@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TANUH Renal Screening Portal</title>
+  <link rel="icon" href="https://bc-screener-research.tanuh.ai/assets/TANUH-BrqyG84h.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="navbar-container">
+    <div class="navbar-content">
+      <div class="navbar-logo">
+        <a class="logo-link" href="#">
+          <img class="logo-img" src="https://bc-screener-research.tanuh.ai/tanuh.png" alt="Tanuh Logo" />
+          <img class="logo-img" src="https://bc-screener-research.tanuh.ai/MoE_Logo.svg" alt="MOE Logo" />
+          <img class="logo-img iisc-logo" src="https://bc-screener-research.tanuh.ai/IISc_logo.png" alt="IISc Logo" />
+        </a>
+      </div>
+      <nav class="navbar-tabs" aria-label="Main navigation">
+        <button class="nav-link active" data-tab="egfr" type="button">eGFR Flow</button>
+        <button class="nav-link" data-tab="dashboard" type="button">Dashboard</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="app-container">
+    <section class="tab-panel visible" id="tab-egfr" aria-labelledby="eGFR">
+      <div class="page-hero form-hero">
+        <h1>Clinical Data Collection</h1>
+        <p>Comprehensive Medical Research Encounter Form</p>
+        <span class="hero-meta">Session ID: EGFR-INTAKE-2026</span>
+      </div>
+      <article class="panel-card flow-card form-card">
+        <form id="egfr-form" class="form-grid" novalidate>
+          <div class="form-section">
+            <div class="section-title"><span class="section-index">1.</span> Basic Information</div>
+            <div class="section-grid">
+              <div class="field-block">
+                <label for="hospital-id">Hospital ID *</label>
+                <input id="hospital-id" name="hospitalId" type="text" placeholder="Hospital identifier" required />
+              </div>
+              <div class="field-block">
+                <label for="uhid">Patient Unique ID *</label>
+                <input id="uhid" name="uhid" type="text" placeholder="Unique patient ID" required />
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="section-title"><span class="section-index">2.</span> Demographics</div>
+            <div class="section-grid">
+              <div class="field-block">
+                <label for="patient-age">Age *</label>
+                <input id="patient-age" name="age" type="number" min="0" placeholder="Age in years" required />
+              </div>
+              <div class="field-block">
+                <label for="patient-sex">Sex *</label>
+                <select id="patient-sex" name="sex" required>
+                  <option value="" selected disabled>Select</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div class="field-block full-span">
+                <label for="patient-weight">Weight (kg) *</label>
+                <input id="patient-weight" name="weight" type="number" min="0" step="0.1" placeholder="Weight in kg" required />
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="section-title"><span class="section-index">3.</span> Clinical Profile</div>
+            <div class="section-grid">
+              <div class="field-block">
+                <label for="ckd-stage">CKD Stage *</label>
+                <select id="ckd-stage" name="ckdStage" required>
+                  <option value="" selected disabled>Select stage</option>
+                  <option value="1">Stage 1</option>
+                  <option value="2">Stage 2</option>
+                  <option value="3">Stage 3</option>
+                  <option value="4">Stage 4</option>
+                </select>
+              </div>
+              <div class="field-block">
+                <label for="diabetic-yes-no">Diabetic *</label>
+                <select id="diabetic-yes-no" name="diabetic" required>
+                  <option value="" selected disabled>Select</option>
+                  <option value="Yes">Yes</option>
+                  <option value="No">No</option>
+                </select>
+              </div>
+            </div>
+            <div class="section-grid hidden" id="dialysis-block">
+              <div class="field-block">
+                <label for="dialysis-yes-no">Dialysis</label>
+                <select id="dialysis-yes-no" name="dialysis">
+                  <option value="" selected disabled>Select</option>
+                  <option value="Yes">Yes</option>
+                  <option value="No">No</option>
+                </select>
+              </div>
+              <div class="field-block">
+                <label for="dialysis-frequency">Dialysis frequency (per week)</label>
+                <input id="dialysis-frequency" name="dialysisFrequency" type="number" min="0" step="1" placeholder="Times per week" />
+              </div>
+            </div>
+            <div class="section-grid">
+              <div id="diabetic-stage-block" class="field-block full-span hidden">
+                <label for="diabetic-stage">Diabetic stage</label>
+                <input id="diabetic-stage" name="diabeticStage" type="text" placeholder="Specify stage" />
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="section-title"><span class="section-index">4.</span> Imaging Data <span class="section-note">(All uploads mandatory)</span></div>
+            <div class="upload-grid">
+              <label class="upload-tile">
+                <input id="left-kidney-file" name="leftKidneyFile" type="file" required />
+                <span class="upload-title">UPLOAD LEFT KIDNEY</span>
+                <span class="upload-subtitle">Left kidney medical image</span>
+              </label>
+              <label class="upload-tile">
+                <input id="right-kidney-file" name="rightKidneyFile" type="file" required />
+                <span class="upload-title">UPLOAD RIGHT KIDNEY</span>
+                <span class="upload-subtitle">Right kidney medical image</span>
+              </label>
+              <label class="upload-tile wide">
+                <input id="egfr-report" name="egfrReport" type="file" required />
+                <span class="upload-title">UPLOAD EGFR REPORT</span>
+                <span class="upload-subtitle">Clinical report document</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button class="btn-premium" type="submit">Submit eGFR Record</button>
+          </div>
+        </form>
+      </article>
+    </section>
+
+    <section class="tab-panel" id="tab-dashboard" aria-labelledby="Dashboard">
+      <div class="page-hero dashboard-hero">
+        <h1>Public Research Insights</h1>
+        <p>Aggregated distribution and systemic disease tracking</p>
+        <span class="hero-update">Latest Update: 19/05/2026</span>
+        <div class="hero-divider"></div>
+      </div>
+      <article class="panel-card flow-card dashboard-card">
+        <div class="summary-grid">
+          <div class="summary-card">
+            <span class="summary-value" id="summary-patients">101</span>
+            <span class="summary-label">TOTAL PATIENTS</span>
+          </div>
+          <div class="summary-card">
+            <span class="summary-value" id="summary-hospitals">5</span>
+            <span class="summary-label">CENTERS</span>
+          </div>
+          <div class="summary-card">
+            <span class="summary-value" id="summary-findings">10</span>
+            <span class="summary-label">FINDINGS</span>
+          </div>
+        </div>
+        <section class="viz-card wide">
+          <div class="viz-header">
+            <h3>Month-wise CKD Trends</h3>
+          </div>
+          <div class="bar-list month-bars" id="month-bars" aria-label="Monthly trends"></div>
+        </section>
+        <div class="viz-grid">
+          <section class="viz-card">
+            <div class="viz-header">
+              <h3>CKD Stage Distribution</h3>
+            </div>
+            <div class="donut-wrap">
+              <div class="donut" id="ckd-stage-donut" aria-label="CKD stage distribution"></div>
+              <div class="donut-center" id="ckd-stage-center">--</div>
+            </div>
+            <div class="viz-legend" id="ckd-stage-legend"></div>
+          </section>
+          <section class="viz-card">
+            <div class="viz-header">
+              <h3>Age Distribution (10yr buckets)</h3>
+            </div>
+            <div class="histogram" id="age-histogram" aria-label="Age distribution"></div>
+          </section>
+        </div>
+        <div class="viz-grid">
+          <section class="viz-card">
+            <div class="viz-header">
+              <h3>Diabetic vs Non-Diabetic</h3>
+            </div>
+            <div class="donut-wrap">
+              <div class="donut" id="diabetic-donut" aria-label="Diabetic distribution"></div>
+              <div class="donut-center" id="diabetic-center">--</div>
+            </div>
+            <div class="viz-legend" id="diabetic-legend"></div>
+          </section>
+          <section class="viz-card compact">
+            <div class="viz-header">
+              <h3>Dialysis Status</h3>
+            </div>
+            <div class="stacked-bar" id="dialysis-bar" aria-label="Dialysis distribution"></div>
+            <div class="viz-legend" id="dialysis-legend"></div>
+          </section>
+        </div>
+        <section class="viz-card">
+          <div class="viz-header">
+            <h3>Hospitals Reporting</h3>
+          </div>
+          <div class="hospital-grid" id="hospital-bars" aria-label="Hospital distribution"></div>
+        </section>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Hospital ID</th>
+                <th>UHID</th>
+                <th>Age</th>
+                <th>Sex</th>
+                <th>Weight (kg)</th>
+                <th>CKD Stage</th>
+                <th>Dialysis</th>
+                <th>Dialysis / Week</th>
+                <th>Diabetic</th>
+                <th>Diabetic Stage</th>
+                <th>Files</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="queue-body">
+              <tr>
+                <td colspan="12" class="empty">No submissions queued yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="actions" style="margin-top: 1.5rem; gap: 0.8rem;">
+          <button class="btn-premium" id="submit-to-firebase">Submit All to VM / GCS</button>
+          <button class="btn-secondary" id="clear-queue">Clear Queue</button>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" aria-live="polite"></div>
+
+  <script src="script.js"></script>
+</body>
+</html>

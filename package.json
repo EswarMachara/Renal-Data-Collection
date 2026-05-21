@@ -1,0 +1,12 @@
+{
+  "name": "tanuh-renal-screening-portal",
+  "version": "1.0.0",
+  "private": true,
+  "description": "VM-ready renal screening portal with local submission capture and optional GCS sync.",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
