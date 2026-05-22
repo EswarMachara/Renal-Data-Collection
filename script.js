@@ -65,14 +65,7 @@ const uploadProgressFill = document.getElementById("upload-progress-fill");
 const uploadProgressPercent = document.getElementById("upload-progress-percent");
 const uploadProgressLabel = document.getElementById("upload-progress-label");
 const dashboardUpdatedAt = document.getElementById("dashboard-updated-at");
-const pipelineNote = document.getElementById("pipeline-note");
-const summaryFilesEl = document.getElementById("summary-files");
-const summaryStorageEl = document.getElementById("summary-storage");
 const summaryVideosEl = document.getElementById("summary-videos");
-const metricSeparateEl = document.getElementById("metric-separate");
-const metricPackageEl = document.getElementById("metric-package");
-const metricDocumentEl = document.getElementById("metric-document");
-const metricVideoEl = document.getElementById("metric-video");
 const reviewModal = document.getElementById("review-modal");
 const reviewContent = document.getElementById("review-content");
 const reviewCloseBtn = document.getElementById("review-close");
@@ -343,111 +336,46 @@ function updateDashboards() {
   let stageCounts = { "1": 0, "2": 0, "3": 0, "4": 0 };
   let diabeticYes = 0;
   let diabeticNo = 0;
-  let dialysisYes = 0;
-  let dialysisNo = 0;
-  let stage34Yes = 0;
-  let stage34No = 0;
-  let hospitalCounts = new Map();
-  let patientSet = new Set();
-  let monthlyData = [];
   let ageBuckets = [];
-  let summaryPatients = 0;
   let summaryHospitals = 0;
   let summaryFindings = 0;
-  let summaryFiles = 0;
-  let summaryBytes = 0;
   let summaryVideos = 0;
-  let separateRecords = 0;
-  let packageRecords = 0;
-  let documentFiles = 0;
 
-  const pendingItems = state.pendingSubmission ? [state.pendingSubmission] : [];
-  const dashboardItems = [...pendingItems, ...(state.recentUploads || [])];
+  const dashboardItems = state.recentUploads || [];
 
   if (USE_DUMMY_DASHBOARD) {
-    summaryPatients = dummyDashboard.summary.patients;
     summaryHospitals = dummyDashboard.summary.hospitals;
     summaryFindings = dummyDashboard.summary.findings;
     stageCounts = { ...dummyDashboard.stages };
     diabeticYes = dummyDashboard.diabetic.yes;
     diabeticNo = dummyDashboard.diabetic.no;
-    dialysisYes = dummyDashboard.dialysis.yes;
-    dialysisNo = dummyDashboard.dialysis.no;
-    stage34Yes = dummyDashboard.stage34.yes;
-    stage34No = dummyDashboard.stage34.no;
-    monthlyData = dummyDashboard.monthly;
     ageBuckets = dummyDashboard.ageBuckets;
   } else {
     dashboardItems.forEach((item) => {
-      patientSet.add(item.uhid);
       stageCounts[item.ckdStage] = (stageCounts[item.ckdStage] || 0) + 1;
       if (item.diabetic === "Yes") {
         diabeticYes += 1;
       } else {
         diabeticNo += 1;
       }
-
-      if (item.ckdStage === "3" || item.ckdStage === "4") {
-        stage34Yes += 1;
-      } else {
-        stage34No += 1;
-      }
-
-      if (item.dialysis === "Yes") {
-        dialysisYes += 1;
-      } else if (item.dialysis === "No") {
-        dialysisNo += 1;
-      }
-
-      const count = hospitalCounts.get(item.hospitalId) || 0;
-      hospitalCounts.set(item.hospitalId, count + 1);
     });
 
-    summaryPatients = pendingItems.length;
-    summaryHospitals = hospitalCounts.size;
-    summaryFindings = (state.recentUploads || []).filter((item) => item.status === "Uploaded").length;
+    summaryHospitals = hospitals.length;
+    summaryFindings = dashboardItems.length;
     ageBuckets = buildAgeBuckets(dashboardItems);
-    monthlyData = buildUploadActivity(dashboardItems);
-    summaryFiles = dashboardItems.reduce((sum, item) => sum + (item.fileCount || item.files?.length || 0), 0);
-    summaryBytes = dashboardItems.reduce((sum, item) => sum + Number(item.totalBytes || 0), 0);
     summaryVideos = dashboardItems.filter((item) => item.hasVideo).length;
-    separateRecords = dashboardItems.filter((item) => item.uploadMode === "separate").length;
-    packageRecords = dashboardItems.filter((item) => item.uploadMode === "package").length;
-    documentFiles = dashboardItems.reduce((sum, item) => {
-      const files = item.files || [];
-      return sum + files.filter((fileName) => String(fileName).toLowerCase().match(/\.(pdf|doc|docx|txt|csv|xlsx)$/)).length;
-    }, 0);
   }
 
-  const hospitalData = USE_DUMMY_DASHBOARD
-    ? dummyDashboard.hospitals
-    : Array.from(hospitalCounts.entries())
-        .map(([name, value]) => ({ name, value }))
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 5);
-
-  const summaryPatientsEl = document.getElementById("summary-patients");
   const summaryHospitalsEl = document.getElementById("summary-hospitals");
   const summaryFindingsEl = document.getElementById("summary-findings");
-  if (summaryPatientsEl) summaryPatientsEl.textContent = summaryPatients;
   if (summaryHospitalsEl) summaryHospitalsEl.textContent = summaryHospitals;
   if (summaryFindingsEl) summaryFindingsEl.textContent = summaryFindings;
-  if (summaryFilesEl) summaryFilesEl.textContent = summaryFiles;
-  if (summaryStorageEl) summaryStorageEl.textContent = formatBytes(summaryBytes);
   if (summaryVideosEl) summaryVideosEl.textContent = summaryVideos;
-  if (metricSeparateEl) metricSeparateEl.textContent = separateRecords;
-  if (metricPackageEl) metricPackageEl.textContent = packageRecords;
-  if (metricDocumentEl) metricDocumentEl.textContent = documentFiles;
-  if (metricVideoEl) metricVideoEl.textContent = summaryVideos;
   if (dashboardUpdatedAt) {
     const latest = (state.recentUploads || [])[0]?.completedAt;
     dashboardUpdatedAt.textContent = latest ? `Latest Upload: ${new Date(latest).toLocaleString()}` : "Awaiting live submissions";
   }
-  if (pipelineNote) {
-    pipelineNote.textContent = `${pendingItems.length} pending review / ${summaryFindings} uploaded`;
-  }
 
-  renderBarList("month-bars", monthlyData, "#5f6c86");
   renderDonut("ckd-stage-donut", "ckd-stage-center", "ckd-stage-legend", [
     { label: "Stage 1", value: stageCounts["1"], color: "#2dd4bf" },
     { label: "Stage 2", value: stageCounts["2"], color: "#60a5fa" },
@@ -456,57 +384,9 @@ function updateDashboards() {
   ], String(dashboardItems.length || Object.values(stageCounts).reduce((sum, val) => sum + val, 0)));
   renderHistogram("age-histogram", ageBuckets);
   renderDonut("diabetic-donut", "diabetic-center", "diabetic-legend", [
-    { label: "Diabetic", value: diabeticYes, color: "#0f9a87" },
-    { label: "Non-diabetic", value: diabeticNo, color: "#94a3b8" }
+    { label: "CKD Diabetic", value: diabeticYes, color: "#0f9a87" },
+    { label: "CKD Non-Diabetic", value: diabeticNo, color: "#94a3b8" }
   ]);
-  renderStackedBar("dialysis-bar", "dialysis-legend", [
-    { label: "Dialysis Yes", value: dialysisYes, color: "#ef4444" },
-    { label: "Dialysis No", value: dialysisNo, color: "#10b981" }
-  ]);
-  renderHospitalBars(hospitalData);
-}
-
-function buildUploadActivity(items) {
-  const counts = new Map();
-  items.forEach((item) => {
-    const date = item.completedAt || item.reviewed_at || item.reviewedAt || new Date().toISOString();
-    const label = String(date).slice(0, 10);
-    counts.set(label, (counts.get(label) || 0) + 1);
-  });
-
-  return Array.from(counts.entries())
-    .sort(([left], [right]) => left.localeCompare(right))
-    .slice(-6)
-    .map(([label, value]) => ({ label, value }));
-}
-
-function renderStackedBar(barId, legendId, segments, totalOverride) {
-  const bar = document.getElementById(barId);
-  const legend = document.getElementById(legendId);
-  if (!bar || !legend) {
-    return;
-  }
-
-  const total = (totalOverride ?? segments.reduce((sum, seg) => sum + seg.value, 0)) || 1;
-  bar.innerHTML = "";
-  legend.innerHTML = "";
-
-  segments.forEach((segment) => {
-    const width = Math.max((segment.value / total) * 100, 2);
-    const div = document.createElement("div");
-    div.className = "stacked-segment";
-    div.style.width = `${width}%`;
-    div.style.background = segment.color;
-    bar.appendChild(div);
-
-    const item = document.createElement("div");
-    item.className = "legend-item";
-    item.innerHTML = `
-      <span class="legend-dot" style="background:${segment.color}"></span>
-      <span>${segment.label} (${segment.value})</span>
-    `;
-    legend.appendChild(item);
-  });
 }
 
 function renderDonut(donutId, centerId, legendId, segments, centerValue) {
@@ -541,35 +421,6 @@ function renderDonut(donutId, centerId, legendId, segments, centerValue) {
   });
 }
 
-function renderBarList(containerId, items, color) {
-  const container = document.getElementById(containerId);
-  if (!container) {
-    return;
-  }
-
-  if (!items.length) {
-    container.innerHTML = "<p class=\"empty\">No data available.</p>";
-    return;
-  }
-
-  const maxValue = Math.max(...items.map((item) => item.value), 1);
-  container.innerHTML = "";
-  items.forEach((item) => {
-    const row = document.createElement("div");
-    row.className = "bar-item";
-    row.innerHTML = `
-      <div class="bar-label">
-        <span>${item.label}</span>
-        <span>${item.value}</span>
-      </div>
-      <div class="bar-track">
-        <div class="bar-fill" style="width:${(item.value / maxValue) * 100}%; background:${color};"></div>
-      </div>
-    `;
-    container.appendChild(row);
-  });
-}
-
 function renderHistogram(containerId, items) {
   const container = document.getElementById(containerId);
   if (!container) {
@@ -600,14 +451,13 @@ function renderHistogram(containerId, items) {
 
 function buildAgeBuckets(items) {
   const buckets = [
-    { label: "10-19", min: 10, max: 19, value: 0 },
-    { label: "20-29", min: 20, max: 29, value: 0 },
+    { label: "18-29", min: 18, max: 29, value: 0 },
     { label: "30-39", min: 30, max: 39, value: 0 },
     { label: "40-49", min: 40, max: 49, value: 0 },
     { label: "50-59", min: 50, max: 59, value: 0 },
     { label: "60-69", min: 60, max: 69, value: 0 },
     { label: "70-79", min: 70, max: 79, value: 0 },
-    { label: "80-89", min: 80, max: 89, value: 0 }
+    { label: "80+", min: 80, max: Infinity, value: 0 }
   ];
 
   items.forEach((item) => {
@@ -619,36 +469,6 @@ function buildAgeBuckets(items) {
   });
 
   return buckets.map(({ label, value }) => ({ label, value }));
-}
-
-function renderHospitalBars(hospitals) {
-  const container = document.getElementById("hospital-bars");
-  if (!container) {
-    return;
-  }
-
-  if (!hospitals.length) {
-    container.innerHTML = "<p class=\"empty\">No data available.</p>";
-    return;
-  }
-
-  const maxValue = Math.max(...hospitals.map((item) => item.value), 1);
-  container.innerHTML = "";
-
-  hospitals.forEach((item) => {
-    const card = document.createElement("div");
-    card.className = "hospital-item";
-    card.innerHTML = `
-      <div class="hospital-header">
-        <span>${item.name}</span>
-        <span class="hospital-count">${item.value}</span>
-      </div>
-      <div class="hospital-track">
-        <div class="hospital-fill" style="width:${(item.value / maxValue) * 100}%"></div>
-      </div>
-    `;
-    container.appendChild(card);
-  });
 }
 
 function setUploadProgress(progress, label) {
@@ -763,6 +583,11 @@ function buildSubmissionFromForm() {
 
   if (!age || !sex || !weight) {
     showToast("Age, sex, and weight are required.");
+    return null;
+  }
+
+  if (Number(age) < 18) {
+    showToast("Patient age must be 18 or above.");
     return null;
   }
 

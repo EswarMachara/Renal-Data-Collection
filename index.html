@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>TANUH Renal Screening Portal</title>
-  <link rel="icon" href="https://bc-screener-research.tanuh.ai/assets/TANUH-BrqyG84h.png" />
+  <link rel="icon" href="assets/tanuh.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -15,9 +15,9 @@
     <div class="navbar-content">
       <div class="navbar-logo">
         <a class="logo-link" href="#">
-          <img class="logo-img" src="https://bc-screener-research.tanuh.ai/tanuh.png" alt="Tanuh Logo" />
-          <img class="logo-img" src="https://bc-screener-research.tanuh.ai/MoE_Logo.svg" alt="MOE Logo" />
-          <img class="logo-img iisc-logo" src="https://bc-screener-research.tanuh.ai/IISc_logo.png" alt="IISc Logo" />
+          <img class="logo-img" src="assets/tanuh.png" alt="Tanuh Logo" />
+          <img class="logo-img" src="assets/moe-logo.svg" alt="MOE Logo" />
+          <img class="logo-img iisc-logo" src="assets/iisc-logo.png" alt="IISc Logo" />
         </a>
       </div>
       <nav class="navbar-tabs" aria-label="Main navigation">
@@ -61,7 +61,7 @@
             <div class="section-grid">
               <div class="field-block">
                 <label for="patient-age">Age *</label>
-                <input id="patient-age" name="age" type="number" min="0" placeholder="Age in years" required />
+                <input id="patient-age" name="age" type="number" min="18" placeholder="Age in years" required />
               </div>
               <div class="field-block">
                 <label for="patient-sex">Sex *</label>
@@ -208,59 +208,18 @@
       <article class="panel-card flow-card dashboard-card">
         <div class="summary-grid">
           <div class="summary-card">
-            <span class="summary-value" id="summary-patients">0</span>
-            <span class="summary-label">PENDING REVIEW</span>
-          </div>
-          <div class="summary-card">
             <span class="summary-value" id="summary-hospitals">0</span>
-            <span class="summary-label">HOSPITALS ACTIVE</span>
+            <span class="summary-label">PARTNER HOSPITALS</span>
           </div>
           <div class="summary-card">
             <span class="summary-value" id="summary-findings">0</span>
-            <span class="summary-label">UPLOADED RECORDS</span>
-          </div>
-          <div class="summary-card">
-            <span class="summary-value" id="summary-files">0</span>
-            <span class="summary-label">FILES SELECTED</span>
-          </div>
-          <div class="summary-card">
-            <span class="summary-value" id="summary-storage">0 MB</span>
-            <span class="summary-label">UPLOAD SIZE</span>
+            <span class="summary-label">PATIENT RECORDS RECEIVED</span>
           </div>
           <div class="summary-card">
             <span class="summary-value" id="summary-videos">0</span>
-            <span class="summary-label">VIDEOS ATTACHED</span>
+            <span class="summary-label">ULTRASOUND VIDEOS RECEIVED</span>
           </div>
         </div>
-        <section class="viz-card wide pipeline-card">
-          <div class="viz-header">
-            <h3>Submission Pipeline</h3>
-            <span class="viz-note" id="pipeline-note">Ready for VM and GCS uploads</span>
-          </div>
-          <div class="pipeline-grid">
-            <div class="pipeline-step">
-              <span class="pipeline-index">1</span>
-              <strong>Review</strong>
-              <small>Cross-check patient metadata and selected files before upload</small>
-            </div>
-            <div class="pipeline-step">
-              <span class="pipeline-index">2</span>
-              <strong>Upload</strong>
-              <small>Track progress while files move to the VM backend</small>
-            </div>
-            <div class="pipeline-step">
-              <span class="pipeline-index">3</span>
-              <strong>Store</strong>
-              <small>Sync hospital folders into private Cloud Storage</small>
-            </div>
-          </div>
-        </section>
-        <section class="viz-card wide">
-          <div class="viz-header">
-            <h3>Upload Activity</h3>
-          </div>
-          <div class="bar-list month-bars" id="month-bars" aria-label="Monthly trends"></div>
-        </section>
         <div class="viz-grid">
           <section class="viz-card">
             <div class="viz-header">
@@ -274,7 +233,8 @@
           </section>
           <section class="viz-card">
             <div class="viz-header">
-              <h3>Age Distribution (10yr buckets)</h3>
+              <h3>Age Distribution</h3>
+              <span class="viz-note">Adults 18+, with 80+ grouped</span>
             </div>
             <div class="histogram" id="age-histogram" aria-label="Age distribution"></div>
           </section>
@@ -282,7 +242,7 @@
         <div class="viz-grid">
           <section class="viz-card">
             <div class="viz-header">
-              <h3>Diabetic vs Non-Diabetic</h3>
+              <h3>CKD Diabetic Vs CKD Non-Diabetic</h3>
             </div>
             <div class="donut-wrap">
               <div class="donut" id="diabetic-donut" aria-label="Diabetic distribution"></div>
@@ -290,44 +250,7 @@
             </div>
             <div class="viz-legend" id="diabetic-legend"></div>
           </section>
-          <section class="viz-card compact">
-            <div class="viz-header">
-              <h3>Dialysis Status</h3>
-            </div>
-            <div class="stacked-bar" id="dialysis-bar" aria-label="Dialysis distribution"></div>
-            <div class="viz-legend" id="dialysis-legend"></div>
-          </section>
         </div>
-        <section class="viz-card wide">
-          <div class="viz-header">
-            <h3>Intake Completeness</h3>
-            <span class="viz-note">Live checks from pending review and recent submissions</span>
-          </div>
-          <div class="metric-strip">
-            <div class="metric-pill">
-              <span id="metric-separate">0</span>
-              <small>Separate-file records</small>
-            </div>
-            <div class="metric-pill">
-              <span id="metric-package">0</span>
-              <small>ZIP-package records</small>
-            </div>
-            <div class="metric-pill">
-              <span id="metric-document">0</span>
-              <small>Clinical documents</small>
-            </div>
-            <div class="metric-pill">
-              <span id="metric-video">0</span>
-              <small>Ultrasound videos</small>
-            </div>
-          </div>
-        </section>
-        <section class="viz-card">
-          <div class="viz-header">
-            <h3>Hospitals Reporting</h3>
-          </div>
-          <div class="hospital-grid" id="hospital-bars" aria-label="Hospital distribution"></div>
-        </section>
         <section class="table-section">
           <div class="viz-header">
             <h3>Recent Uploads</h3>
