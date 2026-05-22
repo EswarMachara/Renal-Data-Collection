@@ -6,26 +6,43 @@ https://bc-screener-research.tanuh.ai/
 ## Included Flows
 
 - eGFR flow
-  - Left Kidney / Right Kidney selection
-  - DICOM image upload (required)
-  - Clinical document upload (required)
-  - Ultrasound video upload (optional)
-  - Strict validation that image and clinical document primary keys match
-
-- KFRE flow
-  - KFRE document upload only
-  - Dedicated KFRE primary key
+  - Hospital dropdown with fixed hospital IDs
+  - Diabetes classification dropdown shown when diabetic status is `Yes`
+  - Separate-file upload mode for left kidney, right kidney, and clinical report
+  - Single ZIP package mode for hospitals that export all patient files together
+  - Ultrasound video upload field saved separately when provided
 
 - VM/GCS submission path
-  - Form data and files are posted to `POST /api/submissions`
+  - Form data and files are posted as `multipart/form-data` to `POST /api/submissions`
+  - Users review all entered details before a direct VM/GCS upload starts
+  - Dashboard shows upload progress for the reviewed record
   - Submissions are written under `data/submissions/`
   - If `GCS_BUCKET` is configured, each batch is synced to GCS with `gsutil rsync`
+
+## GCS Folder Layout
+
+```text
+gs://<bucket>/
+  <hospitalID>/
+    images/
+      Left Kidney/
+        <patientID>_left-kidney_<timestamp>_<suffix>_<original-name>
+      Right Kidney/
+        <patientID>_right-kidney_<timestamp>_<suffix>_<original-name>
+    mixed/
+      <patientID>_package_<timestamp>_<suffix>_<original-name>
+    videos/
+      <patientID>_ultrasound-video_<timestamp>_<suffix>_<original-name>
+    documents/
+      <patientID>_egfr-report_<timestamp>_<suffix>_<original-name>
+      <patientID>_metadata_<timestamp>_<suffix>_metadata.json
+```
 
 ## Files
 
 - `index.html` - App structure and layout
 - `styles.css` - Design system and responsive styles
-- `script.js` - Tab logic, validations, queue state
+- `script.js` - Tab logic, validations, review modal, and direct upload flow
 - `server.js` - Static web server and submission API
 - `DEPLOYMENT.md` - VM and GCP deployment notes
 

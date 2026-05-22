@@ -39,9 +39,15 @@
           <div class="form-section">
             <div class="section-title"><span class="section-index">1.</span> Basic Information</div>
             <div class="section-grid">
+              <div class="field-block full-span">
+                <label for="hospital-name">Hospital *</label>
+                <select id="hospital-name" name="hospitalName" required>
+                  <option value="" selected disabled>Select hospital</option>
+                </select>
+              </div>
               <div class="field-block">
                 <label for="hospital-id">Hospital ID *</label>
-                <input id="hospital-id" name="hospitalId" type="text" placeholder="Hospital identifier" required />
+                <input id="hospital-id" name="hospitalId" type="text" placeholder="Auto-filled from hospital" readonly required />
               </div>
               <div class="field-block">
                 <label for="uhid">Patient Unique ID *</label>
@@ -111,14 +117,39 @@
             </div>
             <div class="section-grid">
               <div id="diabetic-stage-block" class="field-block full-span hidden">
-                <label for="diabetic-stage">Diabetic stage</label>
-                <input id="diabetic-stage" name="diabeticStage" type="text" placeholder="Specify stage" />
+                <label for="diabetic-stage">Diabetes classification</label>
+                <select id="diabetic-stage" name="diabeticStage">
+                  <option value="" selected disabled>Select classification</option>
+                  <option value="Type 1 diabetes - Stage 1">Type 1 diabetes - Stage 1</option>
+                  <option value="Type 1 diabetes - Stage 2">Type 1 diabetes - Stage 2</option>
+                  <option value="Type 1 diabetes - Stage 3 / Clinical">Type 1 diabetes - Stage 3 / Clinical</option>
+                  <option value="Type 2 diabetes">Type 2 diabetes</option>
+                  <option value="Gestational diabetes">Gestational diabetes</option>
+                  <option value="Other / unspecified diabetes">Other / unspecified diabetes</option>
+                </select>
+                <small class="field-help">Formal Stage 1-3 terminology is mainly used for type 1 diabetes; type 2 and gestational diabetes are captured as clinical classifications.</small>
               </div>
             </div>
           </div>
 
           <div class="form-section">
-            <div class="section-title"><span class="section-index">4.</span> Imaging Data <span class="section-note">(All uploads mandatory)</span></div>
+            <div class="section-title"><span class="section-index">4.</span> Upload Method</div>
+            <div class="upload-mode-grid" role="radiogroup" aria-label="Upload method">
+              <label class="upload-mode-card selected" data-upload-mode-card="separate">
+                <input type="radio" name="uploadMode" value="separate" checked />
+                <span>Separate Files</span>
+                <small>Use this when Left kidney, Right kidney, and Clinical Report are available as individual files.</small>
+              </label>
+              <label class="upload-mode-card" data-upload-mode-card="package">
+                <input type="radio" name="uploadMode" value="package" />
+                <span>Single ZIP Package</span>
+                <small>Use this when all patient Images and Clinical documents are available together in one ZIP file.</small>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-section" id="separate-upload-section">
+            <div class="section-title"><span class="section-index">5.</span> Separate Patient Files <span class="section-note">(All uploads mandatory)</span></div>
             <div class="upload-grid">
               <label class="upload-tile">
                 <input id="left-kidney-file" name="leftKidneyFile" type="file" required />
@@ -138,6 +169,28 @@
             </div>
           </div>
 
+          <div class="form-section hidden" id="package-upload-section">
+            <div class="section-title"><span class="section-index">5.</span> Single Patient Package <span class="section-note">(ZIP required)</span></div>
+            <div class="upload-grid">
+              <label class="upload-tile wide">
+                <input id="patient-package-file" name="patientPackageFile" type="file" accept=".zip" />
+                <span class="upload-title">UPLOAD PATIENT ZIP</span>
+                <span class="upload-subtitle">One ZIP containing all patient images and clinical documents</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="section-title"><span class="section-index">6.</span> Ultrasound Video (Optional if you don't have Ultrasound Video of this Patient)</div>
+            <div class="upload-grid">
+              <label class="upload-tile wide">
+                <input id="ultrasound-video-file" name="ultrasoundVideoFile" type="file" accept="video/*" />
+                <span class="upload-title">UPLOAD ULTRASOUND VIDEO</span>
+                <span class="upload-subtitle">Patient Ultrasound Video file</span>
+              </label>
+            </div>
+          </div>
+
           <div class="actions">
             <button class="btn-premium" type="submit">Submit eGFR Record</button>
           </div>
@@ -147,29 +200,64 @@
 
     <section class="tab-panel" id="tab-dashboard" aria-labelledby="Dashboard">
       <div class="page-hero dashboard-hero">
-        <h1>Public Research Insights</h1>
-        <p>Aggregated distribution and systemic disease tracking</p>
-        <span class="hero-update">Latest Update: 19/05/2026</span>
+        <h1>Data Collection Operations</h1>
+        <p>Hospital submissions, upload health, and renal data intake monitoring</p>
+        <span class="hero-update" id="dashboard-updated-at">Awaiting live submissions</span>
         <div class="hero-divider"></div>
       </div>
       <article class="panel-card flow-card dashboard-card">
         <div class="summary-grid">
           <div class="summary-card">
-            <span class="summary-value" id="summary-patients">101</span>
-            <span class="summary-label">TOTAL PATIENTS</span>
+            <span class="summary-value" id="summary-patients">0</span>
+            <span class="summary-label">PENDING REVIEW</span>
           </div>
           <div class="summary-card">
-            <span class="summary-value" id="summary-hospitals">5</span>
-            <span class="summary-label">CENTERS</span>
+            <span class="summary-value" id="summary-hospitals">0</span>
+            <span class="summary-label">HOSPITALS ACTIVE</span>
           </div>
           <div class="summary-card">
-            <span class="summary-value" id="summary-findings">10</span>
-            <span class="summary-label">FINDINGS</span>
+            <span class="summary-value" id="summary-findings">0</span>
+            <span class="summary-label">UPLOADED RECORDS</span>
+          </div>
+          <div class="summary-card">
+            <span class="summary-value" id="summary-files">0</span>
+            <span class="summary-label">FILES SELECTED</span>
+          </div>
+          <div class="summary-card">
+            <span class="summary-value" id="summary-storage">0 MB</span>
+            <span class="summary-label">UPLOAD SIZE</span>
+          </div>
+          <div class="summary-card">
+            <span class="summary-value" id="summary-videos">0</span>
+            <span class="summary-label">VIDEOS ATTACHED</span>
           </div>
         </div>
+        <section class="viz-card wide pipeline-card">
+          <div class="viz-header">
+            <h3>Submission Pipeline</h3>
+            <span class="viz-note" id="pipeline-note">Ready for VM and GCS uploads</span>
+          </div>
+          <div class="pipeline-grid">
+            <div class="pipeline-step">
+              <span class="pipeline-index">1</span>
+              <strong>Review</strong>
+              <small>Cross-check patient metadata and selected files before upload</small>
+            </div>
+            <div class="pipeline-step">
+              <span class="pipeline-index">2</span>
+              <strong>Upload</strong>
+              <small>Track progress while files move to the VM backend</small>
+            </div>
+            <div class="pipeline-step">
+              <span class="pipeline-index">3</span>
+              <strong>Store</strong>
+              <small>Sync hospital folders into private Cloud Storage</small>
+            </div>
+          </div>
+        </section>
         <section class="viz-card wide">
           <div class="viz-header">
-            <h3>Month-wise CKD Trends</h3>
+            <h3>Upload Activity</h3>
           </div>
           <div class="bar-list month-bars" id="month-bars" aria-label="Monthly trends"></div>
         </section>
@@ -210,44 +298,91 @@
             <div class="viz-legend" id="dialysis-legend"></div>
           </section>
         </div>
+        <section class="viz-card wide">
+          <div class="viz-header">
+            <h3>Intake Completeness</h3>
+            <span class="viz-note">Live checks from pending review and recent submissions</span>
+          </div>
+          <div class="metric-strip">
+            <div class="metric-pill">
+              <span id="metric-separate">0</span>
+              <small>Separate-file records</small>
+            </div>
+            <div class="metric-pill">
+              <span id="metric-package">0</span>
+              <small>ZIP-package records</small>
+            </div>
+            <div class="metric-pill">
+              <span id="metric-document">0</span>
+              <small>Clinical documents</small>
+            </div>
+            <div class="metric-pill">
+              <span id="metric-video">0</span>
+              <small>Ultrasound videos</small>
+            </div>
+          </div>
+        </section>
         <section class="viz-card">
           <div class="viz-header">
             <h3>Hospitals Reporting</h3>
           </div>
           <div class="hospital-grid" id="hospital-bars" aria-label="Hospital distribution"></div>
         </section>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Hospital ID</th>
-                <th>UHID</th>
-                <th>Age</th>
-                <th>Sex</th>
-                <th>Weight (kg)</th>
-                <th>CKD Stage</th>
-                <th>Dialysis</th>
-                <th>Dialysis / Week</th>
-                <th>Diabetic</th>
-                <th>Diabetic Stage</th>
-                <th>Files</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody id="queue-body">
-              <tr>
-                <td colspan="12" class="empty">No submissions queued yet.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="actions" style="margin-top: 1.5rem; gap: 0.8rem;">
-          <button class="btn-premium" id="submit-to-firebase">Submit All to VM / GCS</button>
-          <button class="btn-secondary" id="clear-queue">Clear Queue</button>
+        <section class="table-section">
+          <div class="viz-header">
+            <h3>Recent Uploads</h3>
+            <span class="viz-note">Latest batches saved by this browser session</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Batch</th>
+                  <th>Hospital</th>
+                  <th>Patient ID</th>
+                  <th>Method</th>
+                  <th>Files</th>
+                  <th>Destination</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="recent-body">
+                <tr>
+                  <td colspan="7" class="empty">No uploads completed in this session.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <div class="upload-progress-panel hidden" id="upload-progress-panel">
+          <div class="upload-progress-header">
+            <span id="upload-progress-label">Preparing upload</span>
+            <strong id="upload-progress-percent">0%</strong>
+          </div>
+          <div class="upload-progress-track" aria-label="Overall upload progress">
+            <div class="upload-progress-fill" id="upload-progress-fill"></div>
+          </div>
         </div>
       </article>
     </section>
   </main>
+
+  <div id="review-modal" class="review-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="review-title">
+    <section class="review-dialog">
+      <div class="review-header">
+        <div>
+          <span class="review-kicker">Final check before cloud upload</span>
+          <h2 id="review-title">Review eGFR Record</h2>
+        </div>
+        <button class="review-close" id="review-close" type="button" aria-label="Close review">×</button>
+      </div>
+      <div class="review-content" id="review-content"></div>
+      <div class="review-actions">
+        <button class="btn-secondary" id="review-edit" type="button">Edit</button>
+        <button class="btn-premium" id="review-proceed" type="button">Proceed & Upload</button>
+      </div>
+    </section>
+  </div>
 
   <div id="toast" class="toast" aria-live="polite"></div>
 

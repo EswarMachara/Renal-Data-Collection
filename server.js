@@ -39,7 +39,22 @@ function sanitizeFileName(value, fallback = "file") {
   return cleaned || fallback;
 }
 
-function readJsonBody(req) {
+function splitBuffer(buffer, delimiter) {
+  const parts = [];
+  let start = 0;
+  let index = buffer.indexOf(delimiter, start);
+
+  while (index !== -1) {
+    parts.push(buffer.subarray(start, index));
+    start = index + delimiter.length;
+    index = buffer.indexOf(delimiter, start);
+  }
+
+  parts.push(buffer.subarray(start));
+  return parts;
+}
+
+function readRequestBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let totalBytes = 0;
@@ -54,17 +69,119 @@ function readJsonBody(req) {
       chunks.push(chunk);
     });
 
-    req.on("end", () => {
-      try {
-        const rawBody = Buffer.concat(chunks).toString("utf8");
-        resolve(rawBody ? JSON.parse(rawBody) : {});
-      } catch {
-        reject(new Error("Invalid JSON body."));
-      }
-    });
+    req.on("end", () => resolve(Buffer.concat(chunks)));
 
     req.on("error", reject);
   });
+}
+
+function parseJsonPayload(buffer) {
+  try {
+    const rawBody = buffer.toString("utf8");
+    return rawBody ? JSON.parse(rawBody) : {};
+  } catch {
+    throw new Error("Invalid JSON body.");
+  }
+}
+
+function parseMultipartBody(buffer, boundary) {
+  const delimiter = Buffer.from(`--${boundary}`);
+  const headerDelimiter = Buffer.from("\r\n\r\n");
+  const fields = {};
+  const files = [];
+
+  splitBuffer(buffer, delimiter).forEach((part) => {
+    let chunk = part;
+    if (chunk.length === 0 || chunk.equals(Buffer.from("--\r\n")) || chunk.equals(Buffer.from("--"))) {
+      return;
+    }
+
+    if (chunk.subarray(0, 2).toString("latin1") === "\r\n") {
+      chunk = chunk.subarray(2);
+    }
+    if (chunk.subarray(-2).toString("latin1") === "\r\n") {
+      chunk = chunk.subarray(0, -2);
+    }
+    if (chunk.subarray(-2).toString("latin1") === "--") {
+      chunk = chunk.subarray(0, -2);
+    }
+
+    const headerEnd = chunk.indexOf(headerDelimiter);
+    if (headerEnd === -1) {
+      return;
+    }
+
+    const rawHeaders = chunk.subarray(0, headerEnd).toString("latin1");
+    const content = chunk.subarray(headerEnd + headerDelimiter.length);
+    const disposition = rawHeaders
+      .split("\r\n")
+      .find((line) => line.toLowerCase().startsWith("content-disposition:"));
+    if (!disposition) {
+      return;
+    }
+
+    const name = disposition.match(/name="([^"]+)"/)?.[1];
+    const filename = disposition.match(/filename="([^"]*)"/)?.[1];
+    const contentType = rawHeaders.match(/content-type:\s*([^\r\n]+)/i)?.[1]?.trim() || "";
+    if (!name) {
+      return;
+    }
+
+    if (filename !== undefined) {
+      files.push({
+        field: name,
+        filename,
+        contentType,
+        content
+      });
+      return;
+    }
+
+    fields[name] = content.toString("utf8");
+  });
+
+  return { fields, files };
+}
+
+async function readSubmissionPayload(req) {
+  const body = await readRequestBody(req);
+  const contentType = req.headers["content-type"] || "";
+
+  if (contentType.includes("multipart/form-data")) {
+    const boundary = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/)?.[1] || contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/)?.[2];
+    if (!boundary) {
+      throw new Error("Multipart boundary is missing.");
+    }
+
+    const multipart = parseMultipartBody(body, boundary);
+    const payload = parseJsonPayload(Buffer.from(multipart.fields.payload || "{}", "utf8"));
+    const fileMap = new Map();
+    multipart.files.forEach((file) => {
+      const match = file.field.match(/^file_(\d+)_(.+)$/);
+      if (!match) {
+        return;
+      }
+      const index = Number(match[1]);
+      const fieldName = match[2];
+      const files = fileMap.get(index) || [];
+      files.push({
+        fieldName,
+        name: file.filename,
+        type: file.contentType || "application/octet-stream",
+        size: file.content.length,
+        content: file.content
+      });
+      fileMap.set(index, files);
+    });
+
+    payload.submissions = (payload.submissions || []).map((item, index) => ({
+      ...item,
+      files: fileMap.get(index) || item.files || []
+    }));
+    return payload;
+  }
+
+  return parseJsonPayload(body);
 }
 
 function serveStatic(req, res) {
@@ -103,14 +220,14 @@ function serveStatic(req, res) {
   });
 }
 
-function copyToGcs(localPath, batchId) {
+function copyToGcs(localPath) {
   return new Promise((resolve) => {
     if (!GCS_BUCKET) {
       resolve({ synced: false });
       return;
     }
 
-    const gcsPath = `gs://${GCS_BUCKET.replace(/^gs:\/\//, "")}/submissions/${batchId}`;
+    const gcsPath = `gs://${GCS_BUCKET.replace(/^gs:\/\//, "")}`;
     execFile("gsutil", ["-m", "rsync", "-r", localPath, gcsPath], (error, stdout, stderr) => {
       resolve({
         synced: !error,
@@ -122,20 +239,65 @@ function copyToGcs(localPath, batchId) {
 }
 
 function validateSubmission(item) {
-  const requiredFields = ["hospitalId", "uhid", "age", "sex", "weight", "ckdStage", "diabetic"];
+  const requiredFields = ["hospitalId", "hospitalName", "uploadMode", "uhid", "age", "sex", "weight", "ckdStage", "diabetic"];
   const missingField = requiredFields.find((field) => !String(item[field] || "").trim());
   if (missingField) {
     throw new Error(`Missing required field: ${missingField}`);
   }
 
-  if (!Array.isArray(item.files) || item.files.length < 3) {
-    throw new Error("Each submission must include left kidney, right kidney, and eGFR report files.");
+  if (!Array.isArray(item.files)) {
+    throw new Error("Submission files are missing.");
   }
+
+  if (item.uploadMode === "separate") {
+    const requiredSeparateFiles = ["leftKidney", "rightKidney", "egfrReport"];
+    const missingFile = requiredSeparateFiles.find((fieldName) => !item.files.some((file) => file.fieldName === fieldName));
+    if (missingFile) {
+      throw new Error("Separate-file mode requires left kidney, right kidney, and eGFR report files.");
+    }
+  }
+
+  if (item.uploadMode === "package" && !item.files.some((file) => file.fieldName === "patientPackage")) {
+    throw new Error("ZIP package upload is required for package mode.");
+  }
+
+  if (item.uploadMode === "package" && item.files.some((file) => file.fieldName === "patientPackage" && path.extname(file.name || "").toLowerCase() !== ".zip")) {
+    throw new Error("Patient package must be a .zip file.");
+  }
+}
+
+function getFileCategory(fieldName) {
+  const categories = {
+    leftKidney: ["images", "Left Kidney", "left-kidney"],
+    rightKidney: ["images", "Right Kidney", "right-kidney"],
+    mixed: ["mixed", "", "mixed"],
+    mixedKidney: ["mixed", "", "mixed"],
+    patientPackage: ["mixed", "", "package"],
+    ultrasoundVideo: ["videos", "", "ultrasound-video"],
+    egfrReport: ["documents", "", "egfr-report"]
+  };
+
+  return categories[fieldName] || ["documents", "", fieldName || "document"];
+}
+
+function buildStoredFileName(patientId, label, originalName, timestamp, suffix) {
+  const extension = path.extname(originalName);
+  const baseName = path.basename(originalName, extension);
+  const timestampPart = timestamp.replace(/[-:TZ.]/g, "").slice(0, 14);
+  return `${sanitizeFileName(patientId, "patient")}_${sanitizeFileName(label, "file")}_${timestampPart}_${suffix}_${sanitizeFileName(baseName, "upload")}${extension}`;
+}
+
+function getFileContent(file) {
+  if (Buffer.isBuffer(file.content)) {
+    return file.content;
+  }
+
+  return Buffer.from(file.contentBase64 || "", "base64");
 }
 
 async function handleSubmission(req, res) {
   try {
-    const payload = await readJsonBody(req);
+    const payload = await readSubmissionPayload(req);
     const submissions = Array.isArray(payload.submissions) ? payload.submissions : [];
     if (!submissions.length) {
       sendJson(res, 400, { ok: false, error: "No submissions received." });
@@ -147,26 +309,38 @@ async function handleSubmission(req, res) {
     const now = new Date();
     const batchId = `${now.toISOString().replace(/[:.]/g, "-")}-${crypto.randomBytes(4).toString("hex")}`;
     const batchDir = path.join(DATA_DIR, "submissions", batchId);
+    const gcsSyncDir = path.join(DATA_DIR, "gcs-sync", batchId);
     fs.mkdirSync(batchDir, { recursive: true });
+    fs.mkdirSync(gcsSyncDir, { recursive: true });
 
     const records = submissions.map((item, index) => {
       const recordId = `${String(index + 1).padStart(3, "0")}-${sanitizeFileName(item.hospitalId)}-${sanitizeFileName(item.uhid)}-${crypto.randomBytes(3).toString("hex")}`;
       const recordDir = path.join(batchDir, recordId);
-      const filesDir = path.join(recordDir, "files");
-      fs.mkdirSync(filesDir, { recursive: true });
+      fs.mkdirSync(recordDir, { recursive: true });
 
       const storedFiles = item.files.map((file) => {
-        const fileName = sanitizeFileName(file.name, "upload.bin");
         const fieldName = sanitizeFileName(file.fieldName || "upload");
-        const storedName = `${fieldName}-${fileName}`;
-        const filePath = path.join(filesDir, storedName);
-        fs.writeFileSync(filePath, Buffer.from(file.contentBase64 || "", "base64"));
+        const [topLevelFolder, subFolder, label] = getFileCategory(fieldName);
+        const storedName = buildStoredFileName(item.uhid, label, file.name || "upload.bin", now.toISOString(), recordId.slice(-6));
+        const relativeFolder = subFolder
+          ? path.join(item.hospitalId, topLevelFolder, subFolder)
+          : path.join(item.hospitalId, topLevelFolder);
+        const localFolder = path.join(recordDir, relativeFolder);
+        const syncFolder = path.join(gcsSyncDir, relativeFolder);
+        fs.mkdirSync(localFolder, { recursive: true });
+        fs.mkdirSync(syncFolder, { recursive: true });
+
+        const fileContent = getFileContent(file);
+        fs.writeFileSync(path.join(localFolder, storedName), fileContent);
+        fs.writeFileSync(path.join(syncFolder, storedName), fileContent);
+
         return {
           fieldName,
           originalName: file.name,
           storedName,
+          bucketPath: path.posix.join(item.hospitalId, topLevelFolder, subFolder, storedName).replace(/\/+/g, "/"),
           type: file.type || "application/octet-stream",
-          size: Number(file.size || 0)
+          size: Number(file.size || fileContent.length || 0)
         };
       });
 
@@ -174,6 +348,8 @@ async function handleSubmission(req, res) {
         recordId,
         receivedAt: now.toISOString(),
         hospitalId: item.hospitalId,
+        hospitalName: item.hospitalName,
+        uploadMode: item.uploadMode,
         uhid: item.uhid,
         age: item.age,
         sex: item.sex,
@@ -183,11 +359,15 @@ async function handleSubmission(req, res) {
         dialysisFrequency: item.dialysisFrequency || "-",
         diabetic: item.diabetic,
         diabeticStage: item.diabeticStage || "-",
-        queuedAt: item.queued_at || item.queuedAt || null,
+        reviewedAt: item.reviewed_at || item.reviewedAt || null,
         files: storedFiles
       };
 
       fs.writeFileSync(path.join(recordDir, "metadata.json"), JSON.stringify(metadata, null, 2));
+      const metadataFileName = buildStoredFileName(item.uhid, "metadata", "metadata.json", now.toISOString(), recordId.slice(-6));
+      const metadataSyncFolder = path.join(gcsSyncDir, item.hospitalId, "documents");
+      fs.mkdirSync(metadataSyncFolder, { recursive: true });
+      fs.writeFileSync(path.join(metadataSyncFolder, metadataFileName), JSON.stringify(metadata, null, 2));
       return metadata;
     });
 
@@ -196,7 +376,7 @@ async function handleSubmission(req, res) {
       JSON.stringify({ batchId, receivedAt: now.toISOString(), records }, null, 2)
     );
 
-    const gcsResult = await copyToGcs(batchDir, batchId);
+    const gcsResult = await copyToGcs(gcsSyncDir);
     sendJson(res, 200, {
       ok: true,
       batchId,

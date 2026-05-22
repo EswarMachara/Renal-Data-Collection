@@ -1,6 +1,31 @@
 const state = {
-  queue: []
+  pendingSubmission: null,
+  recentUploads: [],
+  uploadProgress: 0
 };
+
+const hospitals = [
+  {
+    id: "SCMC-RMN-KA",
+    name: "Sri Chamundeshwari Medical College, Ramanagara Dist, Karnataka"
+  },
+  {
+    id: "SH-SLM-TN",
+    name: "Shanmuga Hospital, Salem, Tamil Nadu"
+  },
+  {
+    id: "JSS-MYS-KA",
+    name: "JSS Medical College, Mysore, Karnataka"
+  },
+  {
+    id: "NH-BLR-KA",
+    name: "Nira Health Care Private Limited, Bangalore, Karnataka"
+  },
+  {
+    id: "MIL-NDL-DL",
+    name: "Mahajan Imaging & Labs, New Delhi"
+  }
+];
 
 const tabs = document.querySelectorAll(".nav-link[data-tab]");
 const panels = {
@@ -9,8 +34,9 @@ const panels = {
 };
 
 const egfrForm = document.getElementById("egfr-form");
-const queueBody = document.getElementById("queue-body");
+const recentBody = document.getElementById("recent-body");
 
+const hospitalNameInput = document.getElementById("hospital-name");
 const hospitalIdInput = document.getElementById("hospital-id");
 const uhidInput = document.getElementById("uhid");
 const ageInput = document.getElementById("patient-age");
@@ -23,15 +49,37 @@ const dialysisFrequencyInput = document.getElementById("dialysis-frequency");
 const diabeticInput = document.getElementById("diabetic-yes-no");
 const diabeticStageBlock = document.getElementById("diabetic-stage-block");
 const diabeticStageInput = document.getElementById("diabetic-stage");
+const uploadModeInputs = document.querySelectorAll("input[name='uploadMode']");
+const uploadModeCards = document.querySelectorAll("[data-upload-mode-card]");
+const separateUploadSection = document.getElementById("separate-upload-section");
+const packageUploadSection = document.getElementById("package-upload-section");
 const leftKidneyFileInput = document.getElementById("left-kidney-file");
 const rightKidneyFileInput = document.getElementById("right-kidney-file");
 const egfrReportInput = document.getElementById("egfr-report");
+const patientPackageFileInput = document.getElementById("patient-package-file");
+const ultrasoundVideoFileInput = document.getElementById("ultrasound-video-file");
 const toast = document.getElementById("toast");
 
-const submitFirebaseBtn = document.getElementById("submit-to-firebase");
-const clearQueueBtn = document.getElementById("clear-queue");
+const uploadProgressPanel = document.getElementById("upload-progress-panel");
+const uploadProgressFill = document.getElementById("upload-progress-fill");
+const uploadProgressPercent = document.getElementById("upload-progress-percent");
+const uploadProgressLabel = document.getElementById("upload-progress-label");
+const dashboardUpdatedAt = document.getElementById("dashboard-updated-at");
+const pipelineNote = document.getElementById("pipeline-note");
+const summaryFilesEl = document.getElementById("summary-files");
+const summaryStorageEl = document.getElementById("summary-storage");
+const summaryVideosEl = document.getElementById("summary-videos");
+const metricSeparateEl = document.getElementById("metric-separate");
+const metricPackageEl = document.getElementById("metric-package");
+const metricDocumentEl = document.getElementById("metric-document");
+const metricVideoEl = document.getElementById("metric-video");
+const reviewModal = document.getElementById("review-modal");
+const reviewContent = document.getElementById("review-content");
+const reviewCloseBtn = document.getElementById("review-close");
+const reviewEditBtn = document.getElementById("review-edit");
+const reviewProceedBtn = document.getElementById("review-proceed");
 
-const USE_DUMMY_DASHBOARD = true;
+const USE_DUMMY_DASHBOARD = false;
 const dummyDashboard = {
   summary: { patients: 101, hospitals: 5, findings: 10 },
   stages: { "1": 32, "2": 28, "3": 25, "4": 16 },
@@ -68,6 +116,125 @@ function showToast(message) {
   window.setTimeout(() => toast.classList.remove("show"), 2400);
 }
 
+function escapeHTML(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;"
+  })[char]);
+}
+
+function populateHospitals() {
+  hospitals.forEach((hospital) => {
+    const option = document.createElement("option");
+    option.value = hospital.id;
+    option.textContent = hospital.name;
+    option.dataset.name = hospital.name;
+    hospitalNameInput.appendChild(option);
+  });
+}
+
+function updateHospitalId() {
+  hospitalIdInput.value = hospitalNameInput.value || "";
+}
+
+function formatBytes(bytes) {
+  const value = Number(bytes || 0);
+  if (value < 1024) {
+    return `${value} B`;
+  }
+  if (value < 1024 * 1024) {
+    return `${(value / 1024).toFixed(1)} KB`;
+  }
+  if (value < 1024 * 1024 * 1024) {
+    return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  return `${(value / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
+function getUploadLabel(fieldName) {
+  const labels = {
+    leftKidney: "Left Kidney",
+    rightKidney: "Right Kidney",
+    egfrReport: "Clinical Report",
+    patientPackage: "ZIP Package",
+    ultrasoundVideo: "Ultrasound Video"
+  };
+
+  return labels[fieldName] || "Upload";
+}
+
+function ensurePreview(input) {
+  const tile = input.closest(".upload-tile");
+  let preview = tile.querySelector(".file-preview");
+  if (!preview) {
+    preview = document.createElement("div");
+    preview.className = "file-preview";
+    tile.appendChild(preview);
+  }
+  return preview;
+}
+
+function renderFilePreview(input, fieldName) {
+  const preview = ensurePreview(input);
+  const file = input.files[0];
+  preview.innerHTML = "";
+  preview.classList.remove("has-file");
+
+  if (!file) {
+    preview.textContent = "No file selected";
+    return;
+  }
+
+  preview.classList.add("has-file");
+  const details = document.createElement("div");
+  details.className = "file-preview-details";
+  details.innerHTML = `
+    <strong>${escapeHTML(getUploadLabel(fieldName))}</strong>
+    <span>${escapeHTML(file.name)}</span>
+    <small>${escapeHTML(file.type || "Unknown file type")} • ${formatBytes(file.size)}</small>
+  `;
+
+  if (file.type.startsWith("image/")) {
+    const image = document.createElement("img");
+    image.src = URL.createObjectURL(file);
+    image.alt = `${getUploadLabel(fieldName)} preview`;
+    image.addEventListener("load", () => URL.revokeObjectURL(image.src), { once: true });
+    preview.appendChild(image);
+  } else if (file.type.startsWith("video/")) {
+    const video = document.createElement("video");
+    video.src = URL.createObjectURL(file);
+    video.controls = true;
+    video.muted = true;
+    video.preload = "metadata";
+    preview.appendChild(video);
+  }
+
+  preview.appendChild(details);
+}
+
+function clearFilePreviews() {
+  document.querySelectorAll(".file-preview").forEach((preview) => {
+    preview.classList.remove("has-file");
+    preview.innerHTML = "No file selected";
+  });
+}
+
+function initializeFilePreviews() {
+  [
+    [leftKidneyFileInput, "leftKidney"],
+    [rightKidneyFileInput, "rightKidney"],
+    [egfrReportInput, "egfrReport"],
+    [patientPackageFileInput, "patientPackage"],
+    [ultrasoundVideoFileInput, "ultrasoundVideo"]
+  ].forEach(([input, fieldName]) => {
+    renderFilePreview(input, fieldName);
+    input.addEventListener("change", () => renderFilePreview(input, fieldName));
+  });
+}
+
 function activateTab(tabKey) {
   tabs.forEach((tab) => {
     const isActive = tab.dataset.tab === tabKey;
@@ -81,6 +248,43 @@ function activateTab(tabKey) {
 
 tabs.forEach((tab) => {
   tab.addEventListener("click", () => activateTab(tab.dataset.tab));
+});
+
+hospitalNameInput.addEventListener("change", updateHospitalId);
+
+function getUploadMode() {
+  return document.querySelector("input[name='uploadMode']:checked")?.value || "separate";
+}
+
+function updateUploadModeVisibility() {
+  const mode = getUploadMode();
+  separateUploadSection.classList.toggle("hidden", mode !== "separate");
+  packageUploadSection.classList.toggle("hidden", mode !== "package");
+
+  leftKidneyFileInput.required = mode === "separate";
+  rightKidneyFileInput.required = mode === "separate";
+  egfrReportInput.required = mode === "separate";
+  patientPackageFileInput.required = mode === "package";
+
+  if (mode === "separate") {
+    patientPackageFileInput.value = "";
+    renderFilePreview(patientPackageFileInput, "patientPackage");
+  } else {
+    leftKidneyFileInput.value = "";
+    rightKidneyFileInput.value = "";
+    egfrReportInput.value = "";
+    renderFilePreview(leftKidneyFileInput, "leftKidney");
+    renderFilePreview(rightKidneyFileInput, "rightKidney");
+    renderFilePreview(egfrReportInput, "egfrReport");
+  }
+
+  uploadModeCards.forEach((card) => {
+    card.classList.toggle("selected", card.dataset.uploadModeCard === mode);
+  });
+}
+
+uploadModeInputs.forEach((input) => {
+  input.addEventListener("change", updateUploadModeVisibility);
 });
 
 function updateDialysisVisibility() {
@@ -105,37 +309,34 @@ function updateDiabeticVisibility() {
 ckdStageInput.addEventListener("change", updateDialysisVisibility);
 diabeticInput.addEventListener("change", updateDiabeticVisibility);
 
-function redrawQueue() {
-  queueBody.innerHTML = "";
+function refreshDashboard() {
+  updateDashboards();
+  redrawRecentUploads();
+}
 
-  if (state.queue.length === 0) {
+function redrawRecentUploads() {
+  recentBody.innerHTML = "";
+
+  if (!state.recentUploads?.length) {
     const row = document.createElement("tr");
-    row.innerHTML = '<td colspan="12" class="empty">No submissions queued yet.</td>';
-    queueBody.appendChild(row);
-    updateDashboards();
+    row.innerHTML = '<td colspan="7" class="empty">No uploads completed in this session.</td>';
+    recentBody.appendChild(row);
     return;
   }
 
-  state.queue.forEach((item) => {
+  state.recentUploads.slice(0, 8).forEach((item) => {
     const row = document.createElement("tr");
     row.innerHTML = `
-      <td>${item.hospitalId}</td>
-      <td>${item.uhid}</td>
-      <td>${item.age}</td>
-      <td>${item.sex}</td>
-      <td>${item.weight}</td>
-      <td>${item.ckdStage}</td>
-      <td>${item.dialysis || "-"}</td>
-      <td>${item.dialysisFrequency || "-"}</td>
-      <td>${item.diabetic}</td>
-      <td>${item.diabeticStage || "-"}</td>
-      <td>${item.files.join(", ")}</td>
-      <td>${item.status}</td>
+      <td>${escapeHTML(item.batchId)}</td>
+      <td>${escapeHTML(item.hospitalId)}</td>
+      <td>${escapeHTML(item.uhid)}</td>
+      <td>${escapeHTML(item.uploadMode === "package" ? "Single ZIP" : "Separate Files")}</td>
+      <td>${item.files.map(escapeHTML).join(", ")}</td>
+      <td>${escapeHTML(item.gcsPath || item.localPath || "-")}</td>
+      <td>${escapeHTML(item.status)}</td>
     `;
-    queueBody.appendChild(row);
+    recentBody.appendChild(row);
   });
-
-  updateDashboards();
 }
 
 function updateDashboards() {
@@ -153,6 +354,15 @@ function updateDashboards() {
   let summaryPatients = 0;
   let summaryHospitals = 0;
   let summaryFindings = 0;
+  let summaryFiles = 0;
+  let summaryBytes = 0;
+  let summaryVideos = 0;
+  let separateRecords = 0;
+  let packageRecords = 0;
+  let documentFiles = 0;
+
+  const pendingItems = state.pendingSubmission ? [state.pendingSubmission] : [];
+  const dashboardItems = [...pendingItems, ...(state.recentUploads || [])];
 
   if (USE_DUMMY_DASHBOARD) {
     summaryPatients = dummyDashboard.summary.patients;
@@ -168,7 +378,7 @@ function updateDashboards() {
     monthlyData = dummyDashboard.monthly;
     ageBuckets = dummyDashboard.ageBuckets;
   } else {
-    state.queue.forEach((item) => {
+    dashboardItems.forEach((item) => {
       patientSet.add(item.uhid);
       stageCounts[item.ckdStage] = (stageCounts[item.ckdStage] || 0) + 1;
       if (item.diabetic === "Yes") {
@@ -193,10 +403,20 @@ function updateDashboards() {
       hospitalCounts.set(item.hospitalId, count + 1);
     });
 
-    summaryPatients = patientSet.size;
+    summaryPatients = pendingItems.length;
     summaryHospitals = hospitalCounts.size;
-    summaryFindings = stage34Yes;
-    ageBuckets = buildAgeBuckets(state.queue);
+    summaryFindings = (state.recentUploads || []).filter((item) => item.status === "Uploaded").length;
+    ageBuckets = buildAgeBuckets(dashboardItems);
+    monthlyData = buildUploadActivity(dashboardItems);
+    summaryFiles = dashboardItems.reduce((sum, item) => sum + (item.fileCount || item.files?.length || 0), 0);
+    summaryBytes = dashboardItems.reduce((sum, item) => sum + Number(item.totalBytes || 0), 0);
+    summaryVideos = dashboardItems.filter((item) => item.hasVideo).length;
+    separateRecords = dashboardItems.filter((item) => item.uploadMode === "separate").length;
+    packageRecords = dashboardItems.filter((item) => item.uploadMode === "package").length;
+    documentFiles = dashboardItems.reduce((sum, item) => {
+      const files = item.files || [];
+      return sum + files.filter((fileName) => String(fileName).toLowerCase().match(/\.(pdf|doc|docx|txt|csv|xlsx)$/)).length;
+    }, 0);
   }
 
   const hospitalData = USE_DUMMY_DASHBOARD
@@ -212,6 +432,20 @@ function updateDashboards() {
   if (summaryPatientsEl) summaryPatientsEl.textContent = summaryPatients;
   if (summaryHospitalsEl) summaryHospitalsEl.textContent = summaryHospitals;
   if (summaryFindingsEl) summaryFindingsEl.textContent = summaryFindings;
+  if (summaryFilesEl) summaryFilesEl.textContent = summaryFiles;
+  if (summaryStorageEl) summaryStorageEl.textContent = formatBytes(summaryBytes);
+  if (summaryVideosEl) summaryVideosEl.textContent = summaryVideos;
+  if (metricSeparateEl) metricSeparateEl.textContent = separateRecords;
+  if (metricPackageEl) metricPackageEl.textContent = packageRecords;
+  if (metricDocumentEl) metricDocumentEl.textContent = documentFiles;
+  if (metricVideoEl) metricVideoEl.textContent = summaryVideos;
+  if (dashboardUpdatedAt) {
+    const latest = (state.recentUploads || [])[0]?.completedAt;
+    dashboardUpdatedAt.textContent = latest ? `Latest Upload: ${new Date(latest).toLocaleString()}` : "Awaiting live submissions";
+  }
+  if (pipelineNote) {
+    pipelineNote.textContent = `${pendingItems.length} pending review / ${summaryFindings} uploaded`;
+  }
 
   renderBarList("month-bars", monthlyData, "#5f6c86");
   renderDonut("ckd-stage-donut", "ckd-stage-center", "ckd-stage-legend", [
@@ -219,7 +453,7 @@ function updateDashboards() {
     { label: "Stage 2", value: stageCounts["2"], color: "#60a5fa" },
     { label: "Stage 3", value: stageCounts["3"], color: "#fbbf24" },
     { label: "Stage 4", value: stageCounts["4"], color: "#f87171" }
-  ], String(summaryPatients || Object.values(stageCounts).reduce((sum, val) => sum + val, 0)));
+  ], String(dashboardItems.length || Object.values(stageCounts).reduce((sum, val) => sum + val, 0)));
   renderHistogram("age-histogram", ageBuckets);
   renderDonut("diabetic-donut", "diabetic-center", "diabetic-legend", [
     { label: "Diabetic", value: diabeticYes, color: "#0f9a87" },
@@ -230,6 +464,20 @@ function updateDashboards() {
     { label: "Dialysis No", value: dialysisNo, color: "#10b981" }
   ]);
   renderHospitalBars(hospitalData);
+}
+
+function buildUploadActivity(items) {
+  const counts = new Map();
+  items.forEach((item) => {
+    const date = item.completedAt || item.reviewed_at || item.reviewedAt || new Date().toISOString();
+    const label = String(date).slice(0, 10);
+    counts.set(label, (counts.get(label) || 0) + 1);
+  });
+
+  return Array.from(counts.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .slice(-6)
+    .map(([label, value]) => ({ label, value }));
 }
 
 function renderStackedBar(barId, legendId, segments, totalOverride) {
@@ -403,28 +651,96 @@ function renderHospitalBars(hospitals) {
   });
 }
 
-function fileToSubmissionPayload(fieldName, file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.addEventListener("load", () => {
-      const result = String(reader.result || "");
-      const contentBase64 = result.includes(",") ? result.split(",")[1] : "";
-      resolve({
-        fieldName,
-        name: file.name,
-        type: file.type || "application/octet-stream",
-        size: file.size,
-        contentBase64
-      });
+function setUploadProgress(progress, label) {
+  const normalizedProgress = Math.max(0, Math.min(100, Math.round(progress)));
+  state.uploadProgress = normalizedProgress;
+  uploadProgressPanel.classList.remove("hidden");
+  uploadProgressFill.style.width = `${normalizedProgress}%`;
+  uploadProgressPercent.textContent = `${normalizedProgress}%`;
+  uploadProgressLabel.textContent = label;
+
+  if (state.pendingSubmission) {
+    state.pendingSubmission = {
+      ...state.pendingSubmission,
+      progress: normalizedProgress,
+      status: normalizedProgress >= 100 ? "Submitted" : "Uploading"
+    };
+  }
+
+  refreshDashboard();
+}
+
+function resetUploadProgress() {
+  state.uploadProgress = 0;
+  uploadProgressFill.style.width = "0%";
+  uploadProgressPercent.textContent = "0%";
+  uploadProgressLabel.textContent = "Preparing upload";
+  uploadProgressPanel.classList.add("hidden");
+}
+
+function buildSubmissionFormData(timestamp, submission) {
+  const formData = new FormData();
+  const submissions = [submission].map((item, index) => {
+    const { uploadFiles, ...metadata } = item;
+    uploadFiles.forEach((upload) => {
+      formData.append(`file_${index}_${upload.fieldName}`, upload.file, upload.file.name);
     });
-    reader.addEventListener("error", () => reject(new Error(`Could not read ${file.name}`)));
-    reader.readAsDataURL(file);
+    return {
+      ...metadata,
+      reviewed_at: timestamp,
+      files: uploadFiles.map((upload) => ({
+        fieldName: upload.fieldName,
+        name: upload.file.name,
+        type: upload.file.type || "application/octet-stream",
+        size: upload.file.size
+      }))
+    };
+  });
+
+  formData.append("payload", JSON.stringify({ timestamp, submissions }));
+  return formData;
+}
+
+function sendSubmission(formData) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/submissions");
+
+    xhr.upload.addEventListener("progress", (event) => {
+      if (!event.lengthComputable) {
+        return;
+      }
+      setUploadProgress((event.loaded / event.total) * 100, "Uploading record to cloud storage");
+    });
+
+    xhr.addEventListener("load", () => {
+      let result = {};
+      try {
+        result = JSON.parse(xhr.responseText || "{}");
+      } catch {
+        reject(new Error("Server returned an unreadable response."));
+        return;
+      }
+
+      if (xhr.status < 200 || xhr.status >= 300 || !result.ok) {
+        reject(new Error(result.error || "Submission failed."));
+        return;
+      }
+      resolve(result);
+    });
+
+    xhr.addEventListener("error", () => reject(new Error("Network error while uploading.")));
+    xhr.addEventListener("timeout", () => reject(new Error("Upload timed out.")));
+    xhr.timeout = 30 * 60 * 1000;
+    xhr.send(formData);
   });
 }
 
-egfrForm.addEventListener("submit", (event) => {
-  event.preventDefault();
+function buildSubmissionFromForm() {
+  const selectedHospital = hospitals.find((hospital) => hospital.id === hospitalNameInput.value);
+  const uploadMode = getUploadMode();
   const hospitalId = hospitalIdInput.value.trim();
+  const hospitalName = selectedHospital?.name || "";
   const uhid = uhidInput.value.trim();
   const age = ageInput.value.trim();
   const sex = sexInput.value;
@@ -437,54 +753,83 @@ egfrForm.addEventListener("submit", (event) => {
   const leftKidneyFile = leftKidneyFileInput.files[0];
   const rightKidneyFile = rightKidneyFileInput.files[0];
   const egfrReportFile = egfrReportInput.files[0];
+  const patientPackageFile = patientPackageFileInput.files[0];
+  const ultrasoundVideoFile = ultrasoundVideoFileInput.files[0];
 
-  if (!hospitalId || !uhid) {
-    showToast("Hospital ID and UHID are required.");
-    return;
+  if (!hospitalName || !hospitalId || !uhid) {
+    showToast("Hospital, Hospital ID, and UHID are required.");
+    return null;
   }
 
   if (!age || !sex || !weight) {
     showToast("Age, sex, and weight are required.");
-    return;
+    return null;
   }
 
   if (!ckdStage) {
     showToast("Select CKD stage.");
-    return;
+    return null;
   }
 
   if ((ckdStage === "3" || ckdStage === "4") && !dialysis) {
     showToast("Select dialysis status for CKD stage 3 or 4.");
-    return;
+    return null;
   }
 
   if ((ckdStage === "3" || ckdStage === "4") && dialysis === "Yes" && !dialysisFrequency) {
     showToast("Enter dialysis frequency per week.");
-    return;
+    return null;
   }
 
   if (!diabetic) {
     showToast("Select diabetic status.");
-    return;
+    return null;
   }
 
   if (diabetic === "Yes" && !diabeticStage) {
     showToast("Enter diabetic stage.");
-    return;
+    return null;
   }
 
-  if (!leftKidneyFile || !rightKidneyFile) {
-    showToast("Upload both left and right kidney files.");
-    return;
+  let uploadFiles = [];
+
+  if (uploadMode === "separate") {
+    if (!leftKidneyFile || !rightKidneyFile) {
+      showToast("Upload both left and right kidney files.");
+      return null;
+    }
+
+    if (!egfrReportFile) {
+      showToast("Upload the eGFR report.");
+      return null;
+    }
+
+    uploadFiles = [
+      { fieldName: "leftKidney", file: leftKidneyFile },
+      { fieldName: "rightKidney", file: rightKidneyFile },
+      { fieldName: "egfrReport", file: egfrReportFile }
+    ];
+  } else {
+    if (!patientPackageFile) {
+      showToast("Upload the patient ZIP package.");
+      return null;
+    }
+
+    uploadFiles = [
+      { fieldName: "patientPackage", file: patientPackageFile }
+    ];
   }
 
-  if (!egfrReportFile) {
-    showToast("Upload the eGFR report.");
-    return;
+  if (ultrasoundVideoFile) {
+    uploadFiles.push({ fieldName: "ultrasoundVideo", file: ultrasoundVideoFile });
   }
 
-  state.queue.unshift({
+  const totalBytes = uploadFiles.reduce((sum, upload) => sum + upload.file.size, 0);
+
+  return {
     hospitalId,
+    hospitalName,
+    uploadMode,
     uhid,
     age,
     sex,
@@ -494,30 +839,103 @@ egfrForm.addEventListener("submit", (event) => {
     dialysisFrequency: ckdStage === "3" || ckdStage === "4" && dialysis === "Yes" ? dialysisFrequency : "-",
     diabetic,
     diabeticStage: diabetic === "Yes" ? diabeticStage : "-",
-    files: [leftKidneyFile.name, rightKidneyFile.name, egfrReportFile.name],
-    uploadFiles: [
-      { fieldName: "leftKidney", file: leftKidneyFile },
-      { fieldName: "rightKidney", file: rightKidneyFile },
-      { fieldName: "egfrReport", file: egfrReportFile }
-    ],
-    status: "Queued"
-  });
+    files: uploadFiles.map((upload) => upload.file.name),
+    fileCount: uploadFiles.length,
+    totalBytes,
+    hasVideo: Boolean(ultrasoundVideoFile),
+    uploadFiles,
+    progress: 0,
+    status: "Pending Review",
+    reviewedAt: new Date().toISOString()
+  };
+}
 
-  redrawQueue();
+function renderReviewSubmission(submission) {
+  const detailRows = [
+    ["Hospital", submission.hospitalName],
+    ["Hospital ID", submission.hospitalId],
+    ["Patient ID", submission.uhid],
+    ["Upload Method", submission.uploadMode === "package" ? "Single ZIP Package" : "Separate Files"],
+    ["Age", submission.age],
+    ["Sex", submission.sex],
+    ["Weight", `${submission.weight} kg`],
+    ["CKD Stage", `Stage ${submission.ckdStage}`],
+    ["Dialysis", submission.dialysis || "-"],
+    ["Dialysis / Week", submission.dialysisFrequency || "-"],
+    ["Diabetic", submission.diabetic],
+    ["Diabetes Classification", submission.diabeticStage || "-"]
+  ];
+
+  const fileRows = submission.uploadFiles.map((upload) => `
+    <div class="review-file">
+      <span>${escapeHTML(getUploadLabel(upload.fieldName))}</span>
+      <strong>${escapeHTML(upload.file.name)}</strong>
+      <small>${escapeHTML(upload.file.type || "Unknown type")} • ${formatBytes(upload.file.size)}</small>
+    </div>
+  `).join("");
+
+  reviewContent.innerHTML = `
+    <div class="review-alert">
+      Please confirm these details. After you proceed, this record uploads directly to the VM and Cloud Storage.
+    </div>
+    <div class="review-grid">
+      ${detailRows.map(([label, value]) => `
+        <div class="review-item">
+          <span>${escapeHTML(label)}</span>
+          <strong>${escapeHTML(value)}</strong>
+        </div>
+      `).join("")}
+    </div>
+    <div class="review-files">
+      <h3>Selected Files (${submission.fileCount})</h3>
+      ${fileRows}
+      <div class="review-total">Total upload size: ${formatBytes(submission.totalBytes)}</div>
+    </div>
+  `;
+}
+
+function showReviewSubmission(submission) {
+  state.pendingSubmission = submission;
+  renderReviewSubmission(submission);
+  reviewProceedBtn.disabled = false;
+  reviewProceedBtn.textContent = "Proceed & Upload";
+  reviewModal.classList.remove("hidden");
+  refreshDashboard();
+}
+
+function closeReviewSubmission({ keepPending = false } = {}) {
+  reviewModal.classList.add("hidden");
+  if (!keepPending) {
+    state.pendingSubmission = null;
+    refreshDashboard();
+  }
+}
+
+function resetEgfrForm() {
   egfrForm.reset();
+  hospitalIdInput.value = "";
+  clearFilePreviews();
+  updateUploadModeVisibility();
   updateDialysisVisibility();
   updateDiabeticVisibility();
-  showToast("eGFR submission queued successfully.");
-  activateTab("dashboard");
+}
+
+egfrForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const submission = buildSubmissionFromForm();
+  if (!submission) {
+    return;
+  }
+  showReviewSubmission(submission);
 });
 
 updateDialysisVisibility();
 updateDiabeticVisibility();
-redrawQueue();
+refreshDashboard();
 
-async function submitToFirebase() {
-  if (state.queue.length === 0) {
-    showToast("No submissions to send. Queue is empty.");
+async function uploadReviewedSubmission() {
+  if (!state.pendingSubmission) {
+    showToast("No record is waiting for review.");
     return;
   }
 
@@ -526,58 +944,62 @@ async function submitToFirebase() {
     return;
   }
 
-  submitFirebaseBtn.disabled = true;
-  submitFirebaseBtn.textContent = "Submitting...";
+  reviewProceedBtn.disabled = true;
+  reviewEditBtn.disabled = true;
+  reviewCloseBtn.disabled = true;
+  reviewProceedBtn.textContent = "Uploading...";
+  setUploadProgress(0, "Preparing direct upload");
 
   try {
     const timestamp = new Date().toISOString();
-    const submission = {
-      timestamp,
-      submissions: await Promise.all(
-        state.queue.map(async (item) => {
-          const { uploadFiles, ...metadata } = item;
-          return {
-            ...metadata,
-            queued_at: timestamp,
-            files: await Promise.all(
-              uploadFiles.map((upload) => fileToSubmissionPayload(upload.fieldName, upload.file))
-            )
-          };
-        })
-      )
-    };
-
-    const response = await fetch("/api/submissions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(submission)
-    });
-
-    const result = await response.json();
-    if (!response.ok || !result.ok) {
-      throw new Error(result.error || "Submission failed.");
-    }
+    const submission = state.pendingSubmission;
+    const result = await sendSubmission(buildSubmissionFormData(timestamp, submission));
+    setUploadProgress(100, "Upload complete");
 
     showToast(result.gcsSynced ? "Submission saved to VM and GCS." : "Submission saved to VM. Configure GCS_BUCKET for cloud sync.");
 
-    state.queue = [];
-    redrawQueue();
+    const { uploadFiles, ...recentItem } = submission;
+    state.recentUploads = [
+      {
+        ...recentItem,
+        status: result.gcsSynced ? "Uploaded" : "Saved to VM",
+        batchId: result.batchId,
+        gcsPath: result.gcsPath,
+        localPath: result.localPath,
+        completedAt: new Date().toISOString()
+      },
+      ...(state.recentUploads || [])
+    ];
+    closeReviewSubmission({ keepPending: true });
+    state.pendingSubmission = null;
+    resetEgfrForm();
+    refreshDashboard();
+    activateTab("dashboard");
   } catch (err) {
+    state.pendingSubmission = {
+      ...state.pendingSubmission,
+      status: "Failed"
+    };
+    refreshDashboard();
     showToast("Failed to submit: " + err.message);
   } finally {
-    submitFirebaseBtn.disabled = false;
-    submitFirebaseBtn.textContent = "Submit All to VM / GCS";
+    reviewProceedBtn.disabled = false;
+    reviewEditBtn.disabled = false;
+    reviewCloseBtn.disabled = false;
+    reviewProceedBtn.textContent = "Proceed & Upload";
+    window.setTimeout(resetUploadProgress, 1800);
   }
 }
 
-clearQueueBtn.addEventListener("click", () => {
-  if (state.queue.length === 0) {
-    showToast("Queue is already empty.");
-    return;
+reviewEditBtn.addEventListener("click", () => closeReviewSubmission());
+reviewCloseBtn.addEventListener("click", () => closeReviewSubmission());
+reviewModal.addEventListener("click", (event) => {
+  if (event.target === reviewModal) {
+    closeReviewSubmission();
   }
-  state.queue = [];
-  redrawQueue();
-  showToast("Queue cleared.");
 });
+reviewProceedBtn.addEventListener("click", uploadReviewedSubmission);
 
-submitFirebaseBtn.addEventListener("click", submitToFirebase);
+populateHospitals();
+initializeFilePreviews();
+updateUploadModeVisibility();
