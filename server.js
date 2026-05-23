@@ -11,6 +11,35 @@ const HOST = process.env.HOST || "0.0.0.0";
 const GCS_BUCKET = process.env.GCS_BUCKET || "";
 const MAX_BODY_BYTES = Number(process.env.MAX_BODY_BYTES || 300 * 1024 * 1024);
 
+const hospitals = [
+  {
+    id: "SCMC-RMN-KA",
+    name: "Sri Chamundeshwari Medical College, Ramanagara Dist, Karnataka"
+  },
+  {
+    id: "SH-SLM-TN",
+    name: "Shanmuga Hospital, Salem, Tamil Nadu"
+  },
+  {
+    id: "JSS-MYS-KA",
+    name: "JSS Medical College, Mysore, Karnataka"
+  },
+  {
+    id: "NH-BLR-KA",
+    name: "Nira Health Care Private Limited, Bangalore, Karnataka"
+  },
+  {
+    id: "MIL-NDL-DL",
+    name: "Mahajan Imaging & Labs, New Delhi"
+  }
+];
+
+const allowedUploadModes = new Set(["separate", "package"]);
+const allowedSexValues = new Set(["Male", "Female", "Other"]);
+const allowedYesNoValues = new Set(["Yes", "No"]);
+const allowedCkdStages = new Set(["1", "2", "3", "4"]);
+const allowedFileFields = new Set(["leftKidney", "rightKidney", "egfrReport", "patientPackage", "ultrasoundVideo"]);
+
 const mimeTypes = {
   ".css": "text/css; charset=utf-8",
   ".html": "text/html; charset=utf-8",
@@ -238,32 +267,202 @@ function copyToGcs(localPath) {
   });
 }
 
-function validateSubmission(item) {
-  const requiredFields = ["hospitalId", "hospitalName", "uploadMode", "uhid", "age", "sex", "weight", "ckdStage", "diabetic"];
-  const missingField = requiredFields.find((field) => !String(item[field] || "").trim());
-  if (missingField) {
-    throw new Error(`Missing required field: ${missingField}`);
-  }
+function cleanText(value, maxLength = 160) {
+  return String(value || "")
+    .replace(/[\u0000-\u001F\u007F]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
+}
 
-  if (!Array.isArray(item.files)) {
+function optionalText(value, maxLength = 160) {
+  return cleanText(value, maxLength) || "-";
+}
+
+function requiredText(item, field, label, maxLength = 160) {
+  const value = cleanText(item[field], maxLength);
+  if (!value) {
+    throw new Error(`${label} is required.`);
+  }
+  return value;
+}
+
+function validateIdentifier(value, label) {
+  if (!/^[a-zA-Z0-9._-]{2,80}$/.test(value)) {
+    throw new Error(`${label} must use 2-80 letters, numbers, dots, underscores, or hyphens.`);
+  }
+  return value;
+}
+
+function requiredChoice(item, field, label, allowedValues) {
+  const value = requiredText(item, field, label, 120);
+  if (!allowedValues.has(value)) {
+    throw new Error(`${label} has an invalid value.`);
+  }
+  return value;
+}
+
+function optionalYesNo(item, field, label) {
+  const value = cleanText(item[field], 12);
+  if (!value || value === "-") {
+    return "-";
+  }
+  if (!allowedYesNoValues.has(value)) {
+    throw new Error(`${label} must be Yes or No.`);
+  }
+  return value;
+}
+
+function requiredNumber(item, field, label, { min = 0, max = Number.MAX_SAFE_INTEGER, integer = false } = {}) {
+  const rawValue = cleanText(item[field], 40);
+  if (!rawValue) {
+    throw new Error(`${label} is required.`);
+  }
+  if (!/^\d+(\.\d+)?$/.test(rawValue)) {
+    throw new Error(`${label} must be a valid non-negative number.`);
+  }
+  const value = Number(rawValue);
+  if (!Number.isFinite(value) || value < min || value > max || (integer && !Number.isInteger(value))) {
+    throw new Error(`${label} must be between ${min} and ${max}${integer ? " as a whole number" : ""}.`);
+  }
+  return integer ? String(value) : String(Number(value.toFixed(2)));
+}
+
+function optionalNumber(item, field, label, options) {
+  const rawValue = cleanText(item[field], 40);
+  if (!rawValue || rawValue === "-") {
+    return "-";
+  }
+  return requiredNumber(item, field, label, options);
+}
+
+function optionalDate(item, field, label) {
+  const value = cleanText(item[field], 20);
+  if (!value || value === "-") {
+    return "-";
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new Error(`${label} must use YYYY-MM-DD format.`);
+  }
+  const date = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
+    throw new Error(`${label} is not a valid date.`);
+  }
+  const tomorrow = new Date();
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  if (date > tomorrow) {
+    throw new Error(`${label} cannot be in the future.`);
+  }
+  return value;
+}
+
+function normalizeFiles(files) {
+  if (!Array.isArray(files)) {
     throw new Error("Submission files are missing.");
   }
 
-  if (item.uploadMode === "separate") {
+  return files.map((file) => {
+    const fieldName = cleanText(file.fieldName, 60);
+    if (!allowedFileFields.has(fieldName)) {
+      throw new Error(`Unsupported upload field: ${fieldName || "unknown"}.`);
+    }
+
+    const name = cleanText(file.name, 180) || "upload.bin";
+    const size = Number(file.size || 0);
+    const contentSize = Buffer.isBuffer(file.content) ? file.content.length : Buffer.byteLength(file.contentBase64 || "", "base64");
+    if (!Number.isFinite(size) || size < 0 || contentSize <= 0) {
+      throw new Error(`${name} is empty or invalid.`);
+    }
+
+    return {
+      ...file,
+      fieldName,
+      name,
+      type: cleanText(file.type, 120) || "application/octet-stream",
+      size: size || contentSize
+    };
+  });
+}
+
+function normalizeSubmission(item) {
+  const hospitalId = validateIdentifier(requiredText(item, "hospitalId", "Hospital ID", 80), "Hospital ID");
+  const hospital = hospitals.find((entry) => entry.id === hospitalId);
+  if (!hospital) {
+    throw new Error("Hospital ID is not recognized.");
+  }
+
+  const hospitalName = requiredText(item, "hospitalName", "Hospital name", 180);
+  if (hospitalName !== hospital.name) {
+    throw new Error("Hospital name does not match the selected Hospital ID.");
+  }
+
+  const uhid = validateIdentifier(requiredText(item, "uhid", "Patient Unique ID", 80), "Patient Unique ID");
+  const uploadMode = requiredChoice(item, "uploadMode", "Upload mode", allowedUploadModes);
+  const files = normalizeFiles(item.files);
+
+  const normalized = {
+    hospitalSessionId: hospitalId,
+    hospitalSessionName: hospital.name,
+    hospitalId,
+    hospitalName: hospital.name,
+    studyId: optionalText(item.studyId, 80),
+    enrollmentDate: optionalDate(item, "enrollmentDate", "Date of enrollment"),
+    siteCenter: optionalText(item.siteCenter, 140),
+    consentObtained: optionalYesNo(item, "consentObtained", "Consent obtained"),
+    uploadMode,
+    uhid,
+    age: requiredNumber(item, "age", "Age", { min: 18, max: 120, integer: true }),
+    sex: requiredChoice(item, "sex", "Sex", allowedSexValues),
+    heightCm: optionalNumber(item, "heightCm", "Height", { min: 30, max: 250 }),
+    weight: requiredNumber(item, "weight", "Weight", { min: 1, max: 300 }),
+    bmi: optionalNumber(item, "bmi", "BMI", { min: 5, max: 80 }),
+    ethnicity: optionalText(item.ethnicity, 100),
+    occupation: optionalText(item.occupation, 120),
+    knownCkd: optionalYesNo(item, "knownCkd", "Known CKD"),
+    ckdDuration: optionalText(item.ckdDuration, 80),
+    ckdStage: requiredChoice(item, "ckdStage", "CKD stage", allowedCkdStages),
+    dialysis: optionalYesNo(item, "dialysis", "Dialysis"),
+    dialysisFrequency: optionalNumber(item, "dialysisFrequency", "Dialysis frequency", { min: 0, max: 21, integer: true }),
+    diabetic: requiredChoice(item, "diabetic", "Diabetic status", allowedYesNoValues),
+    diabeticStage: optionalText(item.diabeticStage, 120),
+    diabetesDuration: optionalNumber(item, "diabetesDuration", "Diabetes duration", { min: 0, max: 120 }),
+    hypertension: optionalYesNo(item, "hypertension", "Hypertension"),
+    hypertensionDuration: optionalNumber(item, "hypertensionDuration", "Hypertension duration", { min: 0, max: 120 }),
+    cardiovascularDisease: optionalYesNo(item, "cardiovascularDisease", "Cardiovascular disease"),
+    familyKidneyHistory: optionalYesNo(item, "familyKidneyHistory", "Family history of kidney disease"),
+    reviewedAt: optionalText(item.reviewed_at || item.reviewedAt, 60),
+    files
+  };
+
+  if (uploadMode === "separate") {
     const requiredSeparateFiles = ["leftKidney", "rightKidney", "egfrReport"];
-    const missingFile = requiredSeparateFiles.find((fieldName) => !item.files.some((file) => file.fieldName === fieldName));
+    const missingFile = requiredSeparateFiles.find((fieldName) => !files.some((file) => file.fieldName === fieldName));
     if (missingFile) {
       throw new Error("Separate-file mode requires left kidney, right kidney, and eGFR report files.");
     }
   }
 
-  if (item.uploadMode === "package" && !item.files.some((file) => file.fieldName === "patientPackage")) {
+  if (uploadMode === "package" && !files.some((file) => file.fieldName === "patientPackage")) {
     throw new Error("ZIP package upload is required for package mode.");
   }
 
-  if (item.uploadMode === "package" && item.files.some((file) => file.fieldName === "patientPackage" && path.extname(file.name || "").toLowerCase() !== ".zip")) {
+  if (uploadMode === "package" && files.some((file) => file.fieldName === "patientPackage" && path.extname(file.name || "").toLowerCase() !== ".zip")) {
     throw new Error("Patient package must be a .zip file.");
   }
+
+  if ((normalized.ckdStage === "3" || normalized.ckdStage === "4") && normalized.dialysis === "-") {
+    throw new Error("Dialysis status is required for CKD stage 3 or 4.");
+  }
+
+  if (normalized.dialysis === "Yes" && normalized.dialysisFrequency === "-") {
+    throw new Error("Dialysis frequency is required when dialysis is Yes.");
+  }
+
+  if (normalized.diabetic === "Yes" && normalized.diabeticStage === "-") {
+    throw new Error("Diabetes classification is required when diabetic status is Yes.");
+  }
+
+  return normalized;
 }
 
 function getFileCategory(fieldName) {
@@ -304,7 +503,7 @@ async function handleSubmission(req, res) {
       return;
     }
 
-    submissions.forEach(validateSubmission);
+    const normalizedSubmissions = submissions.map(normalizeSubmission);
 
     const now = new Date();
     const batchId = `${now.toISOString().replace(/[:.]/g, "-")}-${crypto.randomBytes(4).toString("hex")}`;
@@ -313,7 +512,7 @@ async function handleSubmission(req, res) {
     fs.mkdirSync(batchDir, { recursive: true });
     fs.mkdirSync(gcsSyncDir, { recursive: true });
 
-    const records = submissions.map((item, index) => {
+    const records = normalizedSubmissions.map((item, index) => {
       const recordId = `${String(index + 1).padStart(3, "0")}-${sanitizeFileName(item.hospitalId)}-${sanitizeFileName(item.uhid)}-${crypto.randomBytes(3).toString("hex")}`;
       const recordDir = path.join(batchDir, recordId);
       fs.mkdirSync(recordDir, { recursive: true });
@@ -347,19 +546,36 @@ async function handleSubmission(req, res) {
       const metadata = {
         recordId,
         receivedAt: now.toISOString(),
+        hospitalSessionId: item.hospitalSessionId,
+        hospitalSessionName: item.hospitalSessionName,
         hospitalId: item.hospitalId,
         hospitalName: item.hospitalName,
+        studyId: item.studyId,
+        enrollmentDate: item.enrollmentDate,
+        siteCenter: item.siteCenter,
+        consentObtained: item.consentObtained,
         uploadMode: item.uploadMode,
         uhid: item.uhid,
         age: item.age,
         sex: item.sex,
+        heightCm: item.heightCm,
         weight: item.weight,
+        bmi: item.bmi,
+        ethnicity: item.ethnicity,
+        occupation: item.occupation,
+        knownCkd: item.knownCkd,
+        ckdDuration: item.ckdDuration,
         ckdStage: item.ckdStage,
-        dialysis: item.dialysis || "-",
-        dialysisFrequency: item.dialysisFrequency || "-",
+        dialysis: item.dialysis,
+        dialysisFrequency: item.dialysisFrequency,
         diabetic: item.diabetic,
-        diabeticStage: item.diabeticStage || "-",
-        reviewedAt: item.reviewed_at || item.reviewedAt || null,
+        diabeticStage: item.diabeticStage,
+        diabetesDuration: item.diabetesDuration,
+        hypertension: item.hypertension,
+        hypertensionDuration: item.hypertensionDuration,
+        cardiovascularDisease: item.cardiovascularDisease,
+        familyKidneyHistory: item.familyKidneyHistory,
+        reviewedAt: item.reviewedAt || null,
         files: storedFiles
       };
 

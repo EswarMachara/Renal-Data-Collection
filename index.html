@@ -7,7 +7,7 @@
   <link rel="icon" href="assets/tanuh.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -21,27 +21,256 @@
         </a>
       </div>
       <nav class="navbar-tabs" aria-label="Main navigation">
-        <button class="nav-link active" data-tab="egfr" type="button">eGFR Flow</button>
+        <button class="nav-link active" data-tab="landing" type="button">Home</button>
+        <button class="nav-link" id="consent-nav" data-tab="consent" type="button" disabled>E-Consent Form</button>
+        <button class="nav-link" id="questionnaire-nav" data-tab="questionnaire" type="button" disabled>Questionnaire</button>
+        <button class="nav-link" id="egfr-nav" data-tab="egfr" type="button" disabled>eGFR Flow</button>
         <button class="nav-link" data-tab="dashboard" type="button">Dashboard</button>
       </nav>
     </div>
   </header>
 
   <main class="app-container">
-    <section class="tab-panel visible" id="tab-egfr" aria-labelledby="eGFR">
+    <section class="tab-panel visible" id="tab-landing" aria-labelledby="Home">
+      <div class="landing-shell">
+        <section class="landing-hero">
+          <div class="landing-copy">
+            <span class="eyebrow">AI-Based eGFR Research Registry</span>
+            <h1>Secure Renal Data capture for Partner Hospitals</h1>
+            <p>Collect consented kidney ultrasound data, clinical reports, and questionnaire details in one guided workflow.</p>
+            <div class="hero-highlights" aria-label="Portal capabilities">
+              <span>Patient-linked consent</span>
+              <span>Structured clinical intake</span>
+              <span>Ultrasound-ready uploads</span>
+            </div>
+            <div class="landing-actions">
+              <button class="btn-premium" id="landing-scroll-setup" type="button">Begin Session</button>
+              <button class="btn-secondary" data-tab-jump="dashboard" type="button">View Dashboard</button>
+            </div>
+          </div>
+          <div class="renal-visual" aria-hidden="true">
+            <div class="renal-orbit"></div>
+            <div class="kidney kidney-left"></div>
+            <div class="kidney kidney-right"></div>
+            <div class="pulse-line"></div>
+          </div>
+          <div class="scroll-cue" aria-hidden="true">
+            <span>Scroll</span>
+            <b></b>
+          </div>
+        </section>
+
+        <section class="handoff-card" aria-label="Session workflow">
+          <span class="eyebrow">Workflow</span>
+          <h2>Set the hospital once. Then keep adding patients.</h2>
+          <div class="flow-strip" aria-label="Intake workflow">
+            <div class="flow-step active">
+              <span>1</span>
+              <strong>Hospital Session</strong>
+              <small>Selected once</small>
+            </div>
+            <div class="flow-step">
+              <span>2</span>
+              <strong>Patient Intake</strong>
+              <small>Repeated per patient</small>
+            </div>
+            <div class="flow-step">
+              <span>3</span>
+              <strong>E-Consent</strong>
+              <small>Patient-linked</small>
+            </div>
+            <div class="flow-step">
+              <span>4</span>
+              <strong>Records Upload</strong>
+              <small>Files + reports</small>
+            </div>
+          </div>
+        </section>
+
+        <article class="panel-card flow-card intake-workspace" id="intake-workspace">
+          <div class="setup-header">
+            <div>
+              <span class="eyebrow">Intake Workspace</span>
+              <h2>Start a hospital session, then add patients.</h2>
+              <p>The hospital context remains active for this browser session. Each patient gets a fresh consent and clinical upload flow.</p>
+            </div>
+            <span class="secure-badge">Controlled Research Intake</span>
+          </div>
+
+          <div class="intake-session-grid">
+            <form class="session-card form-grid" id="hospital-session-form" novalidate>
+              <div class="session-card-header">
+                <span class="session-step">01</span>
+                <div>
+                  <h3>Hospital Session</h3>
+                  <p>Choose once at the start of the day or browser session.</p>
+                </div>
+              </div>
+              <div class="field-block">
+                <label for="landing-hospital">Hospital *</label>
+                <select id="landing-hospital" required>
+                  <option value="" selected disabled>Select hospital</option>
+                </select>
+              </div>
+              <div class="field-block">
+                <label for="landing-hospital-id">Hospital ID</label>
+                <input id="landing-hospital-id" type="text" placeholder="Auto-filled from hospital" readonly />
+              </div>
+              <div class="actions setup-actions">
+                <button class="btn-premium" type="submit">Save Hospital Session</button>
+              </div>
+            </form>
+
+            <form class="session-card form-grid" id="patient-start-form" novalidate>
+              <div class="session-card-header">
+                <span class="session-step">02</span>
+                <div>
+                  <h3>New Patient</h3>
+                  <p>Enter the next patient under the active hospital.</p>
+                </div>
+              </div>
+              <div class="active-session-card" id="active-hospital-card">
+                <small>Active hospital</small>
+                <strong id="active-hospital-name">No hospital selected</strong>
+                <span id="active-hospital-id">Save hospital session first</span>
+              </div>
+              <div class="field-block">
+                <label for="landing-uhid">Patient Unique ID *</label>
+                <input id="landing-uhid" type="text" placeholder="Enter anonymized patient ID" required disabled />
+              </div>
+              <div class="field-block">
+                <label for="landing-study-id">Study ID</label>
+                <input id="landing-study-id" type="text" placeholder="Optional study identifier" disabled />
+              </div>
+              <div class="field-block">
+                <label for="landing-enrollment-date">Date of Enrollment</label>
+                <div class="date-input-shell" aria-label="Date of Enrollment">
+                  <span class="date-icon" aria-hidden="true">Date</span>
+                  <input id="landing-enrollment-date" type="date" max="9999-12-31" disabled />
+                </div>
+              </div>
+              <div class="actions setup-actions">
+                <p>Next: patient-linked consent.</p>
+                <button class="btn-premium" id="start-patient-consent" type="submit" disabled>Start Consent Review</button>
+              </div>
+            </form>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="tab-consent" aria-labelledby="E-Consent Form">
       <div class="page-hero form-hero">
-        <h1>Clinical Data Collection</h1>
-        <p>Comprehensive Medical Research Encounter Form</p>
-        <span class="hero-meta">Session ID: EGFR-INTAKE-2026</span>
+        <h1>E-Consent Form</h1>
+        <p>Participant information linked to the current patient intake session</p>
+        <span class="hero-meta">Please verify the patient context before continuing</span>
+      </div>
+      <article class="panel-card flow-card consent-card">
+        <div class="consent-context-card">
+          <div>
+            <span class="eyebrow">Consent linked to</span>
+            <strong id="consent-context-patient">No patient selected</strong>
+          </div>
+          <div class="consent-context-grid">
+            <div><small>Hospital</small><b id="consent-context-hospital">--</b></div>
+            <div><small>Hospital ID</small><b id="consent-context-hospital-id">--</b></div>
+            <div><small>Patient ID</small><b id="consent-context-uhid">--</b></div>
+            <div><small>Enrollment Date</small><b id="consent-context-date">--</b></div>
+          </div>
+          <button class="btn-ghost" data-tab-jump="landing" type="button">Edit Patient Setup</button>
+        </div>
+        <div class="consent-intro">
+          <h2>AI-Based Multimodal Estimation of eGFR Using Kidney Ultrasound and Clinical Parameters</h2>
+          <p>You are being invited to take part in a research study titled “AI-Based Multimodal Estimation of eGFR Using Kidney Ultrasound and Clinical Parameters”. Before you decide, it is important for you to understand why the research is being done and what it will involve. Please take time to read the following information carefully and discuss it with friends, relatives and your doctors if you wish. Ask us if there is anything that is not clear or if you would like more information. Thank you for reading this.</p>
+        </div>
+        <ol class="consent-list">
+          <li>
+            <h3>What is the purpose of the study?</h3>
+            <p>The purpose of this study is to develop and test an Artificial Intelligence (AI) model that can detect and predict chronic kidney diseases at an early stage.</p>
+          </li>
+          <li>
+            <h3>Why have I been chosen?</h3>
+            <p>You have been chosen to participate because you had a kidney ultrasound and kidney-related laboratory tests as part of your clinical care. The clinical information you provide is good enough to train and test the AI model. The information is provided voluntarily.</p>
+          </li>
+          <li>
+            <h3>Do I have to take part?</h3>
+            <p>Your participation is completely voluntary and will not affect your level of medical care at the Health Centre. You may opt not to participate in the study at any time.</p>
+          </li>
+          <li>
+            <h3>What will happen to me if I take part?</h3>
+            <p>If you agree to participate, you will allow the research team to access and use</p>
+            <p>(i) Your kidney ultrasound images, and<br />(ii) Your laboratory reports related to kidney function</p>
+            <p>No extra procedures or examinations will be required.</p>
+          </li>
+          <li>
+            <h3>What do I have to do?</h3>
+            <p>You will not be required to attend any extra appointments or undergo additional tests. Your anonymized data will be used for research purposes. No identifiable information will be accessed, and you will not be contacted.</p>
+          </li>
+          <li>
+            <h3>What are the possible risks of taking part?</h3>
+            <p>Participation in this research study does not involve any known risks.</p>
+          </li>
+          <li>
+            <h3>What are the possible benefits of taking part?</h3>
+            <p>You may not receive direct personal benefit from taking part in this study. But your participation may contribute to the development of improved tools for early detection of chronic kidney diseases. The findings could support earlier diagnosis, better monitoring, and more effective treatment strategies for future patients.</p>
+          </li>
+          <li>
+            <h3>Will my taking part in this study be kept confidential?</h3>
+            <p>Your information will be handled in a confidential manner and protected according to institutional policies and applicable laws. The research dataset will no longer contain your name or any other direct identifiers. Data will be kept in a safe, password-protected system with controlled access.</p>
+          </li>
+          <li>
+            <h3>What will happen to the results of the research study?</h3>
+            <p>The findings of the study may be published or discussed in conferences or at scientific meetings. Only a collection of findings will be described in these results. Your private medical information will not be disclosed, and no specific participant will be identified. The results of the research study are used to improve early detection of chronic kidney disease.</p>
+            <p>About 20% of the total data, collected in an irreversible anonymised manner, will be part of benchmarking and open data initiative of TANUH for evaluation of AI algorithms.</p>
+          </li>
+          <li>
+            <h3>Who is organising and funding the research?</h3>
+            <p>The research study is being organized at the TANUH, AI Centre of Excellence, Indian Institute of Science, Bangalore 560012 and funded by a research grant from Ministry of Education, Government of India.</p>
+          </li>
+          <li>
+            <h3>Who has reviewed the study?</h3>
+            <p>The research study has been reviewed by the CLINICOM, Independent Ethics Committee for Evaluation of Protocols for Clinical Research, Bangalore 560003.</p>
+          </li>
+          <li>
+            <h3>Who can I contact for further information?</h3>
+            <p>If you have any questions about the study, you may contact Dr. S. Hema Priyadarshini, <a href="mailto:hema.priya@tanuh.ai">hema.priya@tanuh.ai</a>, +91 9945334356.</p>
+            <p>If you wish to speak to someone independent of the study as well as withdrawal of the consent, you may contact the Institutional Ethics Committee (IEC)</p>
+            <p>Name: Dr. Sri Vidhya Jagadish<br />Member Secretary, IEC, TANUH<br />Email: <a href="mailto:secretary.iec@tanuh.ai">secretary.iec@tanuh.ai</a><br />Phone# 080 - 2293 4106 / 2293 4107</p>
+          </li>
+        </ol>
+        <div class="consent-thanks">Thank you for taking part in the study!</div>
+        <div class="consent-acceptance">
+          <label class="consent-check">
+            <input id="consent-checkbox" type="checkbox" />
+            <span>I confirm that this consent review is linked to the patient intake shown above, and that I have read and understood the participant information before proceeding.</span>
+          </label>
+          <button class="btn-premium" id="consent-continue" type="button" disabled>Accept & Continue</button>
+        </div>
+      </article>
+    </section>
+
+    <section class="tab-panel" id="tab-questionnaire" aria-labelledby="Questionnaire">
+      <div class="page-hero form-hero">
+        <h1>Questionnaire</h1>
+        <p>Patient identification, demographics, and clinical history</p>
+        <span class="hero-meta">Research Intake Questionnaire</span>
       </div>
       <article class="panel-card flow-card form-card">
-        <form id="egfr-form" class="form-grid" novalidate>
+        <form id="questionnaire-form" class="form-grid" novalidate>
           <div class="form-section">
-            <div class="section-title"><span class="section-index">1.</span> Basic Information</div>
+            <div class="section-title"><span class="section-index">1.</span> Patient Identification & Study Details</div>
+            <div class="locked-context-note">
+              <span>Patient identifiers are carried forward from the intake setup.</span>
+              <button class="btn-ghost" data-tab-jump="landing" type="button">Edit Setup</button>
+            </div>
             <div class="section-grid">
-              <div class="field-block full-span">
+              <div class="field-block">
+                <label for="study-id">Study ID</label>
+                <input id="study-id" name="studyId" type="text" placeholder="Enter study ID" />
+              </div>
+              <div class="field-block">
                 <label for="hospital-name">Hospital *</label>
-                <select id="hospital-name" name="hospitalName" required>
+                <select id="hospital-name" name="hospitalName" required disabled>
                   <option value="" selected disabled>Select hospital</option>
                 </select>
               </div>
@@ -51,7 +280,26 @@
               </div>
               <div class="field-block">
                 <label for="uhid">Patient Unique ID *</label>
-                <input id="uhid" name="uhid" type="text" placeholder="Unique patient ID" required />
+                <input id="uhid" name="uhid" type="text" placeholder="Unique patient ID" readonly required />
+              </div>
+              <div class="field-block">
+                <label for="enrollment-date">Date of Enrollment</label>
+                <div class="date-input-shell" aria-label="Date of Enrollment">
+                  <span class="date-icon" aria-hidden="true">Date</span>
+                  <input id="enrollment-date" name="enrollmentDate" type="date" max="9999-12-31" />
+                </div>
+                <small class="field-help">Select the date when this patient was enrolled in the study.</small>
+              </div>
+              <div class="field-block">
+                <label for="site-center">Site / Center</label>
+                <input id="site-center" name="siteCenter" type="text" placeholder="Enter site or center" />
+              </div>
+              <div class="field-block full-span">
+                <label>Consent Obtained</label>
+                <div class="choice-row compact-choice">
+                  <label class="choice-tile"><input type="radio" name="consentObtained" value="Yes" /> Yes</label>
+                  <label class="choice-tile"><input type="radio" name="consentObtained" value="No" /> No</label>
+                </div>
               </div>
             </div>
           </div>
@@ -61,79 +309,189 @@
             <div class="section-grid">
               <div class="field-block">
                 <label for="patient-age">Age *</label>
-                <input id="patient-age" name="age" type="number" min="18" placeholder="Age in years" required />
+                <input id="patient-age" name="age" type="number" min="18" max="120" step="1" placeholder="Age in years" required />
               </div>
               <div class="field-block">
-                <label for="patient-sex">Sex *</label>
-                <select id="patient-sex" name="sex" required>
-                  <option value="" selected disabled>Select</option>
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                  <option value="Other">Other</option>
-                </select>
+                <label>Sex</label>
+                <input id="patient-sex" name="sex" type="hidden" required />
+                <div class="choice-row compact-choice">
+                  <label class="choice-tile"><input type="radio" name="questionnaireSex" value="Male" data-sync-target="patient-sex" /> Male</label>
+                  <label class="choice-tile"><input type="radio" name="questionnaireSex" value="Female" data-sync-target="patient-sex" /> Female</label>
+                  <label class="choice-tile"><input type="radio" name="questionnaireSex" value="Other" data-sync-target="patient-sex" /> Other</label>
+                </div>
+              </div>
+              <div class="field-block">
+                <label for="questionnaire-height">Height (cm)</label>
+                <input id="questionnaire-height" name="questionnaireHeight" type="number" min="30" max="250" step="0.1" placeholder="Height in cm" />
+              </div>
+              <div class="field-block">
+                <label for="patient-weight">Weight (kg) *</label>
+                <input id="patient-weight" name="weight" type="number" min="1" max="300" step="0.1" placeholder="Weight in kg" required />
+              </div>
+              <div class="field-block">
+                <label for="questionnaire-bmi">BMI (auto-calculated)</label>
+                <input id="questionnaire-bmi" name="questionnaireBmi" type="text" placeholder="Auto-calculated" readonly />
+              </div>
+              <div class="field-block">
+                <label for="ethnicity">Ethnicity (if applicable)</label>
+                <input id="ethnicity" name="ethnicity" type="text" placeholder="Enter ethnicity" />
               </div>
               <div class="field-block full-span">
-                <label for="patient-weight">Weight (kg) *</label>
-                <input id="patient-weight" name="weight" type="number" min="0" step="0.1" placeholder="Weight in kg" required />
+                <label for="occupation">Occupation</label>
+                <input id="occupation" name="occupation" type="text" placeholder="Enter occupation" />
               </div>
             </div>
           </div>
 
           <div class="form-section">
-            <div class="section-title"><span class="section-index">3.</span> Clinical Profile</div>
-            <div class="section-grid">
-              <div class="field-block">
-                <label for="ckd-stage">CKD Stage *</label>
-                <select id="ckd-stage" name="ckdStage" required>
-                  <option value="" selected disabled>Select stage</option>
-                  <option value="1">Stage 1</option>
-                  <option value="2">Stage 2</option>
-                  <option value="3">Stage 3</option>
-                  <option value="4">Stage 4</option>
-                </select>
+            <div class="section-title"><span class="section-index">3.</span> Clinical History</div>
+            <div class="section-grid clinical-history-grid">
+              <div class="clinical-group">
+                <div class="clinical-group-heading">
+                  <span>Kidney Profile</span>
+                  <small>CKD status and dialysis details</small>
+                </div>
+                <div class="clinical-group-grid">
+                  <div class="field-block clinical-card">
+                    <label>Known CKD</label>
+                    <div class="choice-row compact-choice">
+                      <label class="choice-tile"><input type="radio" name="knownCkd" value="Yes" /> Yes</label>
+                      <label class="choice-tile"><input type="radio" name="knownCkd" value="No" /> No</label>
+                    </div>
+                  </div>
+                  <div class="field-block clinical-card">
+                    <label for="ckd-stage">CKD Stage *</label>
+                    <select id="ckd-stage" name="ckdStage" required>
+                      <option value="" selected disabled>Select stage</option>
+                      <option value="1">Stage 1</option>
+                      <option value="2">Stage 2</option>
+                      <option value="3">Stage 3</option>
+                      <option value="4">Stage 4</option>
+                    </select>
+                  </div>
+                  <div class="field-block clinical-card">
+                    <label for="ckd-duration">Duration of CKD (if known)</label>
+                    <input id="ckd-duration" name="ckdDuration" type="text" placeholder="e.g., 2 years" />
+                  </div>
+                  <div class="clinical-detail hidden" id="dialysis-block">
+                    <div class="field-block clinical-card">
+                      <label>Dialysis</label>
+                      <input id="dialysis-yes-no" name="dialysis" type="hidden" />
+                      <div class="choice-row compact-choice">
+                        <label class="choice-tile"><input type="radio" name="dialysisChoice" value="Yes" data-sync-target="dialysis-yes-no" /> Yes</label>
+                        <label class="choice-tile"><input type="radio" name="dialysisChoice" value="No" data-sync-target="dialysis-yes-no" /> No</label>
+                      </div>
+                    </div>
+                    <div class="field-block clinical-card">
+                      <label for="dialysis-frequency">Dialysis frequency (per week)</label>
+                      <input id="dialysis-frequency" name="dialysisFrequency" type="number" min="0" max="21" step="1" placeholder="Times per week" />
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div class="field-block">
-                <label for="diabetic-yes-no">Diabetic *</label>
-                <select id="diabetic-yes-no" name="diabetic" required>
-                  <option value="" selected disabled>Select</option>
-                  <option value="Yes">Yes</option>
-                  <option value="No">No</option>
-                </select>
+
+              <div class="clinical-group">
+                <div class="clinical-group-heading">
+                  <span>Metabolic Conditions</span>
+                  <small>Diabetes and hypertension history</small>
+                </div>
+                <div class="clinical-group-grid">
+                  <div class="field-block clinical-card">
+                    <label>Diabetes Mellitus</label>
+                    <input id="diabetic-yes-no" name="diabetic" type="hidden" required />
+                    <div class="choice-row compact-choice">
+                      <label class="choice-tile"><input type="radio" name="diabetesMellitus" value="Yes" data-sync-target="diabetic-yes-no" /> Yes</label>
+                      <label class="choice-tile"><input type="radio" name="diabetesMellitus" value="No" data-sync-target="diabetic-yes-no" /> No</label>
+                    </div>
+                  </div>
+                  <div class="field-block clinical-card">
+                    <label for="diabetes-duration">Duration of diabetes (years)</label>
+                    <input id="diabetes-duration" name="diabetesDuration" type="number" min="0" max="120" step="0.1" placeholder="Years" />
+                  </div>
+                  <div id="diabetic-stage-block" class="field-block clinical-card hidden">
+                    <label for="diabetic-stage">Diabetes classification</label>
+                    <select id="diabetic-stage" name="diabeticStage">
+                      <option value="" selected disabled>Select classification</option>
+                      <option value="Type 1 diabetes - Stage 1">Type 1 diabetes - Stage 1</option>
+                      <option value="Type 1 diabetes - Stage 2">Type 1 diabetes - Stage 2</option>
+                      <option value="Type 1 diabetes - Stage 3 / Clinical">Type 1 diabetes - Stage 3 / Clinical</option>
+                      <option value="Type 2 diabetes">Type 2 diabetes</option>
+                      <option value="Gestational diabetes">Gestational diabetes</option>
+                      <option value="Other / unspecified diabetes">Other / unspecified diabetes</option>
+                    </select>
+                    <small class="field-help">Formal Stage 1-3 terminology is mainly used for type 1 diabetes; type 2 and gestational diabetes are captured as clinical classifications.</small>
+                  </div>
+                  <div class="field-block clinical-card">
+                    <label>Hypertension</label>
+                    <div class="choice-row compact-choice">
+                      <label class="choice-tile"><input type="radio" name="hypertension" value="Yes" /> Yes</label>
+                      <label class="choice-tile"><input type="radio" name="hypertension" value="No" /> No</label>
+                    </div>
+                  </div>
+                  <div class="field-block clinical-card">
+                    <label for="hypertension-duration">Duration of hypertension (years)</label>
+                    <input id="hypertension-duration" name="hypertensionDuration" type="number" min="0" max="120" step="0.1" placeholder="Years" />
+                  </div>
+                </div>
               </div>
-            </div>
-            <div class="section-grid hidden" id="dialysis-block">
-              <div class="field-block">
-                <label for="dialysis-yes-no">Dialysis</label>
-                <select id="dialysis-yes-no" name="dialysis">
-                  <option value="" selected disabled>Select</option>
-                  <option value="Yes">Yes</option>
-                  <option value="No">No</option>
-                </select>
-              </div>
-              <div class="field-block">
-                <label for="dialysis-frequency">Dialysis frequency (per week)</label>
-                <input id="dialysis-frequency" name="dialysisFrequency" type="number" min="0" step="1" placeholder="Times per week" />
-              </div>
-            </div>
-            <div class="section-grid">
-              <div id="diabetic-stage-block" class="field-block full-span hidden">
-                <label for="diabetic-stage">Diabetes classification</label>
-                <select id="diabetic-stage" name="diabeticStage">
-                  <option value="" selected disabled>Select classification</option>
-                  <option value="Type 1 diabetes - Stage 1">Type 1 diabetes - Stage 1</option>
-                  <option value="Type 1 diabetes - Stage 2">Type 1 diabetes - Stage 2</option>
-                  <option value="Type 1 diabetes - Stage 3 / Clinical">Type 1 diabetes - Stage 3 / Clinical</option>
-                  <option value="Type 2 diabetes">Type 2 diabetes</option>
-                  <option value="Gestational diabetes">Gestational diabetes</option>
-                  <option value="Other / unspecified diabetes">Other / unspecified diabetes</option>
-                </select>
-                <small class="field-help">Formal Stage 1-3 terminology is mainly used for type 1 diabetes; type 2 and gestational diabetes are captured as clinical classifications.</small>
+
+              <div class="clinical-group">
+                <div class="clinical-group-heading">
+                  <span>Risk Factors</span>
+                  <small>Relevant cardiovascular and family history</small>
+                </div>
+                <div class="clinical-group-grid">
+                  <div class="field-block clinical-card">
+                    <label>Cardiovascular Disease</label>
+                    <div class="choice-row compact-choice">
+                      <label class="choice-tile"><input type="radio" name="cardiovascularDisease" value="Yes" /> Yes</label>
+                      <label class="choice-tile"><input type="radio" name="cardiovascularDisease" value="No" /> No</label>
+                    </div>
+                  </div>
+                  <div class="field-block clinical-card">
+                    <label>Family history of kidney disease</label>
+                    <div class="choice-row compact-choice">
+                      <label class="choice-tile"><input type="radio" name="familyKidneyHistory" value="Yes" /> Yes</label>
+                      <label class="choice-tile"><input type="radio" name="familyKidneyHistory" value="No" /> No</label>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
+          <div class="actions">
+            <button class="btn-secondary" id="questionnaire-continue" type="button">Continue to eGFR Flow</button>
+          </div>
+        </form>
+      </article>
+    </section>
+
+    <section class="tab-panel" id="tab-egfr" aria-labelledby="eGFR Flow">
+      <div class="page-hero form-hero">
+        <h1>Clinical Data Collection</h1>
+        <p>Comprehensive Medical Research Encounter Form</p>
+        <span class="hero-meta">Session ID: EGFR-INTAKE-2026</span>
+      </div>
+      <article class="panel-card flow-card form-card">
+        <form id="egfr-form" class="form-grid" novalidate>
+          <div class="linked-record-card">
+            <div>
+              <span>Patient context from Questionnaire</span>
+              <strong id="linked-patient-title">No patient selected yet</strong>
+            </div>
+            <div class="linked-record-grid">
+              <div><small>Hospital</small><b id="linked-hospital">--</b></div>
+              <div><small>Hospital ID</small><b id="linked-hospital-id">--</b></div>
+              <div><small>Patient ID</small><b id="linked-uhid">--</b></div>
+              <div><small>Age / Sex</small><b id="linked-age-sex">--</b></div>
+              <div><small>CKD Stage</small><b id="linked-ckd">--</b></div>
+              <div><small>Diabetes</small><b id="linked-diabetic">--</b></div>
+            </div>
+          </div>
+
           <div class="form-section">
-            <div class="section-title"><span class="section-index">4.</span> Upload Method</div>
+            <div class="section-title"><span class="section-index">1.</span> Upload Method</div>
             <div class="upload-mode-grid" role="radiogroup" aria-label="Upload method">
               <label class="upload-mode-card selected" data-upload-mode-card="separate">
                 <input type="radio" name="uploadMode" value="separate" checked />
@@ -149,7 +507,7 @@
           </div>
 
           <div class="form-section" id="separate-upload-section">
-            <div class="section-title"><span class="section-index">5.</span> Separate Patient Files <span class="section-note">(All uploads mandatory)</span></div>
+            <div class="section-title"><span class="section-index">2.</span> Separate Patient Files <span class="section-note">(All uploads mandatory)</span></div>
             <div class="upload-grid">
               <label class="upload-tile">
                 <input id="left-kidney-file" name="leftKidneyFile" type="file" required />
@@ -170,7 +528,7 @@
           </div>
 
           <div class="form-section hidden" id="package-upload-section">
-            <div class="section-title"><span class="section-index">5.</span> Single Patient Package <span class="section-note">(ZIP required)</span></div>
+            <div class="section-title"><span class="section-index">2.</span> Single Patient Package <span class="section-note">(ZIP required)</span></div>
             <div class="upload-grid">
               <label class="upload-tile wide">
                 <input id="patient-package-file" name="patientPackageFile" type="file" accept=".zip" />
@@ -181,7 +539,7 @@
           </div>
 
           <div class="form-section">
-            <div class="section-title"><span class="section-index">6.</span> Ultrasound Video (Optional if you don't have Ultrasound Video of this Patient)</div>
+            <div class="section-title"><span class="section-index">3.</span> Ultrasound Video (Optional if you don't have Ultrasound Video of this Patient)</div>
             <div class="upload-grid">
               <label class="upload-tile wide">
                 <input id="ultrasound-video-file" name="ultrasoundVideoFile" type="file" accept="video/*" />
