@@ -13,8 +13,9 @@ https://bc-screener-research.tanuh.ai/
   - Ultrasound video upload field saved separately when provided
 
 - VM/GCS submission path
-  - Form data and files are posted as `multipart/form-data` to `POST /api/submissions`
-  - Users review all entered details before a direct VM/GCS upload starts
+  - Users review all entered details before a resumable VM/GCS upload starts
+  - File uploads use chunked sessions via `/api/uploads/init`, `/api/uploads/:id/files/:fileIndex/chunks/:chunkIndex`, and `/api/uploads/:id/complete`
+  - `POST /api/submissions` remains available for direct multipart submissions and small-file fallback
   - Dashboard shows upload progress for the reviewed record
   - Submissions are written under `data/submissions/`
   - If `GCS_BUCKET` is configured, each batch is synced to GCS with `gsutil rsync`
@@ -81,6 +82,12 @@ The server creates these tables automatically when `DATABASE_URL` is set:
 
 The endpoint `GET /api/dashboard-summary` returns PostgreSQL-backed counts when the database is configured.
 
+## Upload Limits
+
+- `UPLOAD_CHUNK_BYTES` controls the browser chunk size; default is `5242880` bytes.
+- `MAX_CHUNK_BYTES` is the largest chunk the server accepts; default is `8388608` bytes.
+- `MAX_BODY_BYTES` still protects legacy direct multipart uploads; default is `314572800` bytes.
+
 ## Important Security Note
 
-This code is now suitable for VM testing, not yet final hospital production. Before collecting real patient data, add HTTPS, hospital user authentication, audit logging, retention rules, and a platform-approved private database path if structured clinical data must be queried centrally.
+This code is now suitable for controlled VM testing with HTTPS, hospital authentication, audit logging, resumable uploads, private GCS sync, and optional PostgreSQL metadata storage. Before broad hospital rollout, finalize retention rules, database credentials, backup/restore, monitoring, and an approved secret-management path.

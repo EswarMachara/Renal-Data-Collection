@@ -3,41 +3,156 @@ const state = {
   recentUploads: [],
   uploadProgress: 0,
   hospitalSession: null,
-  backendDashboard: null
+  backendDashboard: null,
+  authSession: null,   // { token, userId, hospitalId, hospitalName, role, expiresAt }
+  consentId: null      // set after /api/consent succeeds
 };
 
 const HOSPITAL_SESSION_KEY = "renalPortalHospitalSession";
+const AUTH_SESSION_KEY     = "renalPortalAuthSession";
+const RESUMABLE_UPLOAD_RETRIES = 3;
 
-const hospitals = [
-  {
-    id: "SCMC-RMN-KA",
-    name: "Sri Chamundeshwari Medical College, Ramanagara Dist, Karnataka"
-  },
-  {
-    id: "SH-SLM-TN",
-    name: "Shanmuga Hospital, Salem, Tamil Nadu"
-  },
-  {
-    id: "JSS-MYS-KA",
-    name: "JSS Medical College, Mysore, Karnataka"
-  },
-  {
-    id: "NH-BLR-KA",
-    name: "Nira Health Care Private Limited, Bangalore, Karnataka"
-  },
-  {
-    id: "MIL-NDL-DL",
-    name: "Mahajan Imaging & Labs, New Delhi"
+// Populated from /api/hospitals after login (or at startup when auth is disabled)
+const hospitals = [];
+
+// ─── Auth helpers ─────────────────────────────────────────────────────────────
+
+const loginScreen   = document.getElementById("login-screen");
+const appNavbar     = document.getElementById("app-navbar");
+const loginForm     = document.getElementById("login-form");
+const loginError    = document.getElementById("login-error");
+const navbarAuth    = document.getElementById("navbar-auth");
+const navbarUserLabel = document.getElementById("navbar-user-label");
+const logoutBtn     = document.getElementById("logout-btn");
+
+function authedFetch(url, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  if (state.authSession?.token) {
+    headers["Authorization"] = `Bearer ${state.authSession.token}`;
   }
-];
+  return fetch(url, { ...options, headers });
+}
+
+function loadAuthSession() {
+  try {
+    const stored = JSON.parse(sessionStorage.getItem(AUTH_SESSION_KEY) || "null");
+    if (stored?.token) { state.authSession = stored; return true; }
+  } catch { /* ignore */ }
+  return false;
+}
+
+function saveAuthSession(sessionData) {
+  state.authSession = sessionData;
+  try { sessionStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(sessionData)); } catch { /* ignore */ }
+}
+
+function clearAuthSession() {
+  state.authSession = null;
+  state.consentId   = null;
+  try { sessionStorage.removeItem(AUTH_SESSION_KEY); } catch { /* ignore */ }
+  try { sessionStorage.removeItem(HOSPITAL_SESSION_KEY); } catch { /* ignore */ }
+}
+
+function showLoginError(message) {
+  if (!loginError) return;
+  loginError.textContent = message;
+  loginError.classList.remove("hidden");
+}
+
+function hideLoginError() {
+  if (!loginError) return;
+  loginError.classList.add("hidden");
+  loginError.textContent = "";
+}
+
+function applyHospitalAuthContext() {
+  const session = state.authSession;
+  if (!session || session.role === "admin") {
+    // Admin and unauthenticated: keep dropdown editable
+    if (landingHospitalInput) landingHospitalInput.disabled = false;
+    if (hospitalNameInput)    hospitalNameInput.disabled = false;
+    return;
+  }
+
+  // Hospital-role user: lock dropdown to their assigned hospital
+  if (session.hospitalId) {
+    if (landingHospitalInput) {
+      landingHospitalInput.value    = session.hospitalId;
+      landingHospitalInput.disabled = true;
+    }
+    if (hospitalNameInput) {
+      hospitalNameInput.value    = session.hospitalId;
+      hospitalNameInput.disabled = true;
+    }
+    if (hospitalIdInput)  hospitalIdInput.value  = session.hospitalId;
+    if (landingHospitalIdInput) landingHospitalIdInput.value = session.hospitalId;
+
+    // Auto-confirm the hospital session so patient fields unlock immediately
+    if (!state.hospitalSession) {
+      const hospital = hospitals.find((h) => h.id === session.hospitalId);
+      if (hospital) {
+        state.hospitalSession = { id: hospital.id, name: hospital.name };
+        try { sessionStorage.setItem(HOSPITAL_SESSION_KEY, JSON.stringify(state.hospitalSession)); } catch { /* ignore */ }
+        updateHospitalSessionUI();
+      }
+    }
+  }
+}
+
+function showApp() {
+  if (loginScreen)  loginScreen.classList.add("hidden");
+  if (appNavbar)    appNavbar.classList.remove("hidden");
+  document.querySelector(".app-container")?.classList.remove("hidden");
+
+  const session = state.authSession;
+  if (navbarUserLabel && session) {
+    navbarUserLabel.textContent = session.role === "admin"
+      ? "Admin"
+      : (session.hospitalId || session.userId || "");
+  }
+  if (navbarAuth) navbarAuth.classList.remove("hidden");
+
+  // Show submissions tab for all users; populate hospital filter for admin
+  const submissionsNavBtn = document.getElementById("submissions-nav");
+  if (submissionsNavBtn) submissionsNavBtn.style.display = "";
+  populateSubHospitalFilter();
+}
+
+function showLoginScreen() {
+  if (loginScreen)  loginScreen.classList.remove("hidden");
+  if (appNavbar)    appNavbar.classList.add("hidden");
+  document.querySelector(".app-container")?.classList.add("hidden");
+}
+
+async function loadHospitalsFromApi() {
+  try {
+    const res    = await authedFetch("/api/hospitals");
+    const result = await res.json();
+    if (result.ok && Array.isArray(result.hospitals)) {
+      hospitals.length = 0;
+      result.hospitals.forEach((h) => hospitals.push(h));
+      populateHospitals();
+    }
+  } catch { /* non-fatal; hospitals already populated from previous call */ }
+}
+
+// On any 401 from the server, clear session and show login
+function handle401() {
+  clearAuthSession();
+  showLoginScreen();
+  showToast("Your session has expired. Please sign in again.");
+}
+
+// ─── DOM references ───────────────────────────────────────────────────────────
 
 const tabs = document.querySelectorAll(".nav-link[data-tab]");
 const panels = {
-  landing: document.getElementById("tab-landing"),
-  consent: document.getElementById("tab-consent"),
+  landing:     document.getElementById("tab-landing"),
+  consent:     document.getElementById("tab-consent"),
   questionnaire: document.getElementById("tab-questionnaire"),
-  egfr: document.getElementById("tab-egfr"),
-  dashboard: document.getElementById("tab-dashboard")
+  egfr:        document.getElementById("tab-egfr"),
+  dashboard:   document.getElementById("tab-dashboard"),
+  submissions: document.getElementById("tab-submissions")
 };
 
 const egfrForm = document.getElementById("egfr-form");
@@ -177,8 +292,10 @@ function escapeHTML(value) {
 }
 
 function populateHospitals() {
-  hospitals.forEach((hospital) => {
-    [landingHospitalInput, hospitalNameInput].forEach((select) => {
+  [landingHospitalInput, hospitalNameInput].forEach((select) => {
+    // Clear all options except the first placeholder
+    while (select.options.length > 1) select.remove(1);
+    hospitals.forEach((hospital) => {
       const option = document.createElement("option");
       option.value = hospital.id;
       option.textContent = hospital.name;
@@ -514,12 +631,13 @@ function activateTab(tabKey) {
   });
 
   Object.entries(panels).forEach(([key, panel]) => {
-    panel.classList.toggle("visible", key === tabKey);
+    panel?.classList.toggle("visible", key === tabKey);
   });
 
-  if (tabKey === "dashboard") {
-    loadBackendDashboard();
-  }
+  if (tabKey === "dashboard")   loadBackendDashboard();
+  if (tabKey === "submissions") loadSubmissions(1);
+
+  updateStepper(tabKey);
 }
 
 document.querySelectorAll("[data-tab-jump]").forEach((button) => {
@@ -535,6 +653,183 @@ tabs.forEach((tab) => {
 
 syncChoiceInputs.forEach((input) => {
   input.addEventListener("change", () => syncChoiceValue(input));
+});
+
+// ─── Intake stepper + autosave ────────────────────────────────────────────────
+
+const intakeStepper   = document.getElementById("intake-stepper");
+const stpPatientChip  = document.getElementById("stp-patient-chip");
+const stpAutosave     = document.getElementById("stp-autosave");
+const draftToast      = document.getElementById("draft-toast");
+const draftToastMsg   = document.getElementById("draft-toast-msg");
+const draftToastClear = document.getElementById("draft-toast-clear");
+const draftToastDismiss = document.getElementById("draft-toast-dismiss");
+
+// Which nav-tab key maps to which step number
+const TAB_TO_STEP = { landing: 1, consent: 2, questionnaire: 3, egfr: 4 };
+// Steps above this number have been reached/completed this session
+let maxStepReached = 1;
+
+function updateStepper(tabKey) {
+  const currentStep = TAB_TO_STEP[tabKey];
+  const isIntakeTab  = Boolean(currentStep);
+
+  if (!intakeStepper) return;
+
+  if (!isIntakeTab) {
+    intakeStepper.classList.add("hidden");
+    return;
+  }
+
+  intakeStepper.classList.remove("hidden");
+  if (currentStep > maxStepReached) maxStepReached = currentStep;
+
+  [1, 2, 3, 4].forEach((n) => {
+    const el = document.getElementById(`stp-${n}`);
+    if (!el) return;
+    el.classList.remove("stp-active", "stp-done", "stp-pending");
+    if (n < currentStep)       el.classList.add("stp-done");
+    else if (n === currentStep) el.classList.add("stp-active");
+    else                        el.classList.add("stp-pending");
+  });
+
+  // Fill the connector lines proportionally
+  document.querySelectorAll(".stp-connector").forEach((conn, i) => {
+    const filled = currentStep > i + 1;
+    conn.classList.toggle("stp-connector-done", filled);
+  });
+
+  // Patient chip
+  const h = state.hospitalSession;
+  const uhid = uhidInput?.value.trim() || "";
+  if (stpPatientChip) {
+    stpPatientChip.textContent = (h && uhid)
+      ? `${h.id}  ·  ${uhid}`
+      : h ? h.id : "";
+  }
+}
+
+// ── Autosave ──────────────────────────────────────────────────────────────────
+
+function draftKey() {
+  const hid  = state.hospitalSession?.id || "";
+  const uhid = uhidInput?.value.trim() || "";
+  return hid && uhid ? `tanuh_qdraft_${hid}_${uhid}` : null;
+}
+
+const DRAFT_FIELDS = [
+  "study-id", "enrollment-date", "site-center",
+  "patient-age", "questionnaire-height", "patient-weight",
+  "ethnicity", "occupation", "ckd-stage", "ckd-duration",
+  "dialysis-frequency", "diabetes-duration", "diabetic-stage",
+  "hypertension-duration"
+];
+const DRAFT_RADIOS = [
+  "consentObtained", "questionnaireSex", "knownCkd",
+  "dialysisChoice", "diabetesMellitus", "hypertension",
+  "cardiovascularDisease", "familyKidneyHistory"
+];
+
+function serializeDraft() {
+  const data = {};
+  DRAFT_FIELDS.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) data[id] = el.value;
+  });
+  DRAFT_RADIOS.forEach((name) => {
+    const checked = document.querySelector(`input[name="${name}"]:checked`);
+    if (checked) data[`radio_${name}`] = checked.value;
+  });
+  return data;
+}
+
+function restoreDraft(saved) {
+  DRAFT_FIELDS.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el && saved[id] !== undefined) el.value = saved[id];
+  });
+  DRAFT_RADIOS.forEach((name) => {
+    const val = saved[`radio_${name}`];
+    if (!val) return;
+    const radio = document.querySelector(`input[name="${name}"][value="${val}"]`);
+    if (radio) {
+      radio.checked = true;
+      radio.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  });
+  // Recalculate derived fields
+  updateQuestionnaireBmi?.();
+  updateDialysisVisibility?.();
+  updateDiabeticVisibility?.();
+}
+
+function clearDraft() {
+  const key = draftKey();
+  if (key) try { localStorage.removeItem(key); } catch { /* ignore */ }
+}
+
+let _autosaveTimer = null;
+function scheduleSave() {
+  clearTimeout(_autosaveTimer);
+  _autosaveTimer = setTimeout(() => {
+    const key = draftKey();
+    if (!key) return;
+    try {
+      localStorage.setItem(key, JSON.stringify({ ...serializeDraft(), _savedAt: new Date().toISOString() }));
+    } catch { /* storage full — ignore */ }
+    if (stpAutosave) {
+      stpAutosave.textContent = "Draft saved " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      stpAutosave.classList.add("stp-autosave-flash");
+      setTimeout(() => stpAutosave.classList.remove("stp-autosave-flash"), 1800);
+    }
+  }, 700);
+}
+
+function checkAndRestoreDraft() {
+  const key = draftKey();
+  if (!key) return;
+  let saved;
+  try { saved = JSON.parse(localStorage.getItem(key) || "null"); } catch { return; }
+  if (!saved) return;
+
+  restoreDraft(saved);
+
+  const t = saved._savedAt ? new Date(saved._savedAt) : null;
+  const timeStr = t ? t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+  if (draftToastMsg) draftToastMsg.textContent = `Draft restored${timeStr ? " — last saved " + timeStr : ""}`;
+  if (draftToast) {
+    draftToast.classList.remove("hidden");
+    clearTimeout(draftToast._dismiss);
+    draftToast._dismiss = setTimeout(() => draftToast.classList.add("hidden"), 6000);
+  }
+}
+
+// Wire autosave listeners on questionnaire form
+document.getElementById("questionnaire-form")?.addEventListener("input", scheduleSave);
+document.getElementById("questionnaire-form")?.addEventListener("change", scheduleSave);
+
+draftToastDismiss?.addEventListener("click", () => draftToast.classList.add("hidden"));
+draftToastClear?.addEventListener("click", () => {
+  clearDraft();
+  draftToast.classList.add("hidden");
+  document.getElementById("questionnaire-form")?.reset();
+  updateQuestionnaireBmi?.();
+  updateDialysisVisibility?.();
+  updateDiabeticVisibility?.();
+});
+
+// Hook into questionnaire tab activation to restore draft
+const _origActivateTab = activateTab;
+// (patch already applied via the if-block in activateTab; restore happens here via tab-switch event)
+document.querySelectorAll("[data-tab]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    if (btn.dataset.tab === "questionnaire") checkAndRestoreDraft();
+  });
+});
+document.querySelectorAll("[data-tab-jump]").forEach((btn) => {
+  if (btn.dataset.tabJump === "questionnaire") {
+    btn.addEventListener("click", checkAndRestoreDraft);
+  }
 });
 
 consentCheckbox.addEventListener("change", () => {
@@ -604,12 +899,24 @@ patientStartForm.addEventListener("submit", (event) => {
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
 
-consentContinueBtn.addEventListener("click", () => {
+consentContinueBtn.addEventListener("click", async () => {
   if (!hospitalIdInput.value || !uhidInput.value.trim()) {
     showToast("Create the patient intake before accepting consent.");
     activateTab("landing");
     return;
   }
+
+  // Record consent server-side (non-blocking — proceed even if this fails)
+  try {
+    const response = await authedFetch("/api/consent", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ uhid: uhidInput.value.trim(), hospitalId: hospitalIdInput.value })
+    });
+    if (response.status === 401) { handle401(); return; }
+    const result = await response.json();
+    if (result.ok) state.consentId = result.consentId;
+  } catch { /* non-fatal — consent will still be captured via consentObtained field */ }
 
   questionnaireNav.disabled = false;
   activateTab("questionnaire");
@@ -793,7 +1100,8 @@ async function loadBackendDashboard() {
   }
 
   try {
-    const response = await fetch("/api/dashboard-summary", { cache: "no-store" });
+    const response = await authedFetch("/api/dashboard-summary", { cache: "no-store" });
+    if (response.status === 401) { handle401(); return; }
     const result = await response.json();
     if (response.ok && result.ok && result.dbConfigured && result.summary) {
       state.backendDashboard = result.summary;
@@ -1005,13 +1313,9 @@ function resetUploadProgress() {
   uploadProgressPanel.classList.add("hidden");
 }
 
-function buildSubmissionFormData(timestamp, submission) {
-  const formData = new FormData();
-  const submissions = [submission].map((item, index) => {
+function buildSubmissionPayload(timestamp, submission) {
+  const submissions = [submission].map((item) => {
     const { uploadFiles, ...metadata } = item;
-    uploadFiles.forEach((upload) => {
-      formData.append(`file_${index}_${upload.fieldName}`, upload.file, upload.file.name);
-    });
     return {
       ...metadata,
       reviewed_at: timestamp,
@@ -1024,14 +1328,109 @@ function buildSubmissionFormData(timestamp, submission) {
     };
   });
 
-  formData.append("payload", JSON.stringify({ timestamp, submissions }));
+  return { timestamp, submissions };
+}
+
+function buildSubmissionFormData(timestamp, submission) {
+  const formData = new FormData();
+  const payload = buildSubmissionPayload(timestamp, submission);
+  [submission].forEach((item, index) => {
+    item.uploadFiles.forEach((upload) => {
+      formData.append(`file_${index}_${upload.fieldName}`, upload.file, upload.file.name);
+    });
+  });
+
+  formData.append("payload", JSON.stringify(payload));
   return formData;
+}
+
+async function parseUploadJson(response) {
+  let result = {};
+  try {
+    result = await response.json();
+  } catch {
+    throw new Error("Server returned an unreadable response.");
+  }
+  if (response.status === 401) {
+    handle401();
+    throw new Error("Session expired. Please sign in again.");
+  }
+  if (!response.ok || !result.ok) {
+    throw new Error(result.error || "Upload failed.");
+  }
+  return result;
+}
+
+async function createResumableUpload(timestamp, submission) {
+  const payload = buildSubmissionPayload(timestamp, submission);
+  const response = await authedFetch("/api/uploads/init", {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify({ timestamp, submission: payload.submissions[0] })
+  });
+  return parseUploadJson(response);
+}
+
+async function uploadChunkWithRetry({ uploadId, fileIndex, chunkIndex, chunk }) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= RESUMABLE_UPLOAD_RETRIES; attempt += 1) {
+    try {
+      const response = await authedFetch(`/api/uploads/${uploadId}/files/${fileIndex}/chunks/${chunkIndex}`, {
+        method: "PUT",
+        body:   chunk
+      });
+      return await parseUploadJson(response);
+    } catch (err) {
+      lastError = err;
+      if (attempt < RESUMABLE_UPLOAD_RETRIES) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 900));
+      }
+    }
+  }
+  throw lastError || new Error("Chunk upload failed.");
+}
+
+async function completeResumableUpload(uploadId) {
+  const response = await authedFetch(`/api/uploads/${uploadId}/complete`, { method: "POST" });
+  return parseUploadJson(response);
+}
+
+async function sendResumableSubmission(timestamp, submission) {
+  const session = await createResumableUpload(timestamp, submission);
+  const chunkSize = Number(session.chunkSize || 5 * 1024 * 1024);
+  const totalBytes = Math.max(1, submission.uploadFiles.reduce((sum, upload) => sum + upload.file.size, 0));
+  let uploadedBytes = 0;
+
+  for (let fileIndex = 0; fileIndex < submission.uploadFiles.length; fileIndex += 1) {
+    const upload = submission.uploadFiles[fileIndex];
+    const file = upload.file;
+    const totalChunks = Math.ceil(file.size / chunkSize);
+
+    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
+      const start = chunkIndex * chunkSize;
+      const end = Math.min(start + chunkSize, file.size);
+      const chunk = file.slice(start, end);
+      setUploadProgress(
+        (uploadedBytes / totalBytes) * 100,
+        `Uploading ${getUploadLabel(upload.fieldName)} (${chunkIndex + 1}/${totalChunks})`
+      );
+      await uploadChunkWithRetry({ uploadId: session.uploadId, fileIndex, chunkIndex, chunk });
+      uploadedBytes += chunk.size;
+      setUploadProgress((uploadedBytes / totalBytes) * 96, `Uploaded ${getUploadLabel(upload.fieldName)}`);
+    }
+  }
+
+  setUploadProgress(98, "Finalizing record and syncing cloud storage");
+  return completeResumableUpload(session.uploadId);
 }
 
 function sendSubmission(formData) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/submissions");
+    if (state.authSession?.token) {
+      xhr.setRequestHeader("Authorization", `Bearer ${state.authSession.token}`);
+    }
 
     xhr.upload.addEventListener("progress", (event) => {
       if (!event.lengthComputable) {
@@ -1182,6 +1581,7 @@ function buildSubmissionFromForm() {
     hospitalName,
     hospitalSessionId: state.hospitalSession?.id || hospitalId,
     hospitalSessionName: state.hospitalSession?.name || hospitalName,
+    consentId: state.consentId || null,
     studyId: studyId || "-",
     enrollmentDate: enrollmentDate || "-",
     siteCenter: siteCenter || "-",
@@ -1298,6 +1698,9 @@ function resetEgfrForm() {
 }
 
 function resetPatientIntakeForNextRecord() {
+  clearDraft();           // remove localStorage draft on successful submission
+  maxStepReached = 1;     // reset stepper progress for next patient
+  state.consentId = null;
   patientStartForm.reset();
   questionnaireForm.reset();
   landingEnrollmentDateInput.value = new Date().toISOString().slice(0, 10);
@@ -1312,6 +1715,7 @@ function resetPatientIntakeForNextRecord() {
   updateConsentContext();
   updateLinkedPatientSummary();
   updateHospitalSessionUI();
+  applyHospitalAuthContext();
 }
 
 egfrForm.addEventListener("submit", (event) => {
@@ -1342,12 +1746,12 @@ async function uploadReviewedSubmission() {
   reviewEditBtn.disabled = true;
   reviewCloseBtn.disabled = true;
   reviewProceedBtn.textContent = "Uploading...";
-  setUploadProgress(0, "Preparing direct upload");
+  setUploadProgress(0, "Preparing resumable upload");
 
   try {
     const timestamp = new Date().toISOString();
     const submission = state.pendingSubmission;
-    const result = await sendSubmission(buildSubmissionFormData(timestamp, submission));
+    const result = await sendResumableSubmission(timestamp, submission);
     setUploadProgress(100, "Upload complete");
 
     showToast(result.gcsSynced ? "Submission saved to VM and GCS." : "Submission saved to VM. Configure GCS_BUCKET for cloud sync.");
@@ -1396,12 +1800,435 @@ reviewModal.addEventListener("click", (event) => {
 });
 reviewProceedBtn.addEventListener("click", uploadReviewedSubmission);
 
-populateHospitals();
-landingEnrollmentDateInput.value = new Date().toISOString().slice(0, 10);
-updateLandingHospitalId();
-loadHospitalSession();
-updateConsentContext();
-updateLinkedPatientSummary();
-initializeGlobalValidation();
-initializeFilePreviews();
-updateUploadModeVisibility();
+// ─── Submissions panel ────────────────────────────────────────────────────────
+
+const subTbody          = document.getElementById("sub-tbody");
+const subPageInfo       = document.getElementById("sub-page-info");
+const subPrevBtn        = document.getElementById("sub-prev-btn");
+const subNextBtn        = document.getElementById("sub-next-btn");
+const subHospitalFilter = document.getElementById("sub-hospital-filter");
+const subReviewedFilter = document.getElementById("sub-reviewed-filter");
+const subSearchInput    = document.getElementById("sub-search-input");
+const subApplyBtn       = document.getElementById("sub-apply-filters");
+const subResetBtn       = document.getElementById("sub-reset-filters");
+const subDetailOverlay  = document.getElementById("sub-detail-overlay");
+const subDetailTitle    = document.getElementById("sub-detail-title");
+const subDetailSubtitle = document.getElementById("sub-detail-subtitle");
+const subDetailBody     = document.getElementById("sub-detail-body");
+const subDetailFooter   = document.getElementById("sub-detail-footer");
+const subDetailClose    = document.getElementById("sub-detail-close");
+
+const subState = { page: 1, total: 0, limit: 20 };
+
+function subFormatDate(iso) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+function subBadge(reviewed) {
+  return reviewed
+    ? `<span class="sub-badge sub-badge-reviewed">Reviewed</span>`
+    : `<span class="sub-badge sub-badge-pending">Pending</span>`;
+}
+
+function subUploadMode(mode) {
+  return mode === "package" ? "ZIP Package" : "Separate Files";
+}
+
+async function loadSubmissions(page = 1) {
+  if (!subTbody) return;
+  subTbody.innerHTML = '<tr><td colspan="9" class="empty">Loading…</td></tr>';
+
+  const params = new URLSearchParams({ page, limit: subState.limit });
+  const hospital = subHospitalFilter?.value || "";
+  const reviewed = subReviewedFilter?.value || "";
+  const search   = subSearchInput?.value.trim() || "";
+  if (hospital) params.set("hospitalId", hospital);
+  if (reviewed) params.set("reviewed",   reviewed);
+  if (search)   params.set("search",     search);
+
+  try {
+    const res    = await authedFetch(`/api/submissions?${params}`);
+    if (res.status === 401) { handle401(); return; }
+    const result = await res.json();
+    if (!res.ok || !result.ok) {
+      subTbody.innerHTML = `<tr><td colspan="9" class="empty">${escapeHTML(result.error || "Failed to load.")}</td></tr>`;
+      return;
+    }
+
+    subState.page  = result.page;
+    subState.total = result.total;
+
+    renderSubmissionsTable(result.items);
+    updateSubPagination();
+  } catch {
+    subTbody.innerHTML = '<tr><td colspan="9" class="empty">Network error. Please try again.</td></tr>';
+  }
+}
+
+function renderSubmissionsTable(items) {
+  if (!subTbody) return;
+  if (!items.length) {
+    subTbody.innerHTML = '<tr><td colspan="9" class="empty">No submissions match the current filters.</td></tr>';
+    return;
+  }
+
+  const start = (subState.page - 1) * subState.limit;
+  subTbody.innerHTML = "";
+  items.forEach((item, i) => {
+    const tr = document.createElement("tr");
+    tr.className = "sub-row";
+    tr.dataset.recordId = item.recordId;
+    tr.innerHTML = `
+      <td class="sub-num">${start + i + 1}</td>
+      <td class="sub-uhid">${escapeHTML(item.uhid)}</td>
+      <td class="sub-hospital" title="${escapeHTML(item.hospitalName || "")}">${escapeHTML(item.hospitalId)}</td>
+      <td>${escapeHTML(item.age || "—")} / ${escapeHTML(item.sex || "—")}</td>
+      <td><span class="sub-stage-badge stage-${escapeHTML(item.ckdStage)}">Stage ${escapeHTML(item.ckdStage)}</span></td>
+      <td>${escapeHTML(subUploadMode(item.uploadMode))}</td>
+      <td>${item.fileCount}</td>
+      <td class="sub-date">${subFormatDate(item.receivedAt)}</td>
+      <td>${subBadge(item.reviewedAt)}</td>
+    `;
+    tr.addEventListener("click", () => openSubmissionDetail(item.recordId));
+    subTbody.appendChild(tr);
+  });
+}
+
+function updateSubPagination() {
+  const totalPages = Math.max(1, Math.ceil(subState.total / subState.limit));
+  if (subPageInfo) subPageInfo.textContent = `Page ${subState.page} of ${totalPages} (${subState.total} record${subState.total !== 1 ? "s" : ""})`;
+  if (subPrevBtn)  subPrevBtn.disabled = subState.page <= 1;
+  if (subNextBtn)  subNextBtn.disabled = subState.page >= totalPages;
+}
+
+async function openSubmissionDetail(recordId) {
+  if (!subDetailOverlay) return;
+  subDetailOverlay.classList.remove("hidden");
+  if (subDetailTitle)    subDetailTitle.textContent    = "Loading…";
+  if (subDetailSubtitle) subDetailSubtitle.textContent = "";
+  if (subDetailBody)     subDetailBody.innerHTML       = '<p class="sub-detail-loading">Fetching record…</p>';
+  if (subDetailFooter)   subDetailFooter.innerHTML     = "";
+
+  try {
+    const res    = await authedFetch(`/api/submissions/${encodeURIComponent(recordId)}`);
+    if (res.status === 401) { handle401(); return; }
+    const result = await res.json();
+    if (!res.ok || !result.ok) {
+      if (subDetailBody) subDetailBody.innerHTML = `<p class="sub-detail-error">${escapeHTML(result.error || "Failed to load.")}</p>`;
+      return;
+    }
+    renderSubmissionDetail(result.submission);
+  } catch {
+    if (subDetailBody) subDetailBody.innerHTML = '<p class="sub-detail-error">Network error.</p>';
+  }
+}
+
+function renderSubmissionDetail(s) {
+  if (subDetailTitle)    subDetailTitle.textContent    = escapeHTML(s.uhid);
+  if (subDetailSubtitle) subDetailSubtitle.textContent = `${s.hospitalName || s.hospitalId}  ·  ${subFormatDate(s.receivedAt)}`;
+
+  const field = (label, value) => value && value !== "-"
+    ? `<div class="sub-detail-field"><span class="sub-detail-key">${label}</span><span class="sub-detail-val">${escapeHTML(String(value))}</span></div>`
+    : "";
+
+  const fileList = (s.files || []).map((f) =>
+    `<li class="sub-file-item"><span class="sub-file-name">${escapeHTML(f.originalName || f.storedName)}</span><span class="sub-file-size">${(f.size / 1024).toFixed(0)} KB</span></li>`
+  ).join("");
+
+  if (subDetailBody) subDetailBody.innerHTML = `
+    <section class="sub-detail-section">
+      <h3 class="sub-detail-section-title">Patient</h3>
+      ${field("Record ID",      s.recordId)}
+      ${field("Patient ID",     s.uhid)}
+      ${field("Age",            s.age)}
+      ${field("Sex",            s.sex)}
+      ${field("Height (cm)",    s.heightCm)}
+      ${field("Weight (kg)",    s.weight)}
+      ${field("BMI",            s.bmi)}
+      ${field("Ethnicity",      s.ethnicity)}
+      ${field("Occupation",     s.occupation)}
+    </section>
+    <section class="sub-detail-section">
+      <h3 class="sub-detail-section-title">Clinical</h3>
+      ${field("CKD Stage",            s.ckdStage)}
+      ${field("Known CKD",            s.knownCkd)}
+      ${field("CKD Duration",         s.ckdDuration)}
+      ${field("Dialysis",             s.dialysis)}
+      ${field("Dialysis Frequency",   s.dialysisFrequency)}
+      ${field("Diabetic",             s.diabetic)}
+      ${field("Diabetic Stage",       s.diabeticStage)}
+      ${field("Diabetes Duration",    s.diabetesDuration)}
+      ${field("Hypertension",         s.hypertension)}
+      ${field("Hypert. Duration",     s.hypertensionDuration)}
+      ${field("Cardiovascular Dis.",  s.cardiovascularDisease)}
+      ${field("Family Kidney Hist.",  s.familyKidneyHistory)}
+    </section>
+    <section class="sub-detail-section">
+      <h3 class="sub-detail-section-title">Submission</h3>
+      ${field("Hospital",       s.hospitalName || s.hospitalId)}
+      ${field("Upload Mode",    subUploadMode(s.uploadMode))}
+      ${field("Enrollment Date",s.enrollmentDate)}
+      ${field("Consent ID",     s.consentId)}
+      ${field("Batch ID",       s.batchId)}
+      ${field("Received At",    subFormatDate(s.receivedAt))}
+    </section>
+    ${fileList ? `<section class="sub-detail-section"><h3 class="sub-detail-section-title">Files</h3><ul class="sub-file-list">${fileList}</ul></section>` : ""}
+    ${s.reviewedAt ? `<section class="sub-detail-section"><h3 class="sub-detail-section-title">Review</h3>${field("Reviewed At", subFormatDate(s.reviewedAt))}${field("Reviewed By", s.reviewedBy)}</section>` : ""}
+  `;
+
+  if (subDetailFooter && state.authSession?.role === "admin") {
+    const isReviewed = Boolean(s.reviewedAt);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = isReviewed ? "btn-ghost sub-review-btn" : "btn-primary sub-review-btn";
+    btn.textContent = isReviewed ? "Clear Review" : "Mark as Reviewed";
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      btn.textContent = "Saving…";
+      try {
+        const res = await authedFetch(`/api/submissions/${encodeURIComponent(s.recordId)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reviewed: !isReviewed })
+        });
+        const result = await res.json();
+        if (res.ok && result.ok) {
+          // Refresh detail and table row
+          openSubmissionDetail(s.recordId);
+          loadSubmissions(subState.page);
+        } else {
+          btn.disabled = false;
+          btn.textContent = isReviewed ? "Clear Review" : "Mark as Reviewed";
+        }
+      } catch {
+        btn.disabled = false;
+        btn.textContent = isReviewed ? "Clear Review" : "Mark as Reviewed";
+      }
+    });
+    subDetailFooter.innerHTML = "";
+    subDetailFooter.appendChild(btn);
+  }
+}
+
+function closeSubmissionDetail() {
+  subDetailOverlay?.classList.add("hidden");
+}
+
+// Populate hospital filter for admin
+function populateSubHospitalFilter() {
+  if (!subHospitalFilter) return;
+  const isAdmin = state.authSession?.role === "admin";
+  const wrap = document.getElementById("sub-hospital-filter-wrap");
+  if (wrap) wrap.style.display = isAdmin ? "" : "none";
+  if (!isAdmin) return;
+  // Clear existing options except the first "All Hospitals"
+  while (subHospitalFilter.options.length > 1) subHospitalFilter.remove(1);
+  hospitals.forEach((h) => {
+    const opt = document.createElement("option");
+    opt.value = h.id;
+    opt.textContent = h.name;
+    subHospitalFilter.appendChild(opt);
+  });
+}
+
+const subExportBtn = document.getElementById("sub-export-csv");
+
+const EXPORT_ICON_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
+
+async function exportSubmissionsCsv() {
+  if (!subExportBtn) return;
+  subExportBtn.disabled = true;
+  subExportBtn.textContent = "Exporting…";
+
+  try {
+    const params   = new URLSearchParams();
+    const hospital = subHospitalFilter?.value || "";
+    const reviewed = subReviewedFilter?.value || "";
+    const search   = subSearchInput?.value.trim() || "";
+    if (hospital) params.set("hospitalId", hospital);
+    if (reviewed) params.set("reviewed",   reviewed);
+    if (search)   params.set("search",     search);
+
+    const res = await authedFetch(`/api/submissions/export?${params}`);
+    if (res.status === 401) { handle401(); return; }
+    if (!res.ok) {
+      showToast("Export failed. Please try again.");
+      return;
+    }
+
+    const blob    = await res.blob();
+    const objUrl  = URL.createObjectURL(blob);
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const a       = document.createElement("a");
+    a.href        = objUrl;
+    a.download    = `tanuh-submissions-${dateStr}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(objUrl);
+    showToast("CSV downloaded successfully.");
+  } catch {
+    showToast("Export failed. Please try again.");
+  } finally {
+    subExportBtn.disabled = false;
+    subExportBtn.innerHTML = `${EXPORT_ICON_SVG} Export CSV`;
+  }
+}
+
+subExportBtn?.addEventListener("click", exportSubmissionsCsv);
+
+subApplyBtn?.addEventListener("click", () => loadSubmissions(1));
+subResetBtn?.addEventListener("click", () => {
+  if (subHospitalFilter) subHospitalFilter.value = "";
+  if (subReviewedFilter) subReviewedFilter.value = "";
+  if (subSearchInput)    subSearchInput.value    = "";
+  loadSubmissions(1);
+});
+subSearchInput?.addEventListener("keydown", (e) => { if (e.key === "Enter") loadSubmissions(1); });
+subPrevBtn?.addEventListener("click", () => loadSubmissions(subState.page - 1));
+subNextBtn?.addEventListener("click", () => loadSubmissions(subState.page + 1));
+subDetailClose?.addEventListener("click", closeSubmissionDetail);
+subDetailOverlay?.addEventListener("click", (e) => { if (e.target === subDetailOverlay) closeSubmissionDetail(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSubmissionDetail(); });
+
+// ─── Login / logout event wiring ─────────────────────────────────────────────
+
+loginForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  hideLoginError();
+
+  const username  = document.getElementById("login-username")?.value.trim() || "";
+  const password  = document.getElementById("login-password")?.value || "";
+
+  if (!username || !password) {
+    showLoginError("Enter username and password.");
+    return;
+  }
+
+  const submitBtn = loginForm.querySelector("[type='submit']");
+  submitBtn.disabled = true;
+  submitBtn.classList.add("is-loading");
+
+  try {
+    const response = await fetch("/api/auth/login", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ username, password })
+    });
+    const result = await response.json();
+
+    if (!response.ok || !result.ok) {
+      showLoginError(result.error || "Login failed.");
+      loginForm.classList.add("ls-shake");
+      setTimeout(() => loginForm.classList.remove("ls-shake"), 500);
+      return;
+    }
+
+    saveAuthSession({
+      token:        result.token,
+      userId:       result.user.userId,
+      hospitalId:   result.user.hospitalId,
+      hospitalName: result.user.hospitalName,
+      role:         result.user.role,
+      expiresAt:    result.expiresAt
+    });
+
+    await loadHospitalsFromApi();
+    showApp();
+    applyHospitalAuthContext();
+    landingEnrollmentDateInput.value = new Date().toISOString().slice(0, 10);
+    loadHospitalSession();
+    updateConsentContext();
+    updateLinkedPatientSummary();
+    refreshDashboard();
+  } catch {
+    showLoginError("Network error. Please try again.");
+    loginForm.classList.add("ls-shake");
+    setTimeout(() => loginForm.classList.remove("ls-shake"), 500);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.classList.remove("is-loading");
+  }
+});
+
+logoutBtn?.addEventListener("click", async () => {
+  try {
+    await authedFetch("/api/auth/logout", { method: "POST" });
+  } catch { /* ignore */ }
+  clearAuthSession();
+  showLoginScreen();
+  document.getElementById("login-username") && (document.getElementById("login-username").value = "");
+  document.getElementById("login-password") && (document.getElementById("login-password").value = "");
+});
+
+// Password show/hide toggle
+document.getElementById("ls-pw-toggle")?.addEventListener("click", () => {
+  const pwInput  = document.getElementById("login-password");
+  const eyeOpen  = document.getElementById("ls-eye-open");
+  const eyeShut  = document.getElementById("ls-eye-shut");
+  if (!pwInput) return;
+  const isHidden = pwInput.type === "password";
+  pwInput.type = isHidden ? "text" : "password";
+  if (eyeOpen)  eyeOpen.style.display  = isHidden ? "none"  : "";
+  if (eyeShut)  eyeShut.style.display  = isHidden ? ""      : "none";
+});
+
+// ─── Startup ──────────────────────────────────────────────────────────────────
+
+(async function init() {
+  // Check if server requires auth
+  let serverAuthConfigured = true;
+  try {
+    const healthRes    = await fetch("/api/health");
+    const healthResult = await healthRes.json();
+    if (healthResult.ok) {
+      serverAuthConfigured = healthResult.authConfigured !== false;
+    }
+  } catch { /* assume auth required */ }
+
+  if (!serverAuthConfigured) {
+    // Dev mode: no auth configured on server — skip login screen
+    state.authSession = { token: "", userId: "anonymous", hospitalId: null, role: "admin" };
+    await loadHospitalsFromApi();
+    showApp();
+  } else if (loadAuthSession()) {
+    // Restore existing session
+    try {
+      const meRes    = await authedFetch("/api/auth/me");
+      const meResult = await meRes.json();
+      if (meRes.ok && meResult.ok) {
+        // Session still valid — refresh user info in case it changed
+        saveAuthSession({ ...state.authSession, ...meResult.user });
+        await loadHospitalsFromApi();
+        showApp();
+        applyHospitalAuthContext();
+      } else {
+        clearAuthSession();
+        showLoginScreen();
+      }
+    } catch {
+      // Network error — optimistically show app with cached session
+      await loadHospitalsFromApi();
+      showApp();
+      applyHospitalAuthContext();
+    }
+  } else {
+    showLoginScreen();
+    return; // Don't init the rest of the app yet — will happen after login
+  }
+
+  // These run only when the session is ready
+  populateHospitals();
+  landingEnrollmentDateInput.value = new Date().toISOString().slice(0, 10);
+  updateLandingHospitalId();
+  loadHospitalSession();
+  updateConsentContext();
+  updateLinkedPatientSummary();
+  initializeGlobalValidation();
+  initializeFilePreviews();
+  updateUploadModeVisibility();
+  updateDialysisVisibility();
+  updateDiabeticVisibility();
+  refreshDashboard();
+})();

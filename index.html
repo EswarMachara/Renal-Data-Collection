@@ -11,7 +11,100 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <header class="navbar-container">
+
+  <!-- Login screen — shown when not authenticated -->
+  <div id="login-screen" class="login-screen" role="main" aria-label="Sign in">
+
+    <!-- Left: branded panel -->
+    <div class="ls-left" aria-hidden="true">
+      <div class="ls-blob ls-blob-1"></div>
+      <div class="ls-blob ls-blob-2"></div>
+      <div class="ls-blob ls-blob-3"></div>
+      <div class="ls-left-content">
+        <div class="ls-brand">
+          <img src="assets/tanuh.png" alt="TANUH" class="ls-brand-logo" />
+          <span class="ls-brand-name">TANUH</span>
+        </div>
+        <div class="ls-headline">
+          <h2>AI-Based Renal<br />Screening Registry</h2>
+          <p>Secure, consented kidney data collection for partner hospitals across India.</p>
+        </div>
+        <ul class="ls-features">
+          <li><span class="ls-check">✓</span>Patient-linked consent</li>
+          <li><span class="ls-check">✓</span>Structured clinical intake</li>
+          <li><span class="ls-check">✓</span>DICOM &amp; ultrasound uploads</li>
+          <li><span class="ls-check">✓</span>Real-time GCS cloud sync</li>
+        </ul>
+        <div class="ls-partners">
+          <span class="ls-partners-label">Supported by</span>
+          <div class="ls-partners-logos">
+            <img src="assets/moe-logo.svg" alt="Ministry of Education, India" class="ls-partner-logo" />
+            <div class="ls-partner-sep"></div>
+            <img src="assets/iisc-logo.png" alt="IISc Bangalore" class="ls-partner-logo ls-partner-iisc" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: form panel -->
+    <div class="ls-right">
+      <div class="ls-form-wrap">
+        <div class="ls-form-top">
+          <img src="assets/tanuh.png" alt="TANUH" class="ls-form-logo" />
+          <span class="ls-portal-badge">Hospital Portal</span>
+        </div>
+        <h1 class="ls-form-title">Welcome back</h1>
+        <p class="ls-form-subtitle">Sign in with your hospital credentials to continue</p>
+
+        <form id="login-form" class="ls-form" novalidate autocomplete="on">
+          <div class="ls-field">
+            <label class="ls-label" for="login-username">Username</label>
+            <div class="ls-input-shell">
+              <svg class="ls-input-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/>
+                <path d="M4 20c0-4 3.582-7 8-7s8 3 8 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+              <input id="login-username" type="text" class="ls-input" autocomplete="username" placeholder="e.g. SH-SLM-TN" required />
+            </div>
+          </div>
+          <div class="ls-field">
+            <label class="ls-label" for="login-password">Password</label>
+            <div class="ls-input-shell">
+              <svg class="ls-input-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <rect x="3" y="11" width="18" height="11" rx="2" stroke="currentColor" stroke-width="1.8"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                <circle cx="12" cy="16" r="1.5" fill="currentColor"/>
+              </svg>
+              <input id="login-password" type="password" class="ls-input" autocomplete="current-password" placeholder="Enter your password" required />
+              <button type="button" class="ls-pw-toggle" id="ls-pw-toggle" aria-label="Show or hide password" tabindex="-1">
+                <svg id="ls-eye-open" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" stroke-width="1.8"/>
+                  <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>
+                </svg>
+                <svg id="ls-eye-shut" viewBox="0 0 24 24" fill="none" aria-hidden="true" class="hidden">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                  <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                  <path d="M1 1l22 22" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <p class="ls-error hidden" id="login-error" role="alert"></p>
+          <button class="ls-btn" type="submit">
+            <span class="ls-btn-label">Sign In</span>
+            <svg class="ls-btn-arrow" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </form>
+
+        <p class="ls-footer">TANUH · AI Centre of Excellence · IISc Bangalore</p>
+      </div>
+    </div>
+
+  </div>
+
+  <header class="navbar-container hidden" id="app-navbar">
     <div class="navbar-content">
       <div class="navbar-logo">
         <a class="logo-link" href="#">
@@ -26,11 +119,88 @@
         <button class="nav-link" id="questionnaire-nav" data-tab="questionnaire" type="button" disabled>Questionnaire</button>
         <button class="nav-link" id="egfr-nav" data-tab="egfr" type="button" disabled>eGFR Flow</button>
         <button class="nav-link" data-tab="dashboard" type="button">Dashboard</button>
+        <button class="nav-link" id="submissions-nav" data-tab="submissions" type="button">Submissions</button>
       </nav>
+      <div class="navbar-auth" id="navbar-auth">
+        <span class="navbar-user-label" id="navbar-user-label"></span>
+        <button class="btn-ghost navbar-logout" id="logout-btn" type="button">Sign Out</button>
+      </div>
     </div>
   </header>
 
-  <main class="app-container">
+  <!-- ── Intake stepper — visible only during the 4-step patient flow ── -->
+  <div id="intake-stepper" class="intake-stepper hidden" role="navigation" aria-label="Patient intake progress">
+    <div class="stp-inner">
+      <ol class="stp-track" aria-label="Steps">
+
+        <li class="stp-step stp-active" id="stp-1" data-stp="1">
+          <div class="stp-node" aria-hidden="true">
+            <span class="stp-num">1</span>
+            <svg class="stp-check" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="stp-label-wrap">
+            <span class="stp-label">Patient Setup</span>
+            <span class="stp-sub">Hospital &amp; patient ID</span>
+          </div>
+        </li>
+
+        <li class="stp-connector" aria-hidden="true"><span class="stp-line"></span></li>
+
+        <li class="stp-step stp-pending" id="stp-2" data-stp="2">
+          <div class="stp-node" aria-hidden="true">
+            <span class="stp-num">2</span>
+            <svg class="stp-check" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="stp-label-wrap">
+            <span class="stp-label">E-Consent</span>
+            <span class="stp-sub">Patient-linked consent</span>
+          </div>
+        </li>
+
+        <li class="stp-connector" aria-hidden="true"><span class="stp-line"></span></li>
+
+        <li class="stp-step stp-pending" id="stp-3" data-stp="3">
+          <div class="stp-node" aria-hidden="true">
+            <span class="stp-num">3</span>
+            <svg class="stp-check" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="stp-label-wrap">
+            <span class="stp-label">Questionnaire</span>
+            <span class="stp-sub">Demographics &amp; clinical history</span>
+          </div>
+        </li>
+
+        <li class="stp-connector" aria-hidden="true"><span class="stp-line"></span></li>
+
+        <li class="stp-step stp-pending" id="stp-4" data-stp="4">
+          <div class="stp-node" aria-hidden="true">
+            <span class="stp-num">4</span>
+            <svg class="stp-check" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="stp-label-wrap">
+            <span class="stp-label">Upload &amp; Submit</span>
+            <span class="stp-sub">Files &amp; final submission</span>
+          </div>
+        </li>
+
+      </ol>
+
+      <div class="stp-meta">
+        <div class="stp-patient-chip" id="stp-patient-chip" aria-live="polite"></div>
+        <div class="stp-autosave" id="stp-autosave" aria-live="polite"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Draft restore toast -->
+  <div class="draft-toast hidden" id="draft-toast" role="alert" aria-live="assertive">
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2a8 8 0 100 16A8 8 0 0010 2zm0 4v4l2.5 2.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    <span id="draft-toast-msg">Draft restored</span>
+    <button class="draft-toast-clear" id="draft-toast-clear" type="button">Clear draft</button>
+    <button class="draft-toast-dismiss" id="draft-toast-dismiss" type="button" aria-label="Dismiss">&times;</button>
+  </div>
+
+  <main class="app-container hidden">
     <section class="tab-panel visible" id="tab-landing" aria-labelledby="Home">
       <div class="landing-shell">
         <section class="landing-hero">
@@ -646,7 +816,91 @@
         </div>
       </article>
     </section>
+
+    <!-- ── Submissions Panel ─────────────────────────────────────────── -->
+    <section class="tab-panel" id="tab-submissions" aria-labelledby="Submissions">
+      <div class="page-hero submissions-hero">
+        <h1>Submission Records</h1>
+        <p>Browse, filter, and review patient data submissions from all partner hospitals</p>
+        <div class="hero-divider"></div>
+      </div>
+
+      <!-- Filter bar -->
+      <div class="sub-filter-bar">
+        <div class="sub-filter-group" id="sub-hospital-filter-wrap">
+          <label class="sub-filter-label" for="sub-hospital-filter">Hospital</label>
+          <select class="sub-filter-select" id="sub-hospital-filter">
+            <option value="">All Hospitals</option>
+          </select>
+        </div>
+        <div class="sub-filter-group">
+          <label class="sub-filter-label" for="sub-reviewed-filter">Status</label>
+          <select class="sub-filter-select" id="sub-reviewed-filter">
+            <option value="">All Records</option>
+            <option value="no">Pending Review</option>
+            <option value="yes">Reviewed</option>
+          </select>
+        </div>
+        <div class="sub-filter-group sub-filter-search">
+          <label class="sub-filter-label" for="sub-search-input">Search</label>
+          <input class="sub-filter-input" id="sub-search-input" type="text" placeholder="Patient ID or Record ID…" autocomplete="off" />
+        </div>
+        <button class="btn-primary sub-filter-btn" id="sub-apply-filters" type="button">Apply</button>
+        <button class="btn-ghost sub-filter-btn" id="sub-reset-filters" type="button">Reset</button>
+        <button class="btn-export sub-filter-btn" id="sub-export-csv" type="button">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export CSV
+        </button>
+      </div>
+
+      <!-- Table -->
+      <article class="panel-card sub-table-card">
+        <div class="table-wrap">
+          <table id="sub-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Patient ID</th>
+                <th>Hospital</th>
+                <th>Age / Sex</th>
+                <th>CKD Stage</th>
+                <th>Mode</th>
+                <th>Files</th>
+                <th>Received</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="sub-tbody">
+              <tr><td colspan="9" class="empty">Loading submissions…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <!-- Pagination -->
+        <div class="sub-pagination" id="sub-pagination">
+          <button class="sub-page-btn" id="sub-prev-btn" type="button" disabled>← Prev</button>
+          <span class="sub-page-info" id="sub-page-info">Page 1</span>
+          <button class="sub-page-btn" id="sub-next-btn" type="button" disabled>Next →</button>
+        </div>
+      </article>
+    </section>
   </main>
+
+  <!-- Submission detail slide-in panel -->
+  <div class="sub-detail-overlay hidden" id="sub-detail-overlay" role="dialog" aria-modal="true" aria-label="Submission detail">
+    <div class="sub-detail-panel" id="sub-detail-panel">
+      <div class="sub-detail-header">
+        <div>
+          <h2 class="sub-detail-title" id="sub-detail-title">Record Detail</h2>
+          <span class="sub-detail-subtitle" id="sub-detail-subtitle"></span>
+        </div>
+        <button class="sub-detail-close" id="sub-detail-close" type="button" aria-label="Close">&times;</button>
+      </div>
+      <div class="sub-detail-body" id="sub-detail-body">
+        <p class="sub-detail-loading">Loading…</p>
+      </div>
+      <div class="sub-detail-footer" id="sub-detail-footer"></div>
+    </div>
+  </div>
 
   <div id="review-modal" class="review-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="review-title">
     <section class="review-dialog">
