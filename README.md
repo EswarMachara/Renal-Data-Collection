@@ -18,6 +18,7 @@ https://bc-screener-research.tanuh.ai/
   - Dashboard shows upload progress for the reviewed record
   - Submissions are written under `data/submissions/`
   - If `GCS_BUCKET` is configured, each batch is synced to GCS with `gsutil rsync`
+  - If `DATABASE_URL` is configured, normalized submission metadata is stored in PostgreSQL
 
 ## GCS Folder Layout
 
@@ -63,6 +64,22 @@ For GCS sync, start the server with:
 ```bash
 GCS_BUCKET=renal-data-your-name npm start
 ```
+
+For PostgreSQL metadata storage, start the server with:
+
+```bash
+DATABASE_URL='postgres://USER:PASSWORD@HOST:5432/DATABASE' DB_SSL=disable npm start
+```
+
+Placeholder values such as `CHANGE_ME` are ignored by the server so the portal continues to run until real database credentials are configured.
+
+The server creates these tables automatically when `DATABASE_URL` is set:
+
+- `hospitals`
+- `submissions`
+- `submission_files`
+
+The endpoint `GET /api/dashboard-summary` returns PostgreSQL-backed counts when the database is configured.
 
 ## Important Security Note
 

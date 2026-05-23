@@ -3,6 +3,7 @@ const { execFile } = require("child_process");
 const fs = require("fs");
 const http = require("http");
 const path = require("path");
+const { Pool } = require("pg");
 
 const PUBLIC_DIR = __dirname;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
@@ -10,6 +11,9 @@ const PORT = Number(process.env.PORT || 8000);
 const HOST = process.env.HOST || "0.0.0.0";
 const GCS_BUCKET = process.env.GCS_BUCKET || "";
 const MAX_BODY_BYTES = Number(process.env.MAX_BODY_BYTES || 300 * 1024 * 1024);
+const RAW_DATABASE_URL = process.env.DATABASE_URL || "";
+const DATABASE_URL = /CHANGE_ME|USER:PASSWORD|HOST:5432/.test(RAW_DATABASE_URL) ? "" : RAW_DATABASE_URL;
+const DB_SSL = process.env.DB_SSL || "disable";
 
 const hospitals = [
   {
@@ -39,6 +43,14 @@ const allowedSexValues = new Set(["Male", "Female", "Other"]);
 const allowedYesNoValues = new Set(["Yes", "No"]);
 const allowedCkdStages = new Set(["1", "2", "3", "4"]);
 const allowedFileFields = new Set(["leftKidney", "rightKidney", "egfrReport", "patientPackage", "ultrasoundVideo"]);
+const dbPool = DATABASE_URL
+  ? new Pool({
+    connectionString: DATABASE_URL,
+    ssl: DB_SSL === "disable" ? false : { rejectUnauthorized: false }
+  })
+  : null;
+
+let dbReady = false;
 
 const mimeTypes = {
   ".css": "text/css; charset=utf-8",
@@ -265,6 +277,258 @@ function copyToGcs(localPath) {
       });
     });
   });
+}
+
+async function initializeDatabase() {
+  if (!dbPool) {
+    return;
+  }
+
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS hospitals (
+        hospital_id text PRIMARY KEY,
+        hospital_name text NOT NULL,
+        active boolean NOT NULL DEFAULT true,
+        created_at timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS submissions (
+        record_id text PRIMARY KEY,
+        batch_id text NOT NULL,
+        received_at timestamptz NOT NULL,
+        hospital_session_id text NOT NULL REFERENCES hospitals(hospital_id),
+        hospital_session_name text NOT NULL,
+        hospital_id text NOT NULL REFERENCES hospitals(hospital_id),
+        hospital_name text NOT NULL,
+        study_id text,
+        enrollment_date date,
+        site_center text,
+        consent_obtained text,
+        upload_mode text NOT NULL,
+        uhid text NOT NULL,
+        age integer NOT NULL,
+        sex text NOT NULL,
+        height_cm numeric(6,2),
+        weight_kg numeric(6,2) NOT NULL,
+        bmi numeric(5,2),
+        ethnicity text,
+        occupation text,
+        known_ckd text,
+        ckd_duration text,
+        ckd_stage integer NOT NULL,
+        dialysis text,
+        dialysis_frequency integer,
+        diabetic text NOT NULL,
+        diabetic_stage text,
+        diabetes_duration numeric(5,2),
+        hypertension text,
+        hypertension_duration numeric(5,2),
+        cardiovascular_disease text,
+        family_kidney_history text,
+        reviewed_at timestamptz,
+        local_path text,
+        gcs_synced boolean NOT NULL DEFAULT false,
+        gcs_path text,
+        metadata jsonb NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS submission_files (
+        file_id bigserial PRIMARY KEY,
+        record_id text NOT NULL REFERENCES submissions(record_id) ON DELETE CASCADE,
+        field_name text NOT NULL,
+        original_name text NOT NULL,
+        stored_name text NOT NULL,
+        bucket_path text NOT NULL,
+        mime_type text NOT NULL,
+        size_bytes bigint NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+    await client.query("CREATE INDEX IF NOT EXISTS idx_submissions_hospital_received ON submissions(hospital_id, received_at DESC)");
+    await client.query("CREATE INDEX IF NOT EXISTS idx_submissions_uhid ON submissions(uhid)");
+    await client.query("CREATE INDEX IF NOT EXISTS idx_submission_files_record ON submission_files(record_id)");
+    for (const hospital of hospitals) {
+      await client.query(
+        `
+          INSERT INTO hospitals (hospital_id, hospital_name)
+          VALUES ($1, $2)
+          ON CONFLICT (hospital_id)
+          DO UPDATE SET hospital_name = EXCLUDED.hospital_name, active = true
+        `,
+        [hospital.id, hospital.name]
+      );
+    }
+    await client.query("COMMIT");
+    dbReady = true;
+  } catch (err) {
+    await client.query("ROLLBACK");
+    dbReady = false;
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+function toNullable(value) {
+  return value && value !== "-" ? value : null;
+}
+
+function toNumberOrNull(value) {
+  if (!value || value === "-") {
+    return null;
+  }
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function toTimestampOrNull(value) {
+  if (!value || value === "-") {
+    return null;
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+async function persistRecordsToDatabase({ batchId, batchDir, records, gcsResult }) {
+  if (!dbPool) {
+    return { enabled: false, saved: false };
+  }
+
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    for (const record of records) {
+      await client.query(
+        `
+          INSERT INTO submissions (
+            record_id, batch_id, received_at, hospital_session_id, hospital_session_name,
+            hospital_id, hospital_name, study_id, enrollment_date, site_center,
+            consent_obtained, upload_mode, uhid, age, sex, height_cm, weight_kg,
+            bmi, ethnicity, occupation, known_ckd, ckd_duration, ckd_stage,
+            dialysis, dialysis_frequency, diabetic, diabetic_stage, diabetes_duration,
+            hypertension, hypertension_duration, cardiovascular_disease,
+            family_kidney_history, reviewed_at, local_path, gcs_synced, gcs_path, metadata
+          )
+          VALUES (
+            $1, $2, $3, $4, $5,
+            $6, $7, $8, $9, $10,
+            $11, $12, $13, $14, $15, $16, $17,
+            $18, $19, $20, $21, $22, $23,
+            $24, $25, $26, $27, $28,
+            $29, $30, $31,
+            $32, $33, $34, $35, $36, $37
+          )
+          ON CONFLICT (record_id) DO UPDATE SET
+            gcs_synced = EXCLUDED.gcs_synced,
+            gcs_path = EXCLUDED.gcs_path,
+            metadata = EXCLUDED.metadata
+        `,
+        [
+          record.recordId,
+          batchId,
+          record.receivedAt,
+          record.hospitalSessionId,
+          record.hospitalSessionName,
+          record.hospitalId,
+          record.hospitalName,
+          toNullable(record.studyId),
+          toNullable(record.enrollmentDate),
+          toNullable(record.siteCenter),
+          toNullable(record.consentObtained),
+          record.uploadMode,
+          record.uhid,
+          Number(record.age),
+          record.sex,
+          toNumberOrNull(record.heightCm),
+          Number(record.weight),
+          toNumberOrNull(record.bmi),
+          toNullable(record.ethnicity),
+          toNullable(record.occupation),
+          toNullable(record.knownCkd),
+          toNullable(record.ckdDuration),
+          Number(record.ckdStage),
+          toNullable(record.dialysis),
+          toNumberOrNull(record.dialysisFrequency),
+          record.diabetic,
+          toNullable(record.diabeticStage),
+          toNumberOrNull(record.diabetesDuration),
+          toNullable(record.hypertension),
+          toNumberOrNull(record.hypertensionDuration),
+          toNullable(record.cardiovascularDisease),
+          toNullable(record.familyKidneyHistory),
+          toTimestampOrNull(record.reviewedAt),
+          batchDir,
+          Boolean(gcsResult.synced),
+          gcsResult.gcsPath || null,
+          JSON.stringify(record)
+        ]
+      );
+
+      for (const file of record.files) {
+        await client.query(
+          `
+            INSERT INTO submission_files (
+              record_id, field_name, original_name, stored_name,
+              bucket_path, mime_type, size_bytes
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+          `,
+          [
+            record.recordId,
+            file.fieldName,
+            file.originalName,
+            file.storedName,
+            file.bucketPath,
+            file.type,
+            Number(file.size || 0)
+          ]
+        );
+      }
+    }
+    await client.query("COMMIT");
+    return { enabled: true, saved: true };
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function getDatabaseSummary() {
+  if (!dbPool) {
+    return null;
+  }
+
+  const [summary, stages, diabetic, videos, recent] = await Promise.all([
+    dbPool.query("SELECT COUNT(DISTINCT hospital_id)::int AS hospitals, COUNT(*)::int AS patients FROM submissions"),
+    dbPool.query("SELECT ckd_stage::text AS label, COUNT(*)::int AS value FROM submissions GROUP BY ckd_stage ORDER BY ckd_stage"),
+    dbPool.query("SELECT diabetic AS label, COUNT(*)::int AS value FROM submissions GROUP BY diabetic"),
+    dbPool.query("SELECT COUNT(DISTINCT record_id)::int AS value FROM submission_files WHERE field_name = 'ultrasoundVideo'"),
+    dbPool.query(`
+      SELECT record_id, batch_id, hospital_id, hospital_name, uhid, upload_mode, received_at, gcs_path, gcs_synced
+      FROM submissions
+      ORDER BY received_at DESC
+      LIMIT 10
+    `)
+  ]);
+
+  return {
+    summary: {
+      hospitals: summary.rows[0]?.hospitals || 0,
+      patients: summary.rows[0]?.patients || 0,
+      videos: videos.rows[0]?.value || 0
+    },
+    stages: stages.rows,
+    diabetic: diabetic.rows,
+    recent: recent.rows
+  };
 }
 
 function cleanText(value, maxLength = 160) {
@@ -593,6 +857,7 @@ async function handleSubmission(req, res) {
     );
 
     const gcsResult = await copyToGcs(gcsSyncDir);
+    const dbResult = await persistRecordsToDatabase({ batchId, batchDir, records, gcsResult });
     sendJson(res, 200, {
       ok: true,
       batchId,
@@ -600,7 +865,9 @@ async function handleSubmission(req, res) {
       localPath: batchDir,
       gcsSynced: gcsResult.synced,
       gcsPath: gcsResult.gcsPath || null,
-      gcsError: gcsResult.error || null
+      gcsError: gcsResult.error || null,
+      dbSaved: dbResult.saved,
+      dbConfigured: dbResult.enabled
     });
   } catch (err) {
     sendJson(res, 400, { ok: false, error: err.message });
@@ -614,8 +881,23 @@ const server = http.createServer((req, res) => {
     sendJson(res, 200, {
       ok: true,
       service: "tanuh-renal-data-server",
-      gcsConfigured: Boolean(GCS_BUCKET)
+      gcsConfigured: Boolean(GCS_BUCKET),
+      dbConfigured: Boolean(dbPool),
+      dbReady
     });
+    return;
+  }
+
+  if (req.method === "GET" && requestUrl.pathname === "/api/dashboard-summary") {
+    getDatabaseSummary()
+      .then((summary) => {
+        if (!summary) {
+          sendJson(res, 200, { ok: true, dbConfigured: false, summary: null });
+          return;
+        }
+        sendJson(res, 200, { ok: true, dbConfigured: true, summary });
+      })
+      .catch((err) => sendJson(res, 500, { ok: false, error: err.message }));
     return;
   }
 
@@ -627,6 +909,14 @@ const server = http.createServer((req, res) => {
   serveStatic(req, res);
 });
 
-server.listen(PORT, HOST, () => {
-  console.log(`TANUH Renal Screening Portal running at http://${HOST}:${PORT}`);
-});
+initializeDatabase()
+  .then(() => {
+    server.listen(PORT, HOST, () => {
+      console.log(`TANUH Renal Screening Portal running at http://${HOST}:${PORT}`);
+      console.log(`PostgreSQL metadata storage: ${dbReady ? "enabled" : "disabled"}`);
+    });
+  })
+  .catch((err) => {
+    console.error("Failed to initialize PostgreSQL metadata storage:", err.message);
+    process.exit(1);
+  });

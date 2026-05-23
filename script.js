@@ -2,7 +2,8 @@ const state = {
   pendingSubmission: null,
   recentUploads: [],
   uploadProgress: 0,
-  hospitalSession: null
+  hospitalSession: null,
+  backendDashboard: null
 };
 
 const HOSPITAL_SESSION_KEY = "renalPortalHospitalSession";
@@ -515,6 +516,10 @@ function activateTab(tabKey) {
   Object.entries(panels).forEach(([key, panel]) => {
     panel.classList.toggle("visible", key === tabKey);
   });
+
+  if (tabKey === "dashboard") {
+    loadBackendDashboard();
+  }
 }
 
 document.querySelectorAll("[data-tab-jump]").forEach((button) => {
@@ -782,6 +787,22 @@ function refreshDashboard() {
   redrawRecentUploads();
 }
 
+async function loadBackendDashboard() {
+  if (window.location.protocol === "file:") {
+    return;
+  }
+
+  try {
+    const response = await fetch("/api/dashboard-summary", { cache: "no-store" });
+    const result = await response.json();
+    if (response.ok && result.ok && result.dbConfigured && result.summary) {
+      state.backendDashboard = result.summary;
+      refreshDashboard();
+    }
+  } catch {
+  }
+}
+
 function redrawRecentUploads() {
   recentBody.innerHTML = "";
 
@@ -818,7 +839,18 @@ function updateDashboards() {
 
   const dashboardItems = state.recentUploads || [];
 
-  if (USE_DUMMY_DASHBOARD) {
+  if (state.backendDashboard) {
+    summaryHospitals = state.backendDashboard.summary?.hospitals || hospitals.length;
+    summaryFindings = state.backendDashboard.summary?.patients || 0;
+    summaryVideos = state.backendDashboard.summary?.videos || 0;
+    stageCounts = { "1": 0, "2": 0, "3": 0, "4": 0 };
+    (state.backendDashboard.stages || []).forEach((item) => {
+      stageCounts[item.label] = item.value;
+    });
+    diabeticYes = (state.backendDashboard.diabetic || []).find((item) => item.label === "Yes")?.value || 0;
+    diabeticNo = (state.backendDashboard.diabetic || []).find((item) => item.label === "No")?.value || 0;
+    ageBuckets = buildAgeBuckets(dashboardItems);
+  } else if (USE_DUMMY_DASHBOARD) {
     summaryHospitals = dummyDashboard.summary.hospitals;
     summaryFindings = dummyDashboard.summary.findings;
     stageCounts = { ...dummyDashboard.stages };
@@ -1336,6 +1368,7 @@ async function uploadReviewedSubmission() {
     state.pendingSubmission = null;
     resetEgfrForm();
     resetPatientIntakeForNextRecord();
+    await loadBackendDashboard();
     refreshDashboard();
     activateTab("dashboard");
   } catch (err) {

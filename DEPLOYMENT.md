@@ -11,7 +11,10 @@ These notes are based on `Renal team Project Setup.pdf`.
 - SSH access: IAP tunnel only
 - Public ingress: ports `80` and `443`
 - GCS public access: blocked by organization policy
-- Cloud SQL: must be provisioned by Platform Engineering with private connectivity
+- Cloud SQL: `sql-renal-datacollection`
+- Cloud SQL version: `POSTGRES_18`
+- Cloud SQL connection name: `proj-renal-shared:asia-south1:sql-renal-datacollection`
+- Cloud SQL networking: PSC enabled, public IPv4 disabled
 
 ## Local gcloud Setup
 
@@ -48,6 +51,15 @@ For GCS sync:
 ```bash
 GCS_BUCKET=renal-data-your-name npm start
 ```
+
+For PostgreSQL metadata storage:
+
+```bash
+DATABASE_URL='postgres://USER:PASSWORD@HOST:5432/DATABASE' DB_SSL=disable npm start
+```
+
+Use Secret Manager or a systemd environment file with restricted permissions for database credentials. Do not commit credentials to Git.
+Until real credentials are available, leave `DATABASE_URL` unset; placeholder values are ignored by the server.
 
 The server writes each batch locally under `data/submissions/` and copies it to:
 
