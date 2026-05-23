@@ -11,12 +11,16 @@ https://bc-screener-research.tanuh.ai/
   - Separate-file upload mode for left kidney, right kidney, and clinical report
   - Single ZIP package mode for hospitals that export all patient files together
   - Ultrasound video upload field saved separately when provided
+  - E-consent must be recorded before questionnaire/upload can proceed
+  - Data-quality warnings flag values that should be reviewed without blocking submission
 
 - VM/GCS submission path
   - Users review all entered details before a resumable VM/GCS upload starts
   - File uploads use chunked sessions via `/api/uploads/init`, `/api/uploads/:id/files/:fileIndex/chunks/:chunkIndex`, and `/api/uploads/:id/complete`
+  - Interrupted uploads can resume from the last server-confirmed chunk while the review window remains open
   - `POST /api/submissions` remains available for direct multipart submissions and small-file fallback
   - Dashboard shows upload progress for the reviewed record
+  - Admin submissions can be filtered by hospital, review status, search, and received-date range
   - Submissions are written under `data/submissions/`
   - If `GCS_BUCKET` is configured, each batch is synced to GCS with `gsutil rsync`
   - If `DATABASE_URL` is configured, normalized submission metadata is stored in PostgreSQL

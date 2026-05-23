@@ -285,6 +285,7 @@ function verifyEnvPassword(username, password) {
 // ─── Rate limiter ─────────────────────────────────────────────────────────────
 
 const loginAttempts = new Map(); // ip → { count, resetAt }
+const memoryConsents = new Map(); // consentId → { uhid, hospitalId, userId, consentVersion, createdAt }
 
 function checkRateLimit(ip) {
   const now   = Date.now();
@@ -802,6 +803,32 @@ function optionalDate(item, field, label) {
   return value;
 }
 
+function parseDateFilter(value, label, endOfDay = false) {
+  const cleaned = cleanText(value, 20);
+  if (!cleaned) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) throw new Error(`${label} must use YYYY-MM-DD format.`);
+  const date = new Date(`${cleaned}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}Z`);
+  if (Number.isNaN(date.getTime())) throw new Error(`${label} is not a valid date.`);
+  return date;
+}
+
+function applySubmissionFilters(records, { reviewed = "", search = "", dateFrom = null, dateTo = null } = {}) {
+  let filtered = records;
+  if (reviewed === "yes") filtered = filtered.filter((record) => record.reviewedAt);
+  if (reviewed === "no")  filtered = filtered.filter((record) => !record.reviewedAt);
+  if (dateFrom) filtered = filtered.filter((record) => new Date(record.receivedAt) >= dateFrom);
+  if (dateTo)   filtered = filtered.filter((record) => new Date(record.receivedAt) <= dateTo);
+  if (search) {
+    const normalizedSearch = search.toLowerCase().trim();
+    filtered = filtered.filter((record) =>
+      (record.uhid       || "").toLowerCase().includes(normalizedSearch) ||
+      (record.recordId   || "").toLowerCase().includes(normalizedSearch) ||
+      (record.hospitalId || "").toLowerCase().includes(normalizedSearch)
+    );
+  }
+  return filtered;
+}
+
 // ─── File normalisation ───────────────────────────────────────────────────────
 
 function normalizeFiles(files, { requireContent = true } = {}) {
@@ -824,6 +851,31 @@ function normalizeFiles(files, { requireContent = true } = {}) {
     if (!requireContent && size <= 0) throw new Error(`${name} is empty or invalid.`);
     return { ...file, fieldName, name, type: cleanText(file.type, 120) || "application/octet-stream", size: size || contentSize };
   });
+}
+
+function computeDataQualityWarnings(record) {
+  const warnings = [];
+  const age = Number(record.age);
+  const heightCm = record.heightCm === "-" ? null : Number(record.heightCm);
+  const weightKg = record.weight === "-" ? null : Number(record.weight);
+  const bmi = record.bmi === "-" ? null : Number(record.bmi);
+
+  if (Number.isFinite(age) && age >= 90) warnings.push("Patient age is 90 years or above; verify age entry.");
+  if (Number.isFinite(weightKg) && (weightKg < 30 || weightKg > 180)) warnings.push("Weight is outside the usual adult range; verify weight entry.");
+  if (Number.isFinite(heightCm) && (heightCm < 120 || heightCm > 210)) warnings.push("Height is outside the usual adult range; verify height entry.");
+  if (!Number.isFinite(heightCm)) warnings.push("Height is missing; BMI cannot be independently verified.");
+  if (Number.isFinite(heightCm) && Number.isFinite(weightKg) && Number.isFinite(bmi)) {
+    const calculatedBmi = weightKg / ((heightCm / 100) ** 2);
+    if (Math.abs(calculatedBmi - bmi) > 1) warnings.push("BMI differs from height/weight calculation; verify BMI.");
+    if (bmi < 16 || bmi > 40) warnings.push("BMI is outside the usual adult range; verify height and weight.");
+  }
+  if (record.ckdStage === "3" || record.ckdStage === "4") {
+    if (record.knownCkd === "No") warnings.push("Advanced CKD stage selected while Known CKD is No; verify clinical history.");
+  }
+  if (record.diabetic === "No" && record.diabetesDuration !== "-") warnings.push("Diabetes duration is present while Diabetes Mellitus is No.");
+  if (record.hypertension === "No" && record.hypertensionDuration !== "-") warnings.push("Hypertension duration is present while Hypertension is No.");
+
+  return warnings;
 }
 
 function normalizeSubmission(item, options = {}) {
@@ -894,6 +946,7 @@ function normalizeSubmission(item, options = {}) {
     throw new Error("Diabetes classification is required when diabetic status is Yes.");
   }
 
+  normalized.dataQualityWarnings = computeDataQualityWarnings(normalized);
   return normalized;
 }
 
@@ -1108,6 +1161,13 @@ async function handleConsentRecord(req, res) {
   const consentVersion = "1.0";
   const consentId      = `consent-${crypto.randomBytes(8).toString("hex")}`;
   const ip             = req.socket?.remoteAddress || null;
+  memoryConsents.set(consentId, {
+    uhid,
+    hospitalId,
+    userId: session.userId,
+    consentVersion,
+    createdAt: new Date().toISOString()
+  });
 
   if (dbPool && dbReady) {
     try {
@@ -1130,6 +1190,28 @@ async function handleConsentRecord(req, res) {
   sendJson(res, 200, { ok: true, consentId, consentVersion });
 }
 
+async function verifySubmissionConsent(record) {
+  if (!record.consentId) {
+    throw new Error("Recorded e-consent is required before submission.");
+  }
+
+  if (dbPool && dbReady) {
+    const result = await dbPool.query(
+      "SELECT consent_id FROM consents WHERE consent_id = $1 AND uhid = $2 AND hospital_id = $3",
+      [record.consentId, record.uhid, record.hospitalId]
+    );
+    if (!result.rows[0]) {
+      throw new Error("Consent record was not found for this patient. Please return to E-Consent and record consent again.");
+    }
+    return;
+  }
+
+  const consent = memoryConsents.get(record.consentId);
+  if (!consent || consent.uhid !== record.uhid || consent.hospitalId !== record.hospitalId) {
+    throw new Error("Consent record was not found for this patient. Please return to E-Consent and record consent again.");
+  }
+}
+
 async function finalizeSubmissionBatch({ normalizedSubmissions, session, req }) {
   if (session.role === "hospital" && session.hospitalId) {
     const wrongHospital = normalizedSubmissions.find((item) => item.hospitalId !== session.hospitalId);
@@ -1138,6 +1220,10 @@ async function finalizeSubmissionBatch({ normalizedSubmissions, session, req }) 
       err.statusCode = 403;
       throw err;
     }
+  }
+
+  for (const record of normalizedSubmissions) {
+    await verifySubmissionConsent(record);
   }
 
   const now      = new Date();
@@ -1213,6 +1299,7 @@ async function finalizeSubmissionBatch({ normalizedSubmissions, session, req }) 
       hypertensionDuration: item.hypertensionDuration,
       cardiovascularDisease:  item.cardiovascularDisease,
       familyKidneyHistory:    item.familyKidneyHistory,
+      dataQualityWarnings:  item.dataQualityWarnings || [],
       reviewedAt:           item.reviewedAt || null,
       files:                storedFiles
     };
@@ -1272,6 +1359,14 @@ async function handleSubmission(req, res) {
     const result = await finalizeSubmissionBatch({ normalizedSubmissions, session, req });
     sendJson(res, 200, result);
   } catch (err) {
+    await logAudit({
+      event: "submission_failed",
+      userId: session.userId,
+      hospitalId: session.hospitalId,
+      ip: req.socket?.remoteAddress,
+      req,
+      details: { error: err.message }
+    });
     sendJson(res, err.statusCode || 400, { ok: false, error: err.message });
   }
 }
@@ -1295,6 +1390,7 @@ async function handleUploadInit(req, res) {
       sendJson(res, 403, { ok: false, error: "You can only submit records for your assigned hospital." });
       return;
     }
+    await verifySubmissionConsent(normalizedSubmission);
 
     const uploadId   = crypto.randomBytes(16).toString("hex");
     const now        = new Date().toISOString();
@@ -1343,6 +1439,14 @@ async function handleUploadInit(req, res) {
       files: uploadFiles.map(({ chunks, ...file }) => file)
     });
   } catch (err) {
+    await logAudit({
+      event: "upload_session_init_failed",
+      userId: session.userId,
+      hospitalId: session.hospitalId,
+      ip: req.socket?.remoteAddress,
+      req,
+      details: { error: err.message }
+    });
     sendJson(res, 400, { ok: false, error: err.message });
   }
 }
@@ -1531,6 +1635,12 @@ async function handleUploadComplete(req, res, uploadId) {
     uploadSession.error = err.message;
     uploadSession.updatedAt = new Date().toISOString();
     try { await writeUploadSession(uploadSession); } catch { /* ignore */ }
+    await logAudit({
+      event: "upload_session_failed",
+      userId: session.userId, hospitalId: uploadSession.hospitalId,
+      ip: req.socket?.remoteAddress, req,
+      details: { uploadId, error: err.message }
+    });
     sendJson(res, err.statusCode || 400, { ok: false, error: err.message });
   }
 }
@@ -1591,6 +1701,15 @@ async function handleGetSubmissions(req, res) {
   const limit  = Math.min(50, Math.max(1, parseInt(url.searchParams.get("limit") || "20", 10)));
   const reviewed = url.searchParams.get("reviewed") || "";
   const search   = (url.searchParams.get("search")  || "").toLowerCase().trim();
+  let dateFrom, dateTo;
+  try {
+    dateFrom = parseDateFilter(url.searchParams.get("dateFrom") || "", "From date");
+    dateTo   = parseDateFilter(url.searchParams.get("dateTo")   || "", "To date", true);
+    if (dateFrom && dateTo && dateFrom > dateTo) throw new Error("From date cannot be after To date.");
+  } catch (err) {
+    sendJson(res, 400, { ok: false, error: err.message });
+    return;
+  }
   const filterHospital = session.role === "hospital"
     ? session.hospitalId
     : (url.searchParams.get("hospitalId") || "");
@@ -1598,13 +1717,7 @@ async function handleGetSubmissions(req, res) {
   try {
     let all = await readAllSubmissions(filterHospital || null);
 
-    if (reviewed === "yes") all = all.filter((r) => r.reviewedAt);
-    if (reviewed === "no")  all = all.filter((r) => !r.reviewedAt);
-    if (search) all = all.filter((r) =>
-      (r.uhid        || "").toLowerCase().includes(search) ||
-      (r.recordId    || "").toLowerCase().includes(search) ||
-      (r.hospitalId  || "").toLowerCase().includes(search)
-    );
+    all = applySubmissionFilters(all, { reviewed, search, dateFrom, dateTo });
 
     const total = all.length;
     const items = all.slice((page - 1) * limit, page * limit).map((r) => ({
@@ -1618,6 +1731,7 @@ async function handleGetSubmissions(req, res) {
       ckdStage:     r.ckdStage,
       uploadMode:   r.uploadMode,
       fileCount:    Array.isArray(r.files) ? r.files.length : 0,
+      qualityWarningCount: Array.isArray(r.dataQualityWarnings) ? r.dataQualityWarnings.length : 0,
       receivedAt:   r.receivedAt,
       reviewedAt:   r.reviewedAt  || null,
       reviewedBy:   r.reviewedBy  || null,
@@ -1699,19 +1813,22 @@ async function handleExportSubmissions(req, res) {
   const url            = new URL(req.url, `http://${req.headers.host}`);
   const reviewed       = url.searchParams.get("reviewed") || "";
   const search         = (url.searchParams.get("search") || "").toLowerCase().trim();
+  let dateFrom, dateTo;
+  try {
+    dateFrom = parseDateFilter(url.searchParams.get("dateFrom") || "", "From date");
+    dateTo   = parseDateFilter(url.searchParams.get("dateTo")   || "", "To date", true);
+    if (dateFrom && dateTo && dateFrom > dateTo) throw new Error("From date cannot be after To date.");
+  } catch (err) {
+    sendJson(res, 400, { ok: false, error: err.message });
+    return;
+  }
   const filterHospital = session.role === "hospital"
     ? session.hospitalId
     : (url.searchParams.get("hospitalId") || "");
 
   try {
     let all = await readAllSubmissions(filterHospital || null);
-    if (reviewed === "yes") all = all.filter((r) => r.reviewedAt);
-    if (reviewed === "no")  all = all.filter((r) => !r.reviewedAt);
-    if (search) all = all.filter((r) =>
-      (r.uhid       || "").toLowerCase().includes(search) ||
-      (r.recordId   || "").toLowerCase().includes(search) ||
-      (r.hospitalId || "").toLowerCase().includes(search)
-    );
+    all = applySubmissionFilters(all, { reviewed, search, dateFrom, dateTo });
 
     const cols = [
       "recordId", "batchId", "hospitalId", "hospitalName", "uhid",
@@ -1720,7 +1837,7 @@ async function handleExportSubmissions(req, res) {
       "diabetic", "diabeticStage", "diabetesDuration",
       "hypertension", "hypertensionDuration", "cardiovascularDisease", "familyKidneyHistory",
       "uploadMode", "fileCount", "consentId", "enrollmentDate", "receivedAt",
-      "reviewedAt", "reviewedBy"
+      "reviewedAt", "reviewedBy", "dataQualityWarnings"
     ];
 
     const headers = [
@@ -1730,7 +1847,7 @@ async function handleExportSubmissions(req, res) {
       "Diabetic", "Diabetic Stage", "Diabetes Duration",
       "Hypertension", "Hypertension Duration", "Cardiovascular Disease", "Family Kidney History",
       "Upload Mode", "File Count", "Consent ID", "Enrollment Date", "Received At",
-      "Reviewed At", "Reviewed By"
+      "Reviewed At", "Reviewed By", "Data Quality Warnings"
     ];
 
     function csvCell(v) {
@@ -1742,9 +1859,31 @@ async function handleExportSubmissions(req, res) {
     const rows = [headers.join(",")];
     for (const r of all) {
       const fileCount = Array.isArray(r.files) ? r.files.length : 0;
-      const row = cols.map((c) => c === "fileCount" ? fileCount : csvCell(r[c]));
+      const row = cols.map((c) => {
+        if (c === "fileCount") return fileCount;
+        if (c === "dataQualityWarnings") return csvCell((r.dataQualityWarnings || []).join(" | "));
+        return csvCell(r[c]);
+      });
       rows.push(row.join(","));
     }
+
+    await logAudit({
+      event: "submissions_exported",
+      userId: session.userId,
+      hospitalId: filterHospital || session.hospitalId || null,
+      ip: req.socket?.remoteAddress,
+      req,
+      details: {
+        count: all.length,
+        filters: {
+          hospitalId: filterHospital || "",
+          reviewed,
+          search,
+          dateFrom: url.searchParams.get("dateFrom") || "",
+          dateTo: url.searchParams.get("dateTo") || ""
+        }
+      }
+    });
 
     const csv      = rows.join("\r\n");
     const dateStr  = new Date().toISOString().slice(0, 10);

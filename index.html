@@ -414,6 +414,7 @@
             <input id="consent-checkbox" type="checkbox" />
             <span>I confirm that this consent review is linked to the patient intake shown above, and that I have read and understood the participant information before proceeding.</span>
           </label>
+          <div class="consent-record-status" id="consent-record-status" role="status">Consent is not recorded yet.</div>
           <button class="btn-premium" id="consent-continue" type="button" disabled>Accept & Continue</button>
         </div>
       </article>
@@ -844,6 +845,14 @@
         <div class="sub-filter-group sub-filter-search">
           <label class="sub-filter-label" for="sub-search-input">Search</label>
           <input class="sub-filter-input" id="sub-search-input" type="text" placeholder="Patient ID or Record ID…" autocomplete="off" />
+        </div>
+        <div class="sub-filter-group">
+          <label class="sub-filter-label" for="sub-date-from">From</label>
+          <input class="sub-filter-input" id="sub-date-from" type="date" />
+        </div>
+        <div class="sub-filter-group">
+          <label class="sub-filter-label" for="sub-date-to">To</label>
+          <input class="sub-filter-input" id="sub-date-to" type="date" />
         </div>
         <button class="btn-primary sub-filter-btn" id="sub-apply-filters" type="button">Apply</button>
         <button class="btn-ghost sub-filter-btn" id="sub-reset-filters" type="button">Reset</button>

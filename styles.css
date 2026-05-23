@@ -664,6 +664,28 @@ body {
   accent-color: var(--teal-primary);
 }
 
+.consent-record-status {
+  min-width: 180px;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #9a3412;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.consent-record-status.recorded {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.consent-record-status.error {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
 .btn-premium:disabled {
   background: #94a3b8;
   cursor: not-allowed;
@@ -1784,6 +1806,23 @@ body {
   color: #1e3a8a;
   padding: 0.85rem 1rem;
   font-size: 0.9rem;
+}
+
+.review-alert.warning {
+  border-color: #fed7aa;
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.review-warning-list,
+.sub-warning-list {
+  margin: 0.45rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.review-warning-list li,
+.sub-warning-list li {
+  margin: 0.2rem 0;
 }
 
 .review-grid {
@@ -3021,6 +3060,12 @@ th {
 .sub-detail-error { color: #dc2626; }
 
 .sub-detail-section { }
+.sub-quality-section {
+  border: 1px solid #fed7aa;
+  border-radius: 12px;
+  background: #fff7ed;
+  padding: 0.8rem 0.9rem;
+}
 .sub-detail-section-title {
   font-size: 0.68rem;
   font-weight: 700;

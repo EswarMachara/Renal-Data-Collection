@@ -5,7 +5,8 @@ const state = {
   hospitalSession: null,
   backendDashboard: null,
   authSession: null,   // { token, userId, hospitalId, hospitalName, role, expiresAt }
-  consentId: null      // set after /api/consent succeeds
+  consentId: null,     // set after /api/consent succeeds
+  currentUploadSession: null
 };
 
 const HOSPITAL_SESSION_KEY = "renalPortalHospitalSession";
@@ -48,7 +49,8 @@ function saveAuthSession(sessionData) {
 
 function clearAuthSession() {
   state.authSession = null;
-  state.consentId   = null;
+  state.currentUploadSession = null;
+  resetConsentRecord();
   try { sessionStorage.removeItem(AUTH_SESSION_KEY); } catch { /* ignore */ }
   try { sessionStorage.removeItem(HOSPITAL_SESSION_KEY); } catch { /* ignore */ }
 }
@@ -231,6 +233,7 @@ const consentContextHospital = document.getElementById("consent-context-hospital
 const consentContextHospitalId = document.getElementById("consent-context-hospital-id");
 const consentContextUhid = document.getElementById("consent-context-uhid");
 const consentContextDate = document.getElementById("consent-context-date");
+const consentRecordStatus = document.getElementById("consent-record-status");
 const linkedPatientTitle = document.getElementById("linked-patient-title");
 const linkedHospital = document.getElementById("linked-hospital");
 const linkedHospitalId = document.getElementById("linked-hospital-id");
@@ -279,6 +282,18 @@ function showToast(message) {
   toast.textContent = message;
   toast.classList.add("show");
   window.setTimeout(() => toast.classList.remove("show"), 2400);
+}
+
+function setConsentRecordStatus(message, status = "pending") {
+  if (!consentRecordStatus) return;
+  consentRecordStatus.textContent = message;
+  consentRecordStatus.classList.toggle("recorded", status === "recorded");
+  consentRecordStatus.classList.toggle("error", status === "error");
+}
+
+function resetConsentRecord() {
+  state.consentId = null;
+  setConsentRecordStatus("Consent is not recorded yet.");
 }
 
 function escapeHTML(value) {
@@ -541,6 +556,30 @@ function formatBytes(bytes) {
     return `${(value / (1024 * 1024)).toFixed(1)} MB`;
   }
   return `${(value / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
+function computeDataQualityWarnings(record) {
+  const warnings = [];
+  const age = Number(record.age);
+  const heightCm = record.heightCm === "-" ? null : Number(record.heightCm);
+  const weightKg = record.weight === "-" ? null : Number(record.weight);
+  const bmi = record.bmi === "-" ? null : Number(record.bmi);
+
+  if (Number.isFinite(age) && age >= 90) warnings.push("Patient age is 90 years or above; verify age entry.");
+  if (Number.isFinite(weightKg) && (weightKg < 30 || weightKg > 180)) warnings.push("Weight is outside the usual adult range; verify weight entry.");
+  if (Number.isFinite(heightCm) && (heightCm < 120 || heightCm > 210)) warnings.push("Height is outside the usual adult range; verify height entry.");
+  if (!Number.isFinite(heightCm)) warnings.push("Height is missing; BMI cannot be independently verified.");
+  if (Number.isFinite(heightCm) && Number.isFinite(weightKg) && Number.isFinite(bmi)) {
+    const calculatedBmi = weightKg / ((heightCm / 100) ** 2);
+    if (Math.abs(calculatedBmi - bmi) > 1) warnings.push("BMI differs from height/weight calculation; verify BMI.");
+    if (bmi < 16 || bmi > 40) warnings.push("BMI is outside the usual adult range; verify height and weight.");
+  }
+  if ((record.ckdStage === "3" || record.ckdStage === "4") && record.knownCkd === "No") {
+    warnings.push("Advanced CKD stage selected while Known CKD is No; verify clinical history.");
+  }
+  if (record.diabetic === "No" && record.diabetesDuration !== "-") warnings.push("Diabetes duration is present while Diabetes Mellitus is No.");
+  if (record.hypertension === "No" && record.hypertensionDuration !== "-") warnings.push("Hypertension duration is present while Hypertension is No.");
+  return warnings;
 }
 
 function getUploadLabel(fieldName) {
@@ -833,7 +872,10 @@ document.querySelectorAll("[data-tab-jump]").forEach((btn) => {
 });
 
 consentCheckbox.addEventListener("change", () => {
-  consentContinueBtn.disabled = !consentCheckbox.checked;
+  if (!state.consentId) {
+    consentContinueBtn.textContent = "Accept & Continue";
+    consentContinueBtn.disabled = !consentCheckbox.checked;
+  }
 });
 
 landingScrollSetupBtn.addEventListener("click", () => {
@@ -849,6 +891,8 @@ landingHospitalInput.addEventListener("change", () => {
   hospitalNameInput.value = "";
   hospitalIdInput.value = "";
   uhidInput.value = "";
+  resetConsentRecord();
+  state.currentUploadSession = null;
   consentNav.disabled = true;
   questionnaireNav.disabled = true;
   egfrNav.disabled = true;
@@ -890,6 +934,8 @@ patientStartForm.addEventListener("submit", (event) => {
   }
 
   syncIntakeToQuestionnaire();
+  resetConsentRecord();
+  state.currentUploadSession = null;
   consentCheckbox.checked = false;
   consentContinueBtn.disabled = true;
   consentNav.disabled = false;
@@ -906,7 +952,10 @@ consentContinueBtn.addEventListener("click", async () => {
     return;
   }
 
-  // Record consent server-side (non-blocking — proceed even if this fails)
+  consentContinueBtn.disabled = true;
+  consentContinueBtn.textContent = "Recording Consent...";
+  setConsentRecordStatus("Recording consent...");
+
   try {
     const response = await authedFetch("/api/consent", {
       method:  "POST",
@@ -915,10 +964,22 @@ consentContinueBtn.addEventListener("click", async () => {
     });
     if (response.status === 401) { handle401(); return; }
     const result = await response.json();
-    if (result.ok) state.consentId = result.consentId;
-  } catch { /* non-fatal — consent will still be captured via consentObtained field */ }
+    if (!response.ok || !result.ok || !result.consentId) {
+      throw new Error(result.error || "Could not record consent.");
+    }
+    state.consentId = result.consentId;
+    setConsentRecordStatus(`Consent recorded: ${result.consentId}`, "recorded");
+  } catch (err) {
+    resetConsentRecord();
+    setConsentRecordStatus("Consent recording failed. Please retry.", "error");
+    showToast(err.message || "Consent recording failed. Please retry.");
+    consentContinueBtn.textContent = "Accept & Continue";
+    consentContinueBtn.disabled = !consentCheckbox.checked;
+    return;
+  }
 
   questionnaireNav.disabled = false;
+  consentContinueBtn.textContent = "Consent Recorded";
   activateTab("questionnaire");
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
@@ -1395,33 +1456,89 @@ async function completeResumableUpload(uploadId) {
   return parseUploadJson(response);
 }
 
+async function getResumableUploadStatus(uploadId) {
+  const response = await authedFetch(`/api/uploads/${uploadId}/status`);
+  return parseUploadJson(response);
+}
+
+function getSubmissionUploadSignature(submission) {
+  return [
+    submission.hospitalId,
+    submission.uhid,
+    submission.consentId,
+    ...submission.uploadFiles.map((upload) => `${upload.fieldName}:${upload.file.name}:${upload.file.size}`)
+  ].join("|");
+}
+
+function clearCurrentUploadSession() {
+  state.currentUploadSession = null;
+}
+
 async function sendResumableSubmission(timestamp, submission) {
-  const session = await createResumableUpload(timestamp, submission);
-  const chunkSize = Number(session.chunkSize || 5 * 1024 * 1024);
+  const signature = getSubmissionUploadSignature(submission);
+  let session = state.currentUploadSession?.signature === signature ? state.currentUploadSession : null;
+  if (!session) {
+    session = await createResumableUpload(timestamp, submission);
+    state.currentUploadSession = {
+      uploadId: session.uploadId,
+      chunkSize: Number(session.chunkSize || 5 * 1024 * 1024),
+      signature
+    };
+  } else {
+    setUploadProgress(state.uploadProgress || 0, "Checking resumable upload status");
+    try {
+      const status = await getResumableUploadStatus(session.uploadId);
+      session = { ...session, ...status };
+    } catch {
+      clearCurrentUploadSession();
+      session = await createResumableUpload(timestamp, submission);
+      state.currentUploadSession = {
+        uploadId: session.uploadId,
+        chunkSize: Number(session.chunkSize || 5 * 1024 * 1024),
+        signature
+      };
+    }
+  }
+
+  const chunkSize = Number(session.chunkSize || state.currentUploadSession?.chunkSize || 5 * 1024 * 1024);
+  const receivedByFile = new Map();
+  if (Array.isArray(session.files)) {
+    session.files.forEach((file) => {
+      receivedByFile.set(file.index, new Set(file.receivedChunks || []));
+    });
+  }
   const totalBytes = Math.max(1, submission.uploadFiles.reduce((sum, upload) => sum + upload.file.size, 0));
-  let uploadedBytes = 0;
+  let uploadedBytes = Array.isArray(session.files)
+    ? session.files.reduce((sum, file) => sum + Number(file.receivedBytes || 0), 0)
+    : 0;
 
   for (let fileIndex = 0; fileIndex < submission.uploadFiles.length; fileIndex += 1) {
     const upload = submission.uploadFiles[fileIndex];
     const file = upload.file;
     const totalChunks = Math.ceil(file.size / chunkSize);
+    const receivedChunks = receivedByFile.get(fileIndex) || new Set();
 
     for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
       const start = chunkIndex * chunkSize;
       const end = Math.min(start + chunkSize, file.size);
       const chunk = file.slice(start, end);
+      if (receivedChunks.has(chunkIndex)) {
+        continue;
+      }
       setUploadProgress(
         (uploadedBytes / totalBytes) * 100,
         `Uploading ${getUploadLabel(upload.fieldName)} (${chunkIndex + 1}/${totalChunks})`
       );
-      await uploadChunkWithRetry({ uploadId: session.uploadId, fileIndex, chunkIndex, chunk });
+      await uploadChunkWithRetry({ uploadId: state.currentUploadSession.uploadId, fileIndex, chunkIndex, chunk });
       uploadedBytes += chunk.size;
       setUploadProgress((uploadedBytes / totalBytes) * 96, `Uploaded ${getUploadLabel(upload.fieldName)}`);
     }
   }
 
   setUploadProgress(98, "Finalizing record and syncing cloud storage");
-  return completeResumableUpload(session.uploadId);
+  const result = await completeResumableUpload(state.currentUploadSession.uploadId);
+  clearCurrentUploadSession();
+  return result;
 }
 
 function sendSubmission(formData) {
@@ -1502,6 +1619,12 @@ function buildSubmissionFromForm() {
     return null;
   }
 
+  if (!state.consentId) {
+    showToast("Record e-consent before submitting clinical files.");
+    activateTab("consent");
+    return null;
+  }
+
   if (!validateQuestionnaireForClinicalUpload()) {
     return null;
   }
@@ -1575,8 +1698,7 @@ function buildSubmissionFromForm() {
   }
 
   const totalBytes = uploadFiles.reduce((sum, upload) => sum + upload.file.size, 0);
-
-  return {
+  const submission = {
     hospitalId,
     hospitalName,
     hospitalSessionId: state.hospitalSession?.id || hospitalId,
@@ -1616,13 +1738,19 @@ function buildSubmissionFromForm() {
     status: "Pending Review",
     reviewedAt: new Date().toISOString()
   };
+  submission.dataQualityWarnings = computeDataQualityWarnings(submission);
+  return submission;
 }
 
 function renderReviewSubmission(submission) {
+  const resumableSession = state.currentUploadSession?.signature === getSubmissionUploadSignature(submission)
+    ? state.currentUploadSession
+    : null;
   const detailRows = [
     ["Hospital", submission.hospitalName],
     ["Hospital ID", submission.hospitalId],
     ["Patient ID", submission.uhid],
+    ["Consent ID", submission.consentId || "-"],
     ["Study ID", submission.studyId || "-"],
     ["Enrollment Date", submission.enrollmentDate || "-"],
     ["Consent Obtained", submission.consentObtained || "-"],
@@ -1650,11 +1778,23 @@ function renderReviewSubmission(submission) {
       <small>${escapeHTML(upload.file.type || "Unknown type")} • ${formatBytes(upload.file.size)}</small>
     </div>
   `).join("");
+  const qualityWarnings = submission.dataQualityWarnings || [];
+  const qualityBlock = qualityWarnings.length ? `
+    <div class="review-alert warning">
+      <strong>Data quality checks need attention:</strong>
+      <ul class="review-warning-list">
+        ${qualityWarnings.map((warning) => `<li>${escapeHTML(warning)}</li>`).join("")}
+      </ul>
+    </div>
+  ` : "";
 
   reviewContent.innerHTML = `
-    <div class="review-alert">
-      Please confirm these details. After you proceed, this record uploads directly to the VM and Cloud Storage.
+    <div class="review-alert${resumableSession ? " warning" : ""}">
+      ${resumableSession
+        ? "An interrupted upload session was found for this patient. Click Resume Upload to continue from the last confirmed chunk."
+        : "Please confirm these details. After you proceed, this record uploads directly to the VM and Cloud Storage."}
     </div>
+    ${qualityBlock}
     <div class="review-grid">
       ${detailRows.map(([label, value]) => `
         <div class="review-item">
@@ -1675,7 +1815,9 @@ function showReviewSubmission(submission) {
   state.pendingSubmission = submission;
   renderReviewSubmission(submission);
   reviewProceedBtn.disabled = false;
-  reviewProceedBtn.textContent = "Proceed & Upload";
+  reviewProceedBtn.textContent = state.currentUploadSession?.signature === getSubmissionUploadSignature(submission)
+    ? "Resume Upload"
+    : "Proceed & Upload";
   reviewModal.classList.remove("hidden");
   refreshDashboard();
 }
@@ -1700,7 +1842,8 @@ function resetEgfrForm() {
 function resetPatientIntakeForNextRecord() {
   clearDraft();           // remove localStorage draft on successful submission
   maxStepReached = 1;     // reset stepper progress for next patient
-  state.consentId = null;
+  state.currentUploadSession = null;
+  resetConsentRecord();
   patientStartForm.reset();
   questionnaireForm.reset();
   landingEnrollmentDateInput.value = new Date().toISOString().slice(0, 10);
@@ -1708,6 +1851,7 @@ function resetPatientIntakeForNextRecord() {
   hospitalIdInput.value = landingHospitalIdInput.value;
   consentCheckbox.checked = false;
   consentContinueBtn.disabled = true;
+  consentContinueBtn.textContent = "Accept & Continue";
   consentNav.disabled = true;
   questionnaireNav.disabled = true;
   egfrNav.disabled = true;
@@ -1780,13 +1924,21 @@ async function uploadReviewedSubmission() {
       ...state.pendingSubmission,
       status: "Failed"
     };
+    if (state.pendingSubmission && state.currentUploadSession?.signature === getSubmissionUploadSignature(state.pendingSubmission)) {
+      renderReviewSubmission(state.pendingSubmission);
+      reviewProceedBtn.textContent = "Resume Upload";
+    }
     refreshDashboard();
-    showToast("Failed to submit: " + err.message);
+    showToast("Upload interrupted: " + err.message + " You can resume from the review window.");
   } finally {
     reviewProceedBtn.disabled = false;
     reviewEditBtn.disabled = false;
     reviewCloseBtn.disabled = false;
-    reviewProceedBtn.textContent = "Proceed & Upload";
+    if (state.pendingSubmission && state.currentUploadSession?.signature === getSubmissionUploadSignature(state.pendingSubmission)) {
+      reviewProceedBtn.textContent = "Resume Upload";
+    } else {
+      reviewProceedBtn.textContent = "Proceed & Upload";
+    }
     window.setTimeout(resetUploadProgress, 1800);
   }
 }
@@ -1809,6 +1961,8 @@ const subNextBtn        = document.getElementById("sub-next-btn");
 const subHospitalFilter = document.getElementById("sub-hospital-filter");
 const subReviewedFilter = document.getElementById("sub-reviewed-filter");
 const subSearchInput    = document.getElementById("sub-search-input");
+const subDateFromInput  = document.getElementById("sub-date-from");
+const subDateToInput    = document.getElementById("sub-date-to");
 const subApplyBtn       = document.getElementById("sub-apply-filters");
 const subResetBtn       = document.getElementById("sub-reset-filters");
 const subDetailOverlay  = document.getElementById("sub-detail-overlay");
@@ -1843,9 +1997,13 @@ async function loadSubmissions(page = 1) {
   const hospital = subHospitalFilter?.value || "";
   const reviewed = subReviewedFilter?.value || "";
   const search   = subSearchInput?.value.trim() || "";
+  const dateFrom = subDateFromInput?.value || "";
+  const dateTo   = subDateToInput?.value || "";
   if (hospital) params.set("hospitalId", hospital);
   if (reviewed) params.set("reviewed",   reviewed);
   if (search)   params.set("search",     search);
+  if (dateFrom) params.set("dateFrom",   dateFrom);
+  if (dateTo)   params.set("dateTo",     dateTo);
 
   try {
     const res    = await authedFetch(`/api/submissions?${params}`);
@@ -1935,6 +2093,15 @@ function renderSubmissionDetail(s) {
   const fileList = (s.files || []).map((f) =>
     `<li class="sub-file-item"><span class="sub-file-name">${escapeHTML(f.originalName || f.storedName)}</span><span class="sub-file-size">${(f.size / 1024).toFixed(0)} KB</span></li>`
   ).join("");
+  const qualityWarnings = Array.isArray(s.dataQualityWarnings) ? s.dataQualityWarnings : [];
+  const qualitySection = qualityWarnings.length ? `
+    <section class="sub-detail-section sub-quality-section">
+      <h3 class="sub-detail-section-title">Data Quality Checks</h3>
+      <ul class="sub-warning-list">
+        ${qualityWarnings.map((warning) => `<li>${escapeHTML(warning)}</li>`).join("")}
+      </ul>
+    </section>
+  ` : "";
 
   if (subDetailBody) subDetailBody.innerHTML = `
     <section class="sub-detail-section">
@@ -1973,6 +2140,7 @@ function renderSubmissionDetail(s) {
       ${field("Batch ID",       s.batchId)}
       ${field("Received At",    subFormatDate(s.receivedAt))}
     </section>
+    ${qualitySection}
     ${fileList ? `<section class="sub-detail-section"><h3 class="sub-detail-section-title">Files</h3><ul class="sub-file-list">${fileList}</ul></section>` : ""}
     ${s.reviewedAt ? `<section class="sub-detail-section"><h3 class="sub-detail-section-title">Review</h3>${field("Reviewed At", subFormatDate(s.reviewedAt))}${field("Reviewed By", s.reviewedBy)}</section>` : ""}
   `;
@@ -2046,9 +2214,13 @@ async function exportSubmissionsCsv() {
     const hospital = subHospitalFilter?.value || "";
     const reviewed = subReviewedFilter?.value || "";
     const search   = subSearchInput?.value.trim() || "";
+    const dateFrom = subDateFromInput?.value || "";
+    const dateTo   = subDateToInput?.value || "";
     if (hospital) params.set("hospitalId", hospital);
     if (reviewed) params.set("reviewed",   reviewed);
     if (search)   params.set("search",     search);
+    if (dateFrom) params.set("dateFrom",   dateFrom);
+    if (dateTo)   params.set("dateTo",     dateTo);
 
     const res = await authedFetch(`/api/submissions/export?${params}`);
     if (res.status === 401) { handle401(); return; }
@@ -2083,9 +2255,13 @@ subResetBtn?.addEventListener("click", () => {
   if (subHospitalFilter) subHospitalFilter.value = "";
   if (subReviewedFilter) subReviewedFilter.value = "";
   if (subSearchInput)    subSearchInput.value    = "";
+  if (subDateFromInput)  subDateFromInput.value  = "";
+  if (subDateToInput)    subDateToInput.value    = "";
   loadSubmissions(1);
 });
 subSearchInput?.addEventListener("keydown", (e) => { if (e.key === "Enter") loadSubmissions(1); });
+subDateFromInput?.addEventListener("change", () => loadSubmissions(1));
+subDateToInput?.addEventListener("change", () => loadSubmissions(1));
 subPrevBtn?.addEventListener("click", () => loadSubmissions(subState.page - 1));
 subNextBtn?.addEventListener("click", () => loadSubmissions(subState.page + 1));
 subDetailClose?.addEventListener("click", closeSubmissionDetail);
