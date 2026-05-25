@@ -6,6 +6,7 @@ const state = {
   backendDashboard: null,
   authSession: null,   // { token, userId, hospitalId, hospitalName, role, expiresAt }
   consentId: null,     // set after /api/consent succeeds
+  questionnaireCompleted: false,
   currentUploadSession: null
 };
 
@@ -118,6 +119,7 @@ function showApp() {
   const submissionsNavBtn = document.getElementById("submissions-nav");
   if (submissionsNavBtn) submissionsNavBtn.style.display = "";
   populateSubHospitalFilter();
+  updateWorkflowAccess();
 }
 
 function showLoginScreen() {
@@ -163,10 +165,15 @@ const recentBody = document.getElementById("recent-body");
 const consentNav = document.getElementById("consent-nav");
 const questionnaireNav = document.getElementById("questionnaire-nav");
 const egfrNav = document.getElementById("egfr-nav");
+const consentAccessBanner = document.getElementById("consent-access-banner");
+const questionnaireAccessBanner = document.getElementById("questionnaire-access-banner");
+const egfrAccessBanner = document.getElementById("egfr-access-banner");
 const landingScrollSetupBtn = document.getElementById("landing-scroll-setup");
 const hospitalSessionForm = document.getElementById("hospital-session-form");
 const patientStartForm = document.getElementById("patient-start-form");
 const intakeWorkspace = document.getElementById("intake-workspace");
+const sessionWorkflow = document.getElementById("session-workflow");
+const workflowContinueBtn = document.getElementById("workflow-continue");
 const landingHospitalInput = document.getElementById("landing-hospital");
 const landingHospitalIdInput = document.getElementById("landing-hospital-id");
 const landingUhidInput = document.getElementById("landing-uhid");
@@ -182,6 +189,93 @@ const questionnaireHeightInput = document.getElementById("questionnaire-height")
 const questionnaireWeightInput = document.getElementById("patient-weight");
 const questionnaireBmiInput = document.getElementById("questionnaire-bmi");
 const syncChoiceInputs = document.querySelectorAll("[data-sync-target]");
+
+function getWorkflowAccess() {
+  const patientReady = Boolean(hospitalIdInput?.value.trim() && uhidInput?.value.trim());
+  const consentReady = patientReady && Boolean(state.consentId);
+  return {
+    consent: patientReady,
+    questionnaire: consentReady,
+    egfr: consentReady && state.questionnaireCompleted
+  };
+}
+
+function setPreviewFormLocked(form, locked) {
+  if (!form) return;
+  form.classList.toggle("preview-locked", locked);
+  form.setAttribute("aria-disabled", String(locked));
+  form.querySelectorAll("input, select, textarea, button").forEach((control) => {
+    if (control.matches("[data-tab-jump]")) return;
+    if (locked) {
+      if (!control.hasAttribute("data-gate-locked")) {
+        control.dataset.gatePreviouslyDisabled = String(control.disabled);
+        control.setAttribute("data-gate-locked", "");
+      }
+      control.disabled = true;
+      return;
+    }
+    if (control.hasAttribute("data-gate-locked")) {
+      control.disabled = control.dataset.gatePreviouslyDisabled === "true";
+      delete control.dataset.gatePreviouslyDisabled;
+      control.removeAttribute("data-gate-locked");
+    }
+  });
+}
+
+function setWorkflowNavState(nav, banner, unlocked, title) {
+  if (!nav) return;
+  nav.disabled = false;
+  nav.classList.toggle("is-locked", !unlocked);
+  nav.title = unlocked ? title : `${title} — preview only until the previous step is completed`;
+  banner?.classList.toggle("hidden", unlocked);
+}
+
+function updateWorkflowAccess() {
+  const access = getWorkflowAccess();
+  setWorkflowNavState(consentNav, consentAccessBanner, access.consent, "E-Consent Form");
+  setWorkflowNavState(questionnaireNav, questionnaireAccessBanner, access.questionnaire, "Questionnaire");
+  setWorkflowNavState(egfrNav, egfrAccessBanner, access.egfr, "eGFR Flow");
+
+  document.getElementById("tab-consent")?.classList.toggle("preview-locked", !access.consent);
+  consentCheckbox.disabled = !access.consent;
+  if (!access.consent || state.consentId) {
+    consentContinueBtn.disabled = true;
+  } else {
+    consentContinueBtn.disabled = !consentCheckbox.checked;
+  }
+
+  setPreviewFormLocked(questionnaireForm, !access.questionnaire);
+  setPreviewFormLocked(egfrForm, !access.egfr);
+  return access;
+}
+
+function initializeLandingReveal() {
+  const revealSections = document.querySelectorAll("#tab-landing .reveal-section");
+  if (!revealSections.length) return;
+
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduceMotion || !("IntersectionObserver" in window)) {
+    revealSections.forEach((section) => section.classList.add("is-revealed"));
+    return;
+  }
+
+  document.body.classList.add("reveal-enabled");
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      entry.target.classList.add("is-revealed");
+      observer.unobserve(entry.target);
+    });
+  }, { threshold: 0.18, rootMargin: "0px 0px -8% 0px" });
+
+  revealSections.forEach((section) => observer.observe(section));
+}
+
+function scrollToLandingSection(section) {
+  if (!section) return;
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  section.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
+}
 
 const studyIdInput = document.getElementById("study-id");
 const hospitalNameInput = document.getElementById("hospital-name");
@@ -215,6 +309,7 @@ const uploadModeInputs = document.querySelectorAll("input[name='uploadMode']");
 const uploadModeCards = document.querySelectorAll("[data-upload-mode-card]");
 const separateUploadSection = document.getElementById("separate-upload-section");
 const packageUploadSection = document.getElementById("package-upload-section");
+const kidneyMeasurementInputs = document.querySelectorAll(".renal-measurement-grid input[type='number']");
 const leftKidneyFileInput = document.getElementById("left-kidney-file");
 const rightKidneyFileInput = document.getElementById("right-kidney-file");
 const egfrReportInput = document.getElementById("egfr-report");
@@ -293,6 +388,7 @@ function setConsentRecordStatus(message, status = "pending") {
 
 function resetConsentRecord() {
   state.consentId = null;
+  state.questionnaireCompleted = false;
   setConsentRecordStatus("Consent is not recorded yet.");
 }
 
@@ -664,6 +760,7 @@ function initializeFilePreviews() {
 }
 
 function activateTab(tabKey) {
+  updateWorkflowAccess();
   tabs.forEach((tab) => {
     const isActive = tab.dataset.tab === tabKey;
     tab.classList.toggle("active", isActive);
@@ -706,9 +803,6 @@ const draftToastDismiss = document.getElementById("draft-toast-dismiss");
 
 // Which nav-tab key maps to which step number
 const TAB_TO_STEP = { landing: 1, consent: 2, questionnaire: 3, egfr: 4 };
-// Steps above this number have been reached/completed this session
-let maxStepReached = 1;
-
 function updateStepper(tabKey) {
   const currentStep = TAB_TO_STEP[tabKey];
   const isIntakeTab  = Boolean(currentStep);
@@ -721,20 +815,27 @@ function updateStepper(tabKey) {
   }
 
   intakeStepper.classList.remove("hidden");
-  if (currentStep > maxStepReached) maxStepReached = currentStep;
+  const access = getWorkflowAccess();
+  const stepAccess = { 1: true, 2: access.consent, 3: access.questionnaire, 4: access.egfr };
+  const completed = { 1: access.consent, 2: access.questionnaire, 3: access.egfr, 4: false };
 
   [1, 2, 3, 4].forEach((n) => {
     const el = document.getElementById(`stp-${n}`);
     if (!el) return;
-    el.classList.remove("stp-active", "stp-done", "stp-pending");
-    if (n < currentStep)       el.classList.add("stp-done");
-    else if (n === currentStep) el.classList.add("stp-active");
-    else                        el.classList.add("stp-pending");
+    el.classList.remove("stp-active", "stp-done", "stp-pending", "stp-locked");
+    if (n === currentStep) {
+      el.classList.add("stp-active");
+      el.classList.toggle("stp-locked", !stepAccess[n]);
+    } else if (completed[n]) {
+      el.classList.add("stp-done");
+    } else {
+      el.classList.add("stp-pending");
+    }
   });
 
   // Fill the connector lines proportionally
   document.querySelectorAll(".stp-connector").forEach((conn, i) => {
-    const filled = currentStep > i + 1;
+    const filled = completed[i + 1];
     conn.classList.toggle("stp-connector-done", filled);
   });
 
@@ -872,14 +973,18 @@ document.querySelectorAll("[data-tab-jump]").forEach((btn) => {
 });
 
 consentCheckbox.addEventListener("change", () => {
-  if (!state.consentId) {
+  if (!state.consentId && getWorkflowAccess().consent) {
     consentContinueBtn.textContent = "Accept & Continue";
     consentContinueBtn.disabled = !consentCheckbox.checked;
   }
 });
 
 landingScrollSetupBtn.addEventListener("click", () => {
-  intakeWorkspace.scrollIntoView({ behavior: "smooth", block: "start" });
+  scrollToLandingSection(sessionWorkflow || intakeWorkspace);
+});
+
+workflowContinueBtn?.addEventListener("click", () => {
+  scrollToLandingSection(intakeWorkspace);
 });
 
 landingHospitalInput.addEventListener("change", () => {
@@ -893,9 +998,6 @@ landingHospitalInput.addEventListener("change", () => {
   uhidInput.value = "";
   resetConsentRecord();
   state.currentUploadSession = null;
-  consentNav.disabled = true;
-  questionnaireNav.disabled = true;
-  egfrNav.disabled = true;
   try {
     sessionStorage.removeItem(HOSPITAL_SESSION_KEY);
   } catch {
@@ -903,6 +1005,7 @@ landingHospitalInput.addEventListener("change", () => {
   updateHospitalSessionUI();
   updateConsentContext();
   updateLinkedPatientSummary();
+  updateWorkflowAccess();
 });
 
 hospitalSessionForm.addEventListener("submit", (event) => {
@@ -938,9 +1041,7 @@ patientStartForm.addEventListener("submit", (event) => {
   state.currentUploadSession = null;
   consentCheckbox.checked = false;
   consentContinueBtn.disabled = true;
-  consentNav.disabled = false;
-  questionnaireNav.disabled = true;
-  egfrNav.disabled = true;
+  updateWorkflowAccess();
   activateTab("consent");
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
@@ -978,8 +1079,8 @@ consentContinueBtn.addEventListener("click", async () => {
     return;
   }
 
-  questionnaireNav.disabled = false;
   consentContinueBtn.textContent = "Consent Recorded";
+  updateWorkflowAccess();
   activateTab("questionnaire");
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
@@ -1074,7 +1175,8 @@ questionnaireContinueBtn.addEventListener("click", () => {
     return;
   }
 
-  egfrNav.disabled = false;
+  state.questionnaireCompleted = true;
+  updateWorkflowAccess();
   activateTab("egfr");
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
@@ -1462,10 +1564,9 @@ async function getResumableUploadStatus(uploadId) {
 }
 
 function getSubmissionUploadSignature(submission) {
+  const { uploadFiles, progress, status, reviewedAt, ...metadata } = submission;
   return [
-    submission.hospitalId,
-    submission.uhid,
-    submission.consentId,
+    JSON.stringify(metadata),
     ...submission.uploadFiles.map((upload) => `${upload.fieldName}:${upload.file.name}:${upload.file.size}`)
   ].join("|");
 }
@@ -1579,6 +1680,51 @@ function sendSubmission(formData) {
   });
 }
 
+function getFormTextValue(id) {
+  return document.getElementById(id)?.value.trim() || "-";
+}
+
+function getSelectedChoiceValue(name) {
+  return document.querySelector(`input[name="${name}"]:checked`)?.value || "-";
+}
+
+function collectKidneyFindings(side) {
+  return {
+    lengthCm: getFormTextValue(`${side}-kidney-length`),
+    widthCm: getFormTextValue(`${side}-kidney-width`),
+    corticalThicknessMm: getFormTextValue(`${side}-cortical-thickness`),
+    echogenicity: getSelectedChoiceValue(`${side}Echogenicity`),
+    structural: {
+      kidneySize: getSelectedChoiceValue(`${side}KidneySize`),
+      parenchymalTexture: getSelectedChoiceValue(`${side}ParenchymalTexture`),
+      cysts: getSelectedChoiceValue(`${side}Cysts`),
+      stones: getSelectedChoiceValue(`${side}Stones`),
+      hydronephrosis: getSelectedChoiceValue(`${side}Hydronephrosis`),
+      others: getFormTextValue(`${side}-other-findings`)
+    }
+  };
+}
+
+function formatClinicalMeasurement(value, unit) {
+  return value && value !== "-" ? `${value} ${unit}` : "-";
+}
+
+function getKidneyFindingReviewRows(label, findings) {
+  const structural = findings?.structural || {};
+  return [
+    [`${label} Length`, formatClinicalMeasurement(findings?.lengthCm, "cm")],
+    [`${label} Width`, formatClinicalMeasurement(findings?.widthCm, "cm")],
+    [`${label} Cortical Thickness`, formatClinicalMeasurement(findings?.corticalThicknessMm, "mm")],
+    [`${label} Echogenicity`, findings?.echogenicity || "-"],
+    [`${label} Size`, structural.kidneySize || "-"],
+    [`${label} Parenchymal Texture`, structural.parenchymalTexture || "-"],
+    [`${label} Cysts`, structural.cysts || "-"],
+    [`${label} Stones`, structural.stones || "-"],
+    [`${label} Hydronephrosis`, structural.hydronephrosis || "-"],
+    [`${label} Other Findings`, structural.others || "-"]
+  ];
+}
+
 function buildSubmissionFromForm() {
   const selectedHospital = hospitals.find((hospital) => hospital.id === hospitalNameInput.value);
   const uploadMode = getUploadMode();
@@ -1608,6 +1754,10 @@ function buildSubmissionFromForm() {
   const hypertensionDuration = hypertensionDurationInput.value.trim();
   const cardiovascularDisease = getCheckedValue(cardiovascularDiseaseInputs);
   const familyKidneyHistory = getCheckedValue(familyKidneyHistoryInputs);
+  const ultrasoundFindings = {
+    right: collectKidneyFindings("right"),
+    left: collectKidneyFindings("left")
+  };
   const leftKidneyFile = leftKidneyFileInput.files[0];
   const rightKidneyFile = rightKidneyFileInput.files[0];
   const egfrReportFile = egfrReportInput.files[0];
@@ -1626,6 +1776,14 @@ function buildSubmissionFromForm() {
   }
 
   if (!validateQuestionnaireForClinicalUpload()) {
+    return null;
+  }
+
+  const invalidKidneyMeasurement = Array.from(kidneyMeasurementInputs)
+    .find((input) => input.value.trim() && !validateNumericInput(input));
+  if (invalidKidneyMeasurement) {
+    invalidKidneyMeasurement.reportValidity();
+    invalidKidneyMeasurement.focus();
     return null;
   }
 
@@ -1729,6 +1887,7 @@ function buildSubmissionFromForm() {
     hypertensionDuration: hypertensionDuration || "-",
     cardiovascularDisease: cardiovascularDisease || "-",
     familyKidneyHistory: familyKidneyHistory || "-",
+    ultrasoundFindings,
     files: uploadFiles.map((upload) => upload.file.name),
     fileCount: uploadFiles.length,
     totalBytes,
@@ -1770,6 +1929,27 @@ function renderReviewSubmission(submission) {
     ["Cardiovascular Disease", submission.cardiovascularDisease || "-"],
     ["Family Kidney History", submission.familyKidneyHistory || "-"]
   ];
+  const ultrasoundFindingRows = [
+    ...getKidneyFindingReviewRows("Right Kidney", submission.ultrasoundFindings?.right),
+    ...getKidneyFindingReviewRows("Left Kidney", submission.ultrasoundFindings?.left)
+  ].filter(([, value]) => value !== "-");
+  const ultrasoundFindingBlock = ultrasoundFindingRows.length ? `
+    <div class="review-files">
+      <h3>Ultrasound Findings</h3>
+      <div class="review-grid">
+        ${ultrasoundFindingRows.map(([label, value]) => `
+          <div class="review-item">
+            <span>${escapeHTML(label)}</span>
+            <strong>${escapeHTML(value)}</strong>
+          </div>
+        `).join("")}
+      </div>
+    </div>
+  ` : `
+    <div class="review-alert">
+      No structured ultrasound findings were entered for this record.
+    </div>
+  `;
 
   const fileRows = submission.uploadFiles.map((upload) => `
     <div class="review-file">
@@ -1803,6 +1983,7 @@ function renderReviewSubmission(submission) {
         </div>
       `).join("")}
     </div>
+    ${ultrasoundFindingBlock}
     <div class="review-files">
       <h3>Selected Files (${submission.fileCount})</h3>
       ${fileRows}
@@ -1841,7 +2022,6 @@ function resetEgfrForm() {
 
 function resetPatientIntakeForNextRecord() {
   clearDraft();           // remove localStorage draft on successful submission
-  maxStepReached = 1;     // reset stepper progress for next patient
   state.currentUploadSession = null;
   resetConsentRecord();
   patientStartForm.reset();
@@ -1852,14 +2032,12 @@ function resetPatientIntakeForNextRecord() {
   consentCheckbox.checked = false;
   consentContinueBtn.disabled = true;
   consentContinueBtn.textContent = "Accept & Continue";
-  consentNav.disabled = true;
-  questionnaireNav.disabled = true;
-  egfrNav.disabled = true;
   updateQuestionnaireBmi();
   updateConsentContext();
   updateLinkedPatientSummary();
   updateHospitalSessionUI();
   applyHospitalAuthContext();
+  updateWorkflowAccess();
 }
 
 egfrForm.addEventListener("submit", (event) => {
@@ -2094,6 +2272,16 @@ function renderSubmissionDetail(s) {
     `<li class="sub-file-item"><span class="sub-file-name">${escapeHTML(f.originalName || f.storedName)}</span><span class="sub-file-size">${(f.size / 1024).toFixed(0)} KB</span></li>`
   ).join("");
   const qualityWarnings = Array.isArray(s.dataQualityWarnings) ? s.dataQualityWarnings : [];
+  const ultrasoundFindingRows = [
+    ...getKidneyFindingReviewRows("Right Kidney", s.ultrasoundFindings?.right),
+    ...getKidneyFindingReviewRows("Left Kidney", s.ultrasoundFindings?.left)
+  ].filter(([, value]) => value !== "-");
+  const ultrasoundFindingSection = ultrasoundFindingRows.length ? `
+    <section class="sub-detail-section">
+      <h3 class="sub-detail-section-title">Ultrasound Findings</h3>
+      ${ultrasoundFindingRows.map(([label, value]) => field(label, value)).join("")}
+    </section>
+  ` : "";
   const qualitySection = qualityWarnings.length ? `
     <section class="sub-detail-section sub-quality-section">
       <h3 class="sub-detail-section-title">Data Quality Checks</h3>
@@ -2131,6 +2319,7 @@ function renderSubmissionDetail(s) {
       ${field("Cardiovascular Dis.",  s.cardiovascularDisease)}
       ${field("Family Kidney Hist.",  s.familyKidneyHistory)}
     </section>
+    ${ultrasoundFindingSection}
     <section class="sub-detail-section">
       <h3 class="sub-detail-section-title">Submission</h3>
       ${field("Hospital",       s.hospitalName || s.hospitalId)}
@@ -2353,6 +2542,8 @@ document.getElementById("ls-pw-toggle")?.addEventListener("click", () => {
 // ─── Startup ──────────────────────────────────────────────────────────────────
 
 (async function init() {
+  initializeLandingReveal();
+
   // Check if server requires auth
   let serverAuthConfigured = true;
   try {

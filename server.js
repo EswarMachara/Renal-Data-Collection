@@ -58,6 +58,9 @@ const allowedUploadModes  = new Set(["separate", "package"]);
 const allowedSexValues    = new Set(["Male", "Female", "Other"]);
 const allowedYesNoValues  = new Set(["Yes", "No"]);
 const allowedCkdStages    = new Set(["1", "2", "3", "4"]);
+const allowedEchogenicityValues = new Set(["Normal", "Mild Increased", "Moderate Increased", "Severe Increased"]);
+const allowedKidneySizeValues = new Set(["Normal", "Small", "Enlarged"]);
+const allowedParenchymalTextureValues = new Set(["Normal", "Altered"]);
 const allowedFileFields   = new Set(["leftKidney", "rightKidney", "egfrReport", "patientPackage", "ultrasoundVideo"]);
 
 // ─── Database pool ────────────────────────────────────────────────────────────
@@ -774,6 +777,13 @@ function optionalYesNo(item, field, label) {
   return value;
 }
 
+function optionalChoice(item, field, label, allowedValues) {
+  const value = cleanText(item?.[field], 80);
+  if (!value || value === "-") return "-";
+  if (!allowedValues.has(value)) throw new Error(`${label} has an invalid value.`);
+  return value;
+}
+
 function requiredNumber(item, field, label, { min = 0, max = Number.MAX_SAFE_INTEGER, integer = false } = {}) {
   const rawValue = cleanText(item[field], 40);
   if (!rawValue) throw new Error(`${label} is required.`);
@@ -853,6 +863,36 @@ function normalizeFiles(files, { requireContent = true } = {}) {
   });
 }
 
+function normalizeKidneyFinding(rawFinding, label) {
+  const finding = rawFinding && typeof rawFinding === "object" && !Array.isArray(rawFinding) ? rawFinding : {};
+  const structural = finding.structural && typeof finding.structural === "object" && !Array.isArray(finding.structural)
+    ? finding.structural
+    : {};
+
+  return {
+    lengthCm:            optionalNumber(finding, "lengthCm", `${label} kidney length`, { min: 0.1, max: 30 }),
+    widthCm:             optionalNumber(finding, "widthCm", `${label} kidney width`, { min: 0.1, max: 20 }),
+    corticalThicknessMm: optionalNumber(finding, "corticalThicknessMm", `${label} cortical thickness`, { min: 0.1, max: 50 }),
+    echogenicity:        optionalChoice(finding, "echogenicity", `${label} echogenicity`, allowedEchogenicityValues),
+    structural: {
+      kidneySize:          optionalChoice(structural, "kidneySize", `${label} kidney size`, allowedKidneySizeValues),
+      parenchymalTexture:  optionalChoice(structural, "parenchymalTexture", `${label} parenchymal texture`, allowedParenchymalTextureValues),
+      cysts:               optionalYesNo(structural, "cysts", `${label} cysts`),
+      stones:              optionalYesNo(structural, "stones", `${label} stones`),
+      hydronephrosis:      optionalYesNo(structural, "hydronephrosis", `${label} hydronephrosis`),
+      others:              optionalText(structural.others, 160)
+    }
+  };
+}
+
+function normalizeUltrasoundFindings(rawFindings) {
+  const findings = rawFindings && typeof rawFindings === "object" && !Array.isArray(rawFindings) ? rawFindings : {};
+  return {
+    right: normalizeKidneyFinding(findings.right, "Right"),
+    left:  normalizeKidneyFinding(findings.left, "Left")
+  };
+}
+
 function computeDataQualityWarnings(record) {
   const warnings = [];
   const age = Number(record.age);
@@ -922,6 +962,7 @@ function normalizeSubmission(item, options = {}) {
     hypertensionDuration: optionalNumber(item, "hypertensionDuration", "Hypertension duration", { min: 0, max: 120 }),
     cardiovascularDisease:  optionalYesNo(item, "cardiovascularDisease", "Cardiovascular disease"),
     familyKidneyHistory:    optionalYesNo(item, "familyKidneyHistory", "Family history of kidney disease"),
+    ultrasoundFindings:      normalizeUltrasoundFindings(item.ultrasoundFindings),
     reviewedAt:           optionalText(item.reviewed_at || item.reviewedAt, 60),
     files
   };
@@ -1299,6 +1340,7 @@ async function finalizeSubmissionBatch({ normalizedSubmissions, session, req }) 
       hypertensionDuration: item.hypertensionDuration,
       cardiovascularDisease:  item.cardiovascularDisease,
       familyKidneyHistory:    item.familyKidneyHistory,
+      ultrasoundFindings:    item.ultrasoundFindings,
       dataQualityWarnings:  item.dataQualityWarnings || [],
       reviewedAt:           item.reviewedAt || null,
       files:                storedFiles

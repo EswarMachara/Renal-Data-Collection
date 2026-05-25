@@ -109,15 +109,15 @@
       <div class="navbar-logo">
         <a class="logo-link" href="#">
           <img class="logo-img" src="assets/tanuh.png" alt="Tanuh Logo" />
-          <img class="logo-img" src="assets/moe-logo.svg" alt="MOE Logo" />
-          <img class="logo-img iisc-logo" src="assets/iisc-logo.png" alt="IISc Logo" />
+          <img class="logo-img nav-partner-logo nav-moe-logo" src="assets/moe-logo.svg" alt="MOE Logo" />
+          <img class="logo-img iisc-logo nav-partner-logo nav-iisc-logo" src="assets/iisc-logo.png" alt="IISc Logo" />
         </a>
       </div>
       <nav class="navbar-tabs" aria-label="Main navigation">
         <button class="nav-link active" data-tab="landing" type="button">Home</button>
-        <button class="nav-link" id="consent-nav" data-tab="consent" type="button" disabled>E-Consent Form</button>
-        <button class="nav-link" id="questionnaire-nav" data-tab="questionnaire" type="button" disabled>Questionnaire</button>
-        <button class="nav-link" id="egfr-nav" data-tab="egfr" type="button" disabled>eGFR Flow</button>
+        <button class="nav-link workflow-nav is-locked" id="consent-nav" data-tab="consent" type="button"><span>E-Consent Form</span><small class="nav-gate-badge">Locked</small></button>
+        <button class="nav-link workflow-nav is-locked" id="questionnaire-nav" data-tab="questionnaire" type="button"><span>Questionnaire</span><small class="nav-gate-badge">Locked</small></button>
+        <button class="nav-link workflow-nav is-locked" id="egfr-nav" data-tab="egfr" type="button"><span>eGFR Flow</span><small class="nav-gate-badge">Locked</small></button>
         <button class="nav-link" data-tab="dashboard" type="button">Dashboard</button>
         <button class="nav-link" id="submissions-nav" data-tab="submissions" type="button">Submissions</button>
       </nav>
@@ -203,21 +203,21 @@
   <main class="app-container hidden">
     <section class="tab-panel visible" id="tab-landing" aria-labelledby="Home">
       <div class="landing-shell">
-        <section class="landing-hero">
-          <div class="landing-copy">
-            <span class="eyebrow">AI-Based eGFR Research Registry</span>
-            <h1>Secure Renal Data capture for Partner Hospitals</h1>
-            <p>Collect consented kidney ultrasound data, clinical reports, and questionnaire details in one guided workflow.</p>
-            <div class="hero-highlights" aria-label="Portal capabilities">
-              <span>Patient-linked consent</span>
-              <span>Structured clinical intake</span>
-              <span>Ultrasound-ready uploads</span>
+        <section class="landing-hero-stage">
+          <article class="landing-hero">
+            <div class="landing-copy">
+              <span class="eyebrow">AI-Based eGFR Research Registry</span>
+              <h1>Secure Renal Data Capture for Partner Hospitals</h1>
+              <p>Collect consented kidney ultrasound data, clinical reports, and questionnaire details in one guided workflow.</p>
+              <div class="hero-highlights" aria-label="Portal capability">
+                <span>Patient-linked consent</span>
+              </div>
+              <div class="landing-actions">
+                <button class="btn-premium" id="landing-scroll-setup" type="button">Begin Session</button>
+                <button class="btn-secondary" data-tab-jump="dashboard" type="button">View Dashboard</button>
+              </div>
             </div>
-            <div class="landing-actions">
-              <button class="btn-premium" id="landing-scroll-setup" type="button">Begin Session</button>
-              <button class="btn-secondary" data-tab-jump="dashboard" type="button">View Dashboard</button>
-            </div>
-          </div>
+          </article>
           <div class="renal-visual" aria-hidden="true">
             <div class="renal-orbit"></div>
             <div class="kidney kidney-left"></div>
@@ -230,34 +230,38 @@
           </div>
         </section>
 
-        <section class="handoff-card" aria-label="Session workflow">
+        <section class="handoff-card reveal-section" id="session-workflow" aria-label="Session workflow">
           <span class="eyebrow">Workflow</span>
           <h2>Set the hospital once. Then keep adding patients.</h2>
           <div class="flow-strip" aria-label="Intake workflow">
-            <div class="flow-step active">
+            <div class="flow-step active reveal-item">
               <span>1</span>
               <strong>Hospital Session</strong>
               <small>Selected once</small>
             </div>
-            <div class="flow-step">
+            <div class="flow-step reveal-item">
               <span>2</span>
               <strong>Patient Intake</strong>
               <small>Repeated per patient</small>
             </div>
-            <div class="flow-step">
+            <div class="flow-step reveal-item">
               <span>3</span>
               <strong>E-Consent</strong>
               <small>Patient-linked</small>
             </div>
-            <div class="flow-step">
+            <div class="flow-step reveal-item">
               <span>4</span>
               <strong>Records Upload</strong>
               <small>Files + reports</small>
             </div>
           </div>
+          <div class="handoff-actions">
+            <p>A guided flow keeps each record linked to consent and the right hospital.</p>
+            <button class="btn-premium" id="workflow-continue" type="button">Continue to Intake Workspace</button>
+          </div>
         </section>
 
-        <article class="panel-card flow-card intake-workspace" id="intake-workspace">
+        <article class="panel-card flow-card intake-workspace reveal-section" id="intake-workspace">
           <div class="setup-header">
             <div>
               <span class="eyebrow">Intake Workspace</span>
@@ -334,6 +338,14 @@
         <h1>E-Consent Form</h1>
         <p>Participant information linked to the current patient intake session</p>
         <span class="hero-meta">Please verify the patient context before continuing</span>
+      </div>
+      <div class="stage-access-banner hidden" id="consent-access-banner" role="status">
+        <span class="stage-access-badge">Preview only</span>
+        <div>
+          <strong>Patient setup is required before consent can be recorded.</strong>
+          <p>You can read this form now. Start a patient intake to enable acceptance.</p>
+        </div>
+        <button class="btn-ghost" data-tab-jump="landing" type="button">Go to Patient Setup</button>
       </div>
       <article class="panel-card flow-card consent-card">
         <div class="consent-context-card">
@@ -425,6 +437,14 @@
         <h1>Questionnaire</h1>
         <p>Patient identification, demographics, and clinical history</p>
         <span class="hero-meta">Research Intake Questionnaire</span>
+      </div>
+      <div class="stage-access-banner hidden" id="questionnaire-access-banner" role="status">
+        <span class="stage-access-badge">Preview only</span>
+        <div>
+          <strong>Recorded e-consent is required before questionnaire entry.</strong>
+          <p>You can review the requested fields now; editing unlocks after consent.</p>
+        </div>
+        <button class="btn-ghost" data-tab-jump="consent" type="button">Go to E-Consent</button>
       </div>
       <article class="panel-card flow-card form-card">
         <form id="questionnaire-form" class="form-grid" novalidate>
@@ -644,6 +664,14 @@
         <p>Comprehensive Medical Research Encounter Form</p>
         <span class="hero-meta">Session ID: EGFR-INTAKE-2026</span>
       </div>
+      <div class="stage-access-banner hidden" id="egfr-access-banner" role="status">
+        <span class="stage-access-badge">Preview only</span>
+        <div>
+          <strong>Complete the questionnaire before clinical findings and files can be entered.</strong>
+          <p>You can inspect upload requirements now; submission remains protected.</p>
+        </div>
+        <button class="btn-ghost" data-tab-jump="questionnaire" type="button">Go to Questionnaire</button>
+      </div>
       <article class="panel-card flow-card form-card">
         <form id="egfr-form" class="form-grid" novalidate>
           <div class="linked-record-card">
@@ -662,7 +690,174 @@
           </div>
 
           <div class="form-section">
-            <div class="section-title"><span class="section-index">1.</span> Upload Method</div>
+            <div class="section-title"><span class="section-index">1.</span> Ultrasound Findings <span class="section-note">Enter findings available in the examination report</span></div>
+            <div class="renal-findings-grid">
+              <section class="renal-finding-card" aria-labelledby="right-kidney-findings-title">
+                <header class="renal-finding-header">
+                  <span class="kidney-side-mark">R</span>
+                  <div>
+                    <h3 id="right-kidney-findings-title">Right Kidney</h3>
+                    <p>Measurements and structural observations</p>
+                  </div>
+                </header>
+                <div class="renal-detail-group">
+                  <h4>Kidney Measurements</h4>
+                  <div class="renal-measurement-grid">
+                    <div class="field-block">
+                      <label for="right-kidney-length">Length (cm)</label>
+                      <input id="right-kidney-length" type="number" min="0.1" max="30" step="0.1" placeholder="e.g., 10.4" />
+                    </div>
+                    <div class="field-block">
+                      <label for="right-kidney-width">Width (cm)</label>
+                      <input id="right-kidney-width" type="number" min="0.1" max="20" step="0.1" placeholder="e.g., 5.1" />
+                    </div>
+                    <div class="field-block full-span">
+                      <label for="right-cortical-thickness">Cortical Thickness (mm)</label>
+                      <input id="right-cortical-thickness" type="number" min="0.1" max="50" step="0.1" placeholder="e.g., 8.5" />
+                    </div>
+                  </div>
+                  <div class="finding-choice-block">
+                    <label>Echogenicity</label>
+                    <div class="choice-row finding-choice-row">
+                      <label class="choice-tile"><input type="radio" name="rightEchogenicity" value="Normal" /> Normal</label>
+                      <label class="choice-tile"><input type="radio" name="rightEchogenicity" value="Mild Increased" /> Mild ↑</label>
+                      <label class="choice-tile"><input type="radio" name="rightEchogenicity" value="Moderate Increased" /> Moderate ↑</label>
+                      <label class="choice-tile"><input type="radio" name="rightEchogenicity" value="Severe Increased" /> Severe ↑</label>
+                    </div>
+                  </div>
+                </div>
+                <div class="renal-detail-group structural-findings">
+                  <h4>Structural Findings</h4>
+                  <div class="finding-choice-block">
+                    <label>Kidney Size</label>
+                    <div class="choice-row finding-choice-row compact-three">
+                      <label class="choice-tile"><input type="radio" name="rightKidneySize" value="Normal" /> Normal</label>
+                      <label class="choice-tile"><input type="radio" name="rightKidneySize" value="Small" /> Small</label>
+                      <label class="choice-tile"><input type="radio" name="rightKidneySize" value="Enlarged" /> Enlarged</label>
+                    </div>
+                  </div>
+                  <div class="renal-paired-choices">
+                    <div class="finding-choice-block">
+                      <label>Parenchymal texture</label>
+                      <div class="choice-row finding-choice-row compact-two">
+                        <label class="choice-tile"><input type="radio" name="rightParenchymalTexture" value="Normal" /> Normal</label>
+                        <label class="choice-tile"><input type="radio" name="rightParenchymalTexture" value="Altered" /> Altered</label>
+                      </div>
+                    </div>
+                    <div class="finding-choice-block">
+                      <label>Cysts</label>
+                      <div class="choice-row finding-choice-row compact-two">
+                        <label class="choice-tile"><input type="radio" name="rightCysts" value="Yes" /> Yes</label>
+                        <label class="choice-tile"><input type="radio" name="rightCysts" value="No" /> No</label>
+                      </div>
+                    </div>
+                    <div class="finding-choice-block">
+                      <label>Stones</label>
+                      <div class="choice-row finding-choice-row compact-two">
+                        <label class="choice-tile"><input type="radio" name="rightStones" value="Yes" /> Yes</label>
+                        <label class="choice-tile"><input type="radio" name="rightStones" value="No" /> No</label>
+                      </div>
+                    </div>
+                    <div class="finding-choice-block">
+                      <label>Hydronephrosis</label>
+                      <div class="choice-row finding-choice-row compact-two">
+                        <label class="choice-tile"><input type="radio" name="rightHydronephrosis" value="Yes" /> Yes</label>
+                        <label class="choice-tile"><input type="radio" name="rightHydronephrosis" value="No" /> No</label>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="field-block findings-other">
+                    <label for="right-other-findings">Others</label>
+                    <input id="right-other-findings" type="text" maxlength="160" placeholder="Additional right kidney findings" />
+                  </div>
+                </div>
+              </section>
+
+              <section class="renal-finding-card" aria-labelledby="left-kidney-findings-title">
+                <header class="renal-finding-header">
+                  <span class="kidney-side-mark left">L</span>
+                  <div>
+                    <h3 id="left-kidney-findings-title">Left Kidney</h3>
+                    <p>Measurements and structural observations</p>
+                  </div>
+                </header>
+                <div class="renal-detail-group">
+                  <h4>Kidney Measurements</h4>
+                  <div class="renal-measurement-grid">
+                    <div class="field-block">
+                      <label for="left-kidney-length">Length (cm)</label>
+                      <input id="left-kidney-length" type="number" min="0.1" max="30" step="0.1" placeholder="e.g., 10.4" />
+                    </div>
+                    <div class="field-block">
+                      <label for="left-kidney-width">Width (cm)</label>
+                      <input id="left-kidney-width" type="number" min="0.1" max="20" step="0.1" placeholder="e.g., 5.1" />
+                    </div>
+                    <div class="field-block full-span">
+                      <label for="left-cortical-thickness">Cortical Thickness (mm)</label>
+                      <input id="left-cortical-thickness" type="number" min="0.1" max="50" step="0.1" placeholder="e.g., 8.5" />
+                    </div>
+                  </div>
+                  <div class="finding-choice-block">
+                    <label>Echogenicity</label>
+                    <div class="choice-row finding-choice-row">
+                      <label class="choice-tile"><input type="radio" name="leftEchogenicity" value="Normal" /> Normal</label>
+                      <label class="choice-tile"><input type="radio" name="leftEchogenicity" value="Mild Increased" /> Mild ↑</label>
+                      <label class="choice-tile"><input type="radio" name="leftEchogenicity" value="Moderate Increased" /> Moderate ↑</label>
+                      <label class="choice-tile"><input type="radio" name="leftEchogenicity" value="Severe Increased" /> Severe ↑</label>
+                    </div>
+                  </div>
+                </div>
+                <div class="renal-detail-group structural-findings">
+                  <h4>Structural Findings</h4>
+                  <div class="finding-choice-block">
+                    <label>Kidney Size</label>
+                    <div class="choice-row finding-choice-row compact-three">
+                      <label class="choice-tile"><input type="radio" name="leftKidneySize" value="Normal" /> Normal</label>
+                      <label class="choice-tile"><input type="radio" name="leftKidneySize" value="Small" /> Small</label>
+                      <label class="choice-tile"><input type="radio" name="leftKidneySize" value="Enlarged" /> Enlarged</label>
+                    </div>
+                  </div>
+                  <div class="renal-paired-choices">
+                    <div class="finding-choice-block">
+                      <label>Parenchymal texture</label>
+                      <div class="choice-row finding-choice-row compact-two">
+                        <label class="choice-tile"><input type="radio" name="leftParenchymalTexture" value="Normal" /> Normal</label>
+                        <label class="choice-tile"><input type="radio" name="leftParenchymalTexture" value="Altered" /> Altered</label>
+                      </div>
+                    </div>
+                    <div class="finding-choice-block">
+                      <label>Cysts</label>
+                      <div class="choice-row finding-choice-row compact-two">
+                        <label class="choice-tile"><input type="radio" name="leftCysts" value="Yes" /> Yes</label>
+                        <label class="choice-tile"><input type="radio" name="leftCysts" value="No" /> No</label>
+                      </div>
+                    </div>
+                    <div class="finding-choice-block">
+                      <label>Stones</label>
+                      <div class="choice-row finding-choice-row compact-two">
+                        <label class="choice-tile"><input type="radio" name="leftStones" value="Yes" /> Yes</label>
+                        <label class="choice-tile"><input type="radio" name="leftStones" value="No" /> No</label>
+                      </div>
+                    </div>
+                    <div class="finding-choice-block">
+                      <label>Hydronephrosis</label>
+                      <div class="choice-row finding-choice-row compact-two">
+                        <label class="choice-tile"><input type="radio" name="leftHydronephrosis" value="Yes" /> Yes</label>
+                        <label class="choice-tile"><input type="radio" name="leftHydronephrosis" value="No" /> No</label>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="field-block findings-other">
+                    <label for="left-other-findings">Others</label>
+                    <input id="left-other-findings" type="text" maxlength="160" placeholder="Additional left kidney findings" />
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="section-title"><span class="section-index">2.</span> Upload Method</div>
             <div class="upload-mode-grid" role="radiogroup" aria-label="Upload method">
               <label class="upload-mode-card selected" data-upload-mode-card="separate">
                 <input type="radio" name="uploadMode" value="separate" checked />
@@ -678,7 +873,7 @@
           </div>
 
           <div class="form-section" id="separate-upload-section">
-            <div class="section-title"><span class="section-index">2.</span> Separate Patient Files <span class="section-note">(All uploads mandatory)</span></div>
+            <div class="section-title"><span class="section-index">3.</span> Separate Patient Files <span class="section-note">(All uploads mandatory)</span></div>
             <div class="upload-grid">
               <label class="upload-tile">
                 <input id="left-kidney-file" name="leftKidneyFile" type="file" required />
@@ -699,7 +894,7 @@
           </div>
 
           <div class="form-section hidden" id="package-upload-section">
-            <div class="section-title"><span class="section-index">2.</span> Single Patient Package <span class="section-note">(ZIP required)</span></div>
+            <div class="section-title"><span class="section-index">3.</span> Single Patient Package <span class="section-note">(ZIP required)</span></div>
             <div class="upload-grid">
               <label class="upload-tile wide">
                 <input id="patient-package-file" name="patientPackageFile" type="file" accept=".zip" />
@@ -710,7 +905,7 @@
           </div>
 
           <div class="form-section">
-            <div class="section-title"><span class="section-index">3.</span> Ultrasound Video (Optional if you don't have Ultrasound Video of this Patient)</div>
+            <div class="section-title"><span class="section-index">4.</span> Ultrasound Video <span class="section-note">(Optional)</span></div>
             <div class="upload-grid">
               <label class="upload-tile wide">
                 <input id="ultrasound-video-file" name="ultrasoundVideoFile" type="file" accept="video/*" />
