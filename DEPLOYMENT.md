@@ -61,11 +61,21 @@ DATABASE_URL='postgres://USER:PASSWORD@HOST:5432/DATABASE' DB_SSL=disable npm st
 Use Secret Manager or a systemd environment file with restricted permissions for database credentials. Do not commit credentials to Git.
 Until real credentials are available, leave `DATABASE_URL` unset; placeholder values are ignored by the server.
 
-The server writes each batch locally under `data/submissions/` and copies it to:
+The server writes each batch and its protected patient-linked metadata locally under `data/submissions/`. Uploaded clinical files are copied to GCS using pseudonymous participant and record identifiers:
 
 ```text
-gs://renal-data-your-name/submissions/<batch-id>
+gs://renal-data-your-name/raw/
+  egfr/<hospital-code>/<participant-id>/<record-id>/
+    images/left-kidney/
+    images/right-kidney/
+    documents/
+    videos/
+    packages/
+  kfre/<hospital-code>/<participant-id>/<record-id>/
+    documents/
 ```
+
+Patient UHIDs and questionnaire metadata are not written into GCS object paths or metadata files. Keep PostgreSQL active for the authoritative UHID-to-participant mapping; filesystem fallback data on the VM must be access restricted and backed up securely.
 
 The VM service account needs bucket-level write permission and OAuth scope `https://www.googleapis.com/auth/cloud-platform` for GCS sync.
 

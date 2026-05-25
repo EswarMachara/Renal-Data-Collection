@@ -1189,7 +1189,7 @@
       <div id="dash-admin-view" class="hidden">
         <div class="page-hero dashboard-hero">
           <h1>Data Collection Operations</h1>
-          <p>Monitor all partner hospital submissions, storage health, and renal data intake</p>
+          <p>Monitor participating hospitals, submitted patient records, and review readiness across both study pathways</p>
           <span class="hero-update" id="dashboard-updated-at">Awaiting live data</span>
           <div class="hero-divider"></div>
         </div>
@@ -1197,7 +1197,7 @@
           <div class="summary-grid">
             <div class="summary-card">
               <span class="summary-value" id="summary-hospitals">0</span>
-              <span class="summary-label">PARTNER HOSPITALS</span>
+              <span class="summary-label">COLLABORATING HOSPITALS</span>
             </div>
             <div class="summary-card">
               <span class="summary-value" id="summary-findings">0</span>
@@ -1208,12 +1208,8 @@
               <span class="summary-label">ULTRASOUND VIDEOS</span>
             </div>
             <div class="summary-card">
-              <span class="summary-value" id="summary-reviewed">0</span>
-              <span class="summary-label">RECORDS REVIEWED</span>
-            </div>
-            <div class="summary-card">
               <span class="summary-value" id="summary-pending">0</span>
-              <span class="summary-label">PENDING REVIEW</span>
+              <span class="summary-label">AWAITING ADMIN REVIEW</span>
             </div>
           </div>
 
@@ -1276,8 +1272,8 @@
       <!-- ── Hospital dashboard ──────────────────────────────────────────── -->
       <div id="dash-hospital-view" class="hidden">
         <div class="page-hero dashboard-hero">
-          <h1>My Upload Dashboard</h1>
-          <p id="dash-hospital-subtitle">Your submissions and storage metrics</p>
+          <h1>Hospital Submission Overview</h1>
+          <p id="dash-hospital-subtitle">Your submitted patient records and review progress</p>
           <span class="hero-update" id="dash-hospital-updated">Awaiting live data</span>
           <div class="hero-divider"></div>
         </div>
@@ -1285,19 +1281,15 @@
           <div class="summary-grid">
             <div class="summary-card">
               <span class="summary-value" id="hosp-summary-patients">0</span>
-              <span class="summary-label">MY PATIENT RECORDS</span>
+              <span class="summary-label">PATIENT RECORDS SUBMITTED</span>
             </div>
             <div class="summary-card">
               <span class="summary-value" id="hosp-summary-videos">0</span>
               <span class="summary-label">ULTRASOUND VIDEOS</span>
             </div>
             <div class="summary-card">
-              <span class="summary-value" id="hosp-summary-reviewed">0</span>
-              <span class="summary-label">REVIEWED BY ADMIN</span>
-            </div>
-            <div class="summary-card">
               <span class="summary-value" id="hosp-summary-pending">0</span>
-              <span class="summary-label">PENDING REVIEW</span>
+              <span class="summary-label">AWAITING ADMIN REVIEW</span>
             </div>
           </div>
 
@@ -1368,7 +1360,7 @@
           <label class="sub-filter-label" for="sub-reviewed-filter">Status</label>
           <select class="sub-filter-select" id="sub-reviewed-filter">
             <option value="">All Records</option>
-            <option value="no">Pending Review</option>
+            <option value="no">Awaiting Review</option>
             <option value="yes">Reviewed</option>
           </select>
         </div>

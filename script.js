@@ -1624,7 +1624,6 @@ function updateDashboards() {
     set("summary-hospitals", d.summary?.hospitals ?? 0);
     set("summary-findings",  d.summary?.patients  ?? 0);
     set("summary-videos",    d.summary?.videos    ?? 0);
-    set("summary-reviewed",  d.summary?.reviewed  ?? 0);
     set("summary-pending",   d.summary?.pending   ?? 0);
     const updEl = document.getElementById("dashboard-updated-at");
     if (updEl) updEl.textContent = nowStr;
@@ -1657,12 +1656,11 @@ function updateDashboards() {
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
     set("hosp-summary-patients", d.summary?.patients  ?? 0);
     set("hosp-summary-videos",   d.summary?.videos    ?? 0);
-    set("hosp-summary-reviewed", d.summary?.reviewed  ?? 0);
     set("hosp-summary-pending",  d.summary?.pending   ?? 0);
 
     const subtitleEl = document.getElementById("dash-hospital-subtitle");
     const hospName = state.authSession?.hospitalName || state.authSession?.hospitalId || "";
-    if (subtitleEl && hospName) subtitleEl.textContent = `Submissions and storage metrics for ${hospName}`;
+    if (subtitleEl && hospName) subtitleEl.textContent = `Submitted patient records and review progress for ${hospName}`;
 
     const updEl = document.getElementById("dash-hospital-updated");
     if (updEl) updEl.textContent = nowStr;
@@ -1734,7 +1732,7 @@ function renderRecentRecordsTable(tbodyId, records, cols) {
       if (c === "receivedAt") return `<td class="sub-date">${subFormatDate(r.receivedAt)}</td>`;
       if (c === "reviewedAt") return r.reviewedAt
         ? `<td><span class="sub-badge sub-badge-reviewed">Reviewed</span></td>`
-        : `<td><span class="sub-badge sub-badge-pending">Pending</span></td>`;
+        : `<td><span class="sub-badge sub-badge-pending">Awaiting Review</span></td>`;
       if (c === "uploadMode") return `<td>${escapeHTML(subUploadMode(r.uploadMode))}</td>`;
       return `<td>${escapeHTML(String(r[c] || "—"))}</td>`;
     }).join("");
@@ -2362,7 +2360,7 @@ function buildSubmissionFromForm() {
     hasVideo: Boolean(!isKfre && ultrasoundVideoFile),
     uploadFiles,
     progress: 0,
-    status: "Pending Review",
+    status: "Awaiting Review",
     reviewedAt: null
   };
   submission.dataQualityWarnings = computeDataQualityWarnings(submission);
@@ -2646,7 +2644,7 @@ function subFormatDate(iso) {
 function subBadge(reviewed) {
   return reviewed
     ? `<span class="sub-badge sub-badge-reviewed">Reviewed</span>`
-    : `<span class="sub-badge sub-badge-pending">Pending</span>`;
+    : `<span class="sub-badge sub-badge-pending">Awaiting Review</span>`;
 }
 
 function subUploadMode(mode) {
@@ -2789,6 +2787,7 @@ function renderSubmissionDetail(s) {
     <section class="sub-detail-section">
       <h3 class="sub-detail-section-title">Patient</h3>
       ${field("Record ID",      s.recordId)}
+      ${field("Participant ID", s.participantId)}
       ${field("Patient ID",     s.uhid)}
       ${field("Age",            s.age)}
       ${field("Sex",            s.sex)}

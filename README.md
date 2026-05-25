@@ -21,28 +21,40 @@ https://bc-screener-research.tanuh.ai/
   - `POST /api/submissions` remains available for direct multipart submissions and small-file fallback
   - Dashboard shows upload progress for the reviewed record
   - Admin submissions can be filtered by hospital, review status, search, and received-date range
-  - Submissions are written under `data/submissions/`
+  - Submissions and protected metadata are written under `data/submissions/`
   - If `GCS_BUCKET` is configured, each batch is synced to GCS with `gsutil rsync`
-  - If `DATABASE_URL` is configured, normalized submission metadata is stored in PostgreSQL
+  - If `DATABASE_URL` is configured, normalized submission metadata and the UHID-to-participant mapping are stored in PostgreSQL
+  - Cloud object paths use pseudonymous participant and record IDs rather than patient UHIDs
 
 ## GCS Folder Layout
 
 ```text
 gs://<bucket>/
-  <hospitalID>/
-    images/
-      Left Kidney/
-        <patientID>_left-kidney_<timestamp>_<suffix>_<original-name>
-      Right Kidney/
-        <patientID>_right-kidney_<timestamp>_<suffix>_<original-name>
-    mixed/
-      <patientID>_package_<timestamp>_<suffix>_<original-name>
-    videos/
-      <patientID>_ultrasound-video_<timestamp>_<suffix>_<original-name>
-    documents/
-      <patientID>_egfr-report_<timestamp>_<suffix>_<original-name>
-      <patientID>_metadata_<timestamp>_<suffix>_metadata.json
+  raw/
+    egfr/
+      <hospital-code>/
+        <participant-id>/
+          <record-id>/
+            images/
+              left-kidney/
+                <record-id>_left-kidney_<timestamp>_<suffix>.<ext>
+              right-kidney/
+                <record-id>_right-kidney_<timestamp>_<suffix>.<ext>
+            documents/
+              <record-id>_egfr-report_<timestamp>_<suffix>.<ext>
+            videos/
+              <record-id>_ultrasound-video_<timestamp>_<suffix>.<ext>
+            packages/
+              <record-id>_source-package_<timestamp>_<suffix>.zip
+    kfre/
+      <hospital-code>/
+        <participant-id>/
+          <record-id>/
+            documents/
+              <record-id>_kfre-clinical-document_<timestamp>_<suffix>.<ext>
 ```
+
+Uploaded clinical files are synced to GCS. Questionnaire data and original patient-linked metadata remain in protected VM/PostgreSQL storage rather than being copied into the clinical-file bucket.
 
 ## Files
 
@@ -81,6 +93,7 @@ Placeholder values such as `CHANGE_ME` are ignored by the server so the portal c
 The server creates these tables automatically when `DATABASE_URL` is set:
 
 - `hospitals`
+- `participants`
 - `submissions`
 - `submission_files`
 
