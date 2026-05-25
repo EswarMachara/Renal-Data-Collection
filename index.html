@@ -1016,9 +1016,9 @@
     <!-- ── Submissions Panel ─────────────────────────────────────────── -->
     <section class="tab-panel" id="tab-submissions" aria-labelledby="Submissions">
       <div class="page-hero submissions-hero">
+        <span class="submissions-kicker">Clinical intake review</span>
         <h1>Submission Records</h1>
         <p>Browse, filter, and review patient data submissions from all partner hospitals</p>
-        <div class="hero-divider"></div>
       </div>
 
       <!-- Filter bar -->
@@ -1041,20 +1041,25 @@
           <label class="sub-filter-label" for="sub-search-input">Search</label>
           <input class="sub-filter-input" id="sub-search-input" type="text" placeholder="Patient ID or Record ID…" autocomplete="off" />
         </div>
-        <div class="sub-filter-group">
-          <label class="sub-filter-label" for="sub-date-from">From</label>
-          <input class="sub-filter-input" id="sub-date-from" type="date" />
+        <div class="sub-date-range" aria-label="Received date range">
+          <div class="sub-filter-group sub-date-field">
+            <label class="sub-filter-label" for="sub-date-from">From date</label>
+            <input class="sub-filter-input sub-date-input" id="sub-date-from" type="date" />
+          </div>
+          <span class="sub-date-separator" aria-hidden="true">to</span>
+          <div class="sub-filter-group sub-date-field">
+            <label class="sub-filter-label" for="sub-date-to">To date</label>
+            <input class="sub-filter-input sub-date-input" id="sub-date-to" type="date" />
+          </div>
         </div>
-        <div class="sub-filter-group">
-          <label class="sub-filter-label" for="sub-date-to">To</label>
-          <input class="sub-filter-input" id="sub-date-to" type="date" />
+        <div class="sub-filter-actions">
+          <button class="btn-primary sub-filter-btn" id="sub-apply-filters" type="button">Apply Filters</button>
+          <button class="btn-ghost sub-filter-btn" id="sub-reset-filters" type="button">Reset</button>
+          <button class="btn-export sub-filter-btn" id="sub-export-csv" type="button">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export CSV
+          </button>
         </div>
-        <button class="btn-primary sub-filter-btn" id="sub-apply-filters" type="button">Apply</button>
-        <button class="btn-ghost sub-filter-btn" id="sub-reset-filters" type="button">Reset</button>
-        <button class="btn-export sub-filter-btn" id="sub-export-csv" type="button">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          Export CSV
-        </button>
       </div>
 
       <!-- Table -->

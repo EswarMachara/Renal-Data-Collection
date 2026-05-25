@@ -1895,7 +1895,7 @@ function buildSubmissionFromForm() {
     uploadFiles,
     progress: 0,
     status: "Pending Review",
-    reviewedAt: new Date().toISOString()
+    reviewedAt: null
   };
   submission.dataQualityWarnings = computeDataQualityWarnings(submission);
   return submission;

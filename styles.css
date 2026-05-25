@@ -3232,37 +3232,115 @@ th {
 
 /* ── Submissions Panel ───────────────────────────────────────────────────────── */
 
-.submissions-hero { background: linear-gradient(135deg, #0a4a4e 0%, #14868c 100%); }
+.submissions-hero {
+  margin-bottom: 1rem;
+  padding: clamp(1.5rem, 3vw, 2rem);
+  border-radius: 24px;
+  background: linear-gradient(125deg, #073f45 0%, #0e6a6f 55%, #14868c 100%);
+  box-shadow: 0 10px 30px rgba(7, 63, 69, 0.16);
+  text-align: left;
+}
+.submissions-kicker {
+  display: inline-block;
+  margin-bottom: 0.55rem;
+  color: rgba(219, 255, 249, 0.86);
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.submissions-hero h1 {
+  margin: 0 0 0.45rem;
+  color: #ffffff;
+  font-size: clamp(1.8rem, 3vw, 2.25rem);
+  line-height: 1.16;
+  letter-spacing: -0.035em;
+}
+.submissions-hero p {
+  margin: 0;
+  color: rgba(239, 253, 250, 0.8);
+  font-size: 0.96rem;
+  line-height: 1.6;
+}
 
 /* Filter bar */
 .sub-filter-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 0.75rem 1rem;
+  display: grid;
+  grid-template-columns: minmax(210px, 1.25fr) minmax(145px, 0.75fr) minmax(210px, 1.15fr) minmax(318px, 1.55fr);
+  align-items: end;
+  gap: 1rem;
+  margin-bottom: 1rem;
   padding: 1.25rem 1.5rem;
+  border: 1px solid #e2edf0;
+  border-radius: 20px;
   background: #ffffff;
-  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.045);
 }
-.sub-filter-group { display: flex; flex-direction: column; gap: 0.3rem; }
-.sub-filter-label { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #64748b; }
+.sub-filter-group { display: flex; flex-direction: column; min-width: 0; gap: 0.42rem; }
+.sub-filter-label { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #52637b; }
 .sub-filter-select,
 .sub-filter-input {
-  height: 2.25rem;
-  padding: 0 0.75rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
+  width: 100%;
+  height: 46px;
+  padding: 0 0.9rem;
+  border: 1px solid #cbdde2;
+  border-radius: 12px;
   font-size: 0.875rem;
   color: #0f172a;
-  background: #f8fafc;
+  background: #f8fbfc;
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .sub-filter-select:focus,
 .sub-filter-input:focus { border-color: #14868c; box-shadow: 0 0 0 3px rgba(20,134,140,0.12); }
-.sub-filter-search { flex: 1; min-width: 180px; }
+.sub-filter-search { min-width: 0; }
 .sub-filter-search .sub-filter-input { width: 100%; }
-.sub-filter-btn { height: 2.25rem; padding: 0 1.1rem; align-self: flex-end; font-size: 0.85rem; }
+.sub-date-range {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: end;
+  gap: 0.55rem;
+}
+.sub-date-separator {
+  display: grid;
+  place-items: center;
+  align-self: end;
+  height: 46px;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.sub-date-input {
+  color-scheme: light;
+  background: #ffffff;
+  font-variant-numeric: tabular-nums;
+}
+.sub-date-input::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  padding: 0.35rem;
+  border-radius: 8px;
+  background-color: #e8f6f4;
+  opacity: 0.82;
+}
+.sub-filter-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.7rem;
+  padding-top: 0.15rem;
+}
+.sub-filter-btn { height: 44px; padding: 0 1.15rem; border-radius: 11px; font-size: 0.85rem; }
+#sub-apply-filters {
+  border: 0;
+  background: #14868c;
+  color: #ffffff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 6px 14px rgba(20, 134, 140, 0.2);
+}
+#sub-apply-filters:hover { background: #0e6a6f; }
 
 .btn-export {
   display: inline-flex;
@@ -3465,9 +3543,21 @@ th {
 }
 .sub-review-btn { width: 100%; justify-content: center; }
 
+@media (max-width: 1020px) {
+  .sub-filter-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sub-filter-search,
+  .sub-date-range { grid-column: 1 / -1; }
+}
+
 @media (max-width: 640px) {
-  .sub-filter-bar { padding: 1rem; }
-  .sub-filter-search { min-width: 100%; }
+  .submissions-hero { padding: 1.3rem 1.1rem; border-radius: 18px; }
+  .sub-filter-bar { grid-template-columns: 1fr; padding: 1rem; }
+  .sub-filter-search,
+  .sub-date-range { grid-column: auto; min-width: 0; }
+  .sub-date-range { grid-template-columns: 1fr; }
+  .sub-date-separator { justify-content: start; height: auto; padding-left: 0.2rem; }
+  .sub-filter-actions { flex-direction: column; }
+  .sub-filter-btn { width: 100%; justify-content: center; }
   .sub-detail-panel { width: 100vw; }
   #sub-table th, #sub-table td { padding: 0.6rem 0.6rem; }
 }

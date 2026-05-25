@@ -963,7 +963,7 @@ function normalizeSubmission(item, options = {}) {
     cardiovascularDisease:  optionalYesNo(item, "cardiovascularDisease", "Cardiovascular disease"),
     familyKidneyHistory:    optionalYesNo(item, "familyKidneyHistory", "Family history of kidney disease"),
     ultrasoundFindings:      normalizeUltrasoundFindings(item.ultrasoundFindings),
-    reviewedAt:           optionalText(item.reviewed_at || item.reviewedAt, 60),
+    reviewedAt:           null,
     files
   };
 
