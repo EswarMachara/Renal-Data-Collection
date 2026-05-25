@@ -70,6 +70,7 @@ function saveAuthSession(sessionData) {
 
 function clearAuthSession() {
   state.authSession = null;
+  state.hospitalSession = null;
   state.currentUploadSession = null;
   resetConsentRecord();
   try { sessionStorage.removeItem(AUTH_SESSION_KEY); } catch { /* ignore */ }
@@ -90,15 +91,20 @@ function hideLoginError() {
 
 function applyHospitalAuthContext() {
   const session = state.authSession;
+  const sessionInstruction = document.getElementById("hospital-session-instruction");
+  const saveSessionButton = document.getElementById("save-hospital-session");
   if (!session || session.role === "admin") {
     // Admin and unauthenticated: keep dropdown editable
     if (landingHospitalInput) landingHospitalInput.disabled = false;
     if (hospitalNameInput)    hospitalNameInput.disabled = false;
+    if (sessionInstruction) sessionInstruction.textContent = "Choose once at the start of the day or browser session.";
+    if (saveSessionButton) saveSessionButton.classList.remove("hidden");
     return;
   }
 
   // Hospital-role user: lock dropdown to their assigned hospital
   if (session.hospitalId) {
+    const hospital = hospitals.find((entry) => entry.id === session.hospitalId);
     if (landingHospitalInput) {
       landingHospitalInput.value    = session.hospitalId;
       landingHospitalInput.disabled = true;
@@ -109,15 +115,14 @@ function applyHospitalAuthContext() {
     }
     if (hospitalIdInput)  hospitalIdInput.value  = session.hospitalId;
     if (landingHospitalIdInput) landingHospitalIdInput.value = session.hospitalId;
+    if (sessionInstruction) sessionInstruction.textContent = "Assigned automatically from your secure hospital account.";
+    if (saveSessionButton) saveSessionButton.classList.add("hidden");
 
-    // Auto-confirm the hospital session so patient fields unlock immediately
-    if (!state.hospitalSession) {
-      const hospital = hospitals.find((h) => h.id === session.hospitalId);
-      if (hospital) {
-        state.hospitalSession = { id: hospital.id, name: hospital.name };
-        try { sessionStorage.setItem(HOSPITAL_SESSION_KEY, JSON.stringify(state.hospitalSession)); } catch { /* ignore */ }
-        updateHospitalSessionUI();
-      }
+    // The authenticated hospital assignment is authoritative, even after account switches.
+    if (hospital) {
+      state.hospitalSession = { id: hospital.id, name: hospital.name };
+      try { sessionStorage.setItem(HOSPITAL_SESSION_KEY, JSON.stringify(state.hospitalSession)); } catch { /* ignore */ }
+      updateHospitalSessionUI();
     }
   }
 }
@@ -646,6 +651,11 @@ function saveHospitalSession() {
 }
 
 function loadHospitalSession() {
+  if (state.authSession?.role === "hospital" && state.authSession.hospitalId) {
+    applyHospitalAuthContext();
+    return;
+  }
+
   let storedSession = null;
   try {
     storedSession = JSON.parse(sessionStorage.getItem(HOSPITAL_SESSION_KEY) || "null");
