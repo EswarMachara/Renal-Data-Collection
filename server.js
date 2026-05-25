@@ -54,14 +54,18 @@ const hospitals = [
   { id: "MIL-NDL-DL",  name: "Mahajan Imaging & Labs, New Delhi" }
 ];
 
-const allowedUploadModes  = new Set(["separate", "package"]);
+const allowedStudyFlows   = new Set(["egfr", "kfre"]);
+const allowedUploadModes  = new Set(["separate", "package", "clinical_document"]);
 const allowedSexValues    = new Set(["Male", "Female", "Other"]);
 const allowedYesNoValues  = new Set(["Yes", "No"]);
 const allowedCkdStages    = new Set(["Normal", "1", "2", "3a", "3b", "4", "5", "Other"]);
 const allowedEchogenicityValues = new Set(["Normal", "Mild Increased", "Moderate Increased", "Severe Increased"]);
 const allowedKidneySizeValues = new Set(["Normal", "Small", "Enlarged"]);
 const allowedParenchymalTextureValues = new Set(["Normal", "Altered"]);
-const allowedFileFields   = new Set(["leftKidney", "rightKidney", "egfrReport", "patientPackage", "ultrasoundVideo"]);
+const allowedKfreOutcomeStages = new Set(["1", "2", "3a", "3b", "4", "5"]);
+const allowedKfreProgressionValues = new Set(["No change", "Improved", "Progressed", "Kidney failure", "Not assessed"]);
+const allowedKfreEventTypes = new Set(["Dialysis", "Transplant"]);
+const allowedFileFields   = new Set(["leftKidney", "rightKidney", "egfrReport", "patientPackage", "ultrasoundVideo", "clinicalDocument"]);
 
 // ─── Database pool ────────────────────────────────────────────────────────────
 
@@ -499,12 +503,14 @@ async function initializeDatabase() {
         uhid            text NOT NULL,
         hospital_id     text NOT NULL REFERENCES hospitals(hospital_id),
         user_id         text NOT NULL REFERENCES users(user_id),
+        study_flow      text NOT NULL DEFAULT 'egfr',
         consent_version text NOT NULL DEFAULT '1.0',
         consented_at    timestamptz NOT NULL DEFAULT now(),
         ip_address      text,
         user_agent      text
       )
     `);
+    await client.query("ALTER TABLE consents ADD COLUMN IF NOT EXISTS study_flow text NOT NULL DEFAULT 'egfr'");
     await client.query("CREATE INDEX IF NOT EXISTS idx_consents_uhid ON consents(uhid, hospital_id)");
 
     // Audit log
@@ -534,6 +540,8 @@ async function initializeDatabase() {
         hospital_id          text NOT NULL REFERENCES hospitals(hospital_id),
         hospital_name        text NOT NULL,
         consent_id           text REFERENCES consents(consent_id),
+        study_flow           text NOT NULL DEFAULT 'egfr',
+        kfre_data            jsonb,
         study_id             text,
         enrollment_date      date,
         site_center          text,
@@ -571,6 +579,8 @@ async function initializeDatabase() {
 
     // Add consent_id to existing tables if upgrading (idempotent)
     await client.query("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS consent_id text REFERENCES consents(consent_id)");
+    await client.query("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS study_flow text NOT NULL DEFAULT 'egfr'");
+    await client.query("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS kfre_data jsonb");
     await client.query(`
       DO $$
       BEGIN
@@ -657,6 +667,8 @@ async function persistRecordsToDatabase({ batchId, batchDir, records, gcsResult 
            hospital_session_id, hospital_session_name,
            hospital_id, hospital_name,
            consent_id,
+           study_flow,
+           kfre_data,
            study_id, enrollment_date, site_center, consent_obtained,
            upload_mode, uhid, age, sex, height_cm, weight_kg,
            bmi, ethnicity, occupation, known_ckd, ckd_duration, ckd_stage, ckd_stage_remarks,
@@ -669,12 +681,14 @@ async function persistRecordsToDatabase({ batchId, batchDir, records, gcsResult 
            $4,  $5,
            $6,  $7,
            $8,
-           $9,  $10, $11, $12,
-           $13, $14, $15, $16, $17, $18,
-           $19, $20, $21, $22, $23, $24, $25,
-           $26, $27, $28, $29, $30,
-           $31, $32, $33,
-           $34, $35, $36, $37, $38, $39
+           $9,
+           $10,
+           $11, $12, $13, $14,
+           $15, $16, $17, $18, $19, $20,
+           $21, $22, $23, $24, $25, $26, $27,
+           $28, $29, $30, $31, $32,
+           $33, $34, $35,
+           $36, $37, $38, $39, $40, $41
          )
          ON CONFLICT (record_id) DO UPDATE SET
            gcs_synced = EXCLUDED.gcs_synced,
@@ -685,6 +699,8 @@ async function persistRecordsToDatabase({ batchId, batchDir, records, gcsResult 
           record.hospitalSessionId, record.hospitalSessionName,
           record.hospitalId, record.hospitalName,
           record.consentId || null,
+          record.studyFlow || "egfr",
+          record.kfreForm ? JSON.stringify(record.kfreForm) : null,
           toNullable(record.studyId), toNullable(record.enrollmentDate),
           toNullable(record.siteCenter), toNullable(record.consentObtained),
           record.uploadMode, record.uhid, Number(record.age), record.sex,
@@ -741,7 +757,7 @@ async function getDatabaseSummary(scopeHospitalId = null) {
     dbPool.query(`SELECT ckd_stage AS label, COUNT(*)::int AS value FROM submissions ${cond} GROUP BY ckd_stage ORDER BY CASE ckd_stage WHEN 'Normal' THEN 0 WHEN '1' THEN 1 WHEN '2' THEN 2 WHEN '3' THEN 3 WHEN '4' THEN 4 WHEN 'Other' THEN 5 ELSE 6 END`, filter),
     dbPool.query(`SELECT diabetic AS label, COUNT(*)::int AS value FROM submissions ${diabeticCond} GROUP BY diabetic`, filter),
     dbPool.query(videoQuery, filter),
-    dbPool.query(`SELECT record_id, batch_id, hospital_id, hospital_name, uhid, upload_mode, received_at, gcs_path, gcs_synced FROM submissions ${cond} ORDER BY received_at DESC LIMIT 10`, filter)
+    dbPool.query(`SELECT record_id, batch_id, hospital_id, hospital_name, uhid, study_flow, upload_mode, received_at, gcs_path, gcs_synced FROM submissions ${cond} ORDER BY received_at DESC LIMIT 10`, filter)
   ]);
 
   return {
@@ -826,9 +842,14 @@ function optionalDate(item, field, label) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error(`${label} must use YYYY-MM-DD format.`);
   const date = new Date(`${value}T00:00:00Z`);
   if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) throw new Error(`${label} is not a valid date.`);
-  const tomorrow = new Date();
-  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-  if (date > tomorrow) throw new Error(`${label} cannot be in the future.`);
+  const today = new Date().toISOString().slice(0, 10);
+  if (value > today) throw new Error(`${label} cannot be in the future.`);
+  return value;
+}
+
+function requiredDate(item, field, label) {
+  const value = optionalDate(item, field, label);
+  if (value === "-") throw new Error(`${label} is required.`);
   return value;
 }
 
@@ -912,6 +933,60 @@ function normalizeUltrasoundFindings(rawFindings) {
   };
 }
 
+function normalizeKfreForm(rawForm, studyFlow) {
+  if (studyFlow !== "kfre") return null;
+  if (!rawForm || typeof rawForm !== "object" || Array.isArray(rawForm)) {
+    throw new Error("KFRE clinical and outcome data are required.");
+  }
+  const examination = rawForm.clinicalExamination || {};
+  const outcomes = rawForm.outcomes || {};
+  const normalized = {
+    clinicalExamination: {
+      systolicBp:    requiredNumber(examination, "systolicBp", "Systolic blood pressure", { min: 50, max: 300, integer: true }),
+      diastolicBp:   requiredNumber(examination, "diastolicBp", "Diastolic blood pressure", { min: 30, max: 200, integer: true }),
+      heartRate:     requiredNumber(examination, "heartRate", "Heart rate", { min: 20, max: 250, integer: true }),
+      waistHipRatio: requiredNumber(examination, "waistHipRatio", "Waist-to-hip ratio", { min: 0.3, max: 3 })
+    },
+    followUp: null,
+    outcomes: {
+      ckdStage:           requiredChoice(outcomes, "ckdStage", "KFRE outcome CKD stage", allowedKfreOutcomeStages),
+      rapidProgression:   requiredChoice(outcomes, "rapidProgression", "Rapid progression", allowedYesNoValues),
+      kidneyFailureEvent: requiredChoice(outcomes, "kidneyFailureEvent", "Kidney failure event", allowedYesNoValues),
+      eventDate:          "-",
+      eventType:          "-"
+    }
+  };
+  if (Number(normalized.clinicalExamination.systolicBp) <= Number(normalized.clinicalExamination.diastolicBp)) {
+    throw new Error("Systolic blood pressure must be greater than diastolic blood pressure.");
+  }
+
+  if (rawForm.followUp !== null && rawForm.followUp !== undefined) {
+    const followUp = rawForm.followUp;
+    if (!followUp || typeof followUp !== "object" || Array.isArray(followUp)) {
+      throw new Error("KFRE follow-up data are invalid.");
+    }
+    const visit = requiredText(followUp, "visit", "Follow-up visit", 10);
+    if (!/^T[1-9]\d*$/.test(visit)) throw new Error("Follow-up visit must be a valid timepoint such as T1 or T2.");
+    normalized.followUp = {
+      visit,
+      months:             requiredNumber(followUp, "months", "Follow-up timepoint", { min: 0, max: 240 }),
+      repeatCreatinine:   requiredNumber(followUp, "repeatCreatinine", "Repeat creatinine", { min: 0.01, max: 100 }),
+      updatedEgfr:        requiredNumber(followUp, "updatedEgfr", "Updated eGFR", { min: 0, max: 250 }),
+      ckdProgression:     requiredChoice(followUp, "ckdProgression", "CKD progression", allowedKfreProgressionValues),
+      hospitalization:    requiredChoice(followUp, "hospitalization", "Hospitalization", allowedYesNoValues),
+      dialysisInitiated:  requiredChoice(followUp, "dialysisInitiated", "Dialysis initiated", allowedYesNoValues),
+      transplant:         requiredChoice(followUp, "transplant", "Transplant", allowedYesNoValues)
+    };
+  }
+
+  if (normalized.outcomes.kidneyFailureEvent === "Yes") {
+    normalized.outcomes.eventDate = requiredDate(outcomes, "eventDate", "Kidney failure event date");
+    normalized.outcomes.eventType = requiredChoice(outcomes, "eventType", "Kidney failure event type", allowedKfreEventTypes);
+  }
+
+  return normalized;
+}
+
 function computeDataQualityWarnings(record) {
   const warnings = [];
   const age = Number(record.age);
@@ -946,6 +1021,7 @@ function normalizeSubmission(item, options = {}) {
   if (hospitalName !== hospital.name) throw new Error("Hospital name does not match the selected Hospital ID.");
 
   const uhid       = validateIdentifier(requiredText(item, "uhid", "Patient Unique ID", 80), "Patient Unique ID");
+  const studyFlow  = requiredChoice(item, "studyFlow", "Study pathway", allowedStudyFlows);
   const uploadMode = requiredChoice(item, "uploadMode", "Upload mode", allowedUploadModes);
   const files      = normalizeFiles(item.files, options);
   const consentId  = cleanText(item.consentId || item.consent_id, 100) || null;
@@ -963,6 +1039,7 @@ function normalizeSubmission(item, options = {}) {
     hospitalId,
     hospitalName:         hospital.name,
     consentId,
+    studyFlow,
     studyId:              optionalText(item.studyId, 80),
     enrollmentDate:       optionalDate(item, "enrollmentDate", "Date of enrollment"),
     siteCenter:           optionalText(item.siteCenter, 140),
@@ -989,11 +1066,25 @@ function normalizeSubmission(item, options = {}) {
     hypertensionDuration: optionalNumber(item, "hypertensionDuration", "Hypertension duration", { min: 0, max: 120 }),
     cardiovascularDisease:  optionalYesNo(item, "cardiovascularDisease", "Cardiovascular disease"),
     familyKidneyHistory:    optionalYesNo(item, "familyKidneyHistory", "Family history of kidney disease"),
-    ultrasoundFindings:      normalizeUltrasoundFindings(item.ultrasoundFindings),
+    ultrasoundFindings:      studyFlow === "egfr" ? normalizeUltrasoundFindings(item.ultrasoundFindings) : null,
+    kfreForm:                normalizeKfreForm(item.kfreForm, studyFlow),
     reviewedAt:           null,
     files
   };
 
+  if (studyFlow === "kfre" && uploadMode !== "clinical_document") {
+    throw new Error("KFRE submissions must use the clinical document upload pathway.");
+  }
+  if (studyFlow === "egfr" && uploadMode === "clinical_document") {
+    throw new Error("Clinical-document-only upload is available only for KFRE submissions.");
+  }
+  if (studyFlow === "kfre") {
+    if (files.length !== 1 || !files.some((file) => file.fieldName === "clinicalDocument")) {
+      throw new Error("KFRE submission requires one kidney-related clinical document.");
+    }
+  } else if (files.some((file) => file.fieldName === "clinicalDocument")) {
+    throw new Error("KFRE clinical documents cannot be uploaded through the eGFR pathway.");
+  }
   if (uploadMode === "separate") {
     const missing = ["leftKidney", "rightKidney", "egfrReport"].find((f) => !files.some((file) => file.fieldName === f));
     if (missing) throw new Error("Separate-file mode requires left kidney, right kidney, and eGFR report files.");
@@ -1034,7 +1125,8 @@ function getFileCategory(fieldName) {
     mixedKidney:     ["mixed",     "", "mixed"],
     patientPackage:  ["mixed",     "", "package"],
     ultrasoundVideo: ["videos",    "", "ultrasound-video"],
-    egfrReport:      ["documents", "", "egfr-report"]
+    egfrReport:      ["documents", "", "egfr-report"],
+    clinicalDocument:["documents", "", "kfre-clinical-document"]
   };
   return categories[fieldName] || ["documents", "", fieldName || "document"];
 }
@@ -1216,9 +1308,10 @@ async function handleConsentRecord(req, res) {
     return;
   }
 
-  let uhid, hospitalId;
+  let uhid, hospitalId, studyFlow;
   try {
     uhid       = validateIdentifier(cleanText(body.uhid, 80), "Patient ID");
+    studyFlow  = requiredChoice(body, "studyFlow", "Study pathway", allowedStudyFlows);
     hospitalId = session.role === "admin"
       ? validateIdentifier(cleanText(body.hospitalId, 80), "Hospital ID")
       : session.hospitalId;
@@ -1232,13 +1325,14 @@ async function handleConsentRecord(req, res) {
     return;
   }
 
-  const consentVersion = "1.0";
+  const consentVersion = `${studyFlow}-1.0`;
   const consentId      = `consent-${crypto.randomBytes(8).toString("hex")}`;
   const ip             = req.socket?.remoteAddress || null;
   memoryConsents.set(consentId, {
     uhid,
     hospitalId,
     userId: session.userId,
+    studyFlow,
     consentVersion,
     createdAt: new Date().toISOString()
   });
@@ -1246,9 +1340,9 @@ async function handleConsentRecord(req, res) {
   if (dbPool && dbReady) {
     try {
       await dbPool.query(
-        `INSERT INTO consents (consent_id, uhid, hospital_id, user_id, consent_version, ip_address, user_agent)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [consentId, uhid, hospitalId, session.userId, consentVersion, ip, (req.headers["user-agent"] || "").slice(0, 300)]
+        `INSERT INTO consents (consent_id, uhid, hospital_id, user_id, study_flow, consent_version, ip_address, user_agent)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [consentId, uhid, hospitalId, session.userId, studyFlow, consentVersion, ip, (req.headers["user-agent"] || "").slice(0, 300)]
       );
     } catch (err) {
       sendJson(res, 500, { ok: false, error: "Failed to record consent." });
@@ -1258,10 +1352,10 @@ async function handleConsentRecord(req, res) {
 
   await logAudit({
     event: "consent_recorded", userId: session.userId, hospitalId, ip, req,
-    details: { uhid, consentId, consentVersion }
+    details: { uhid, consentId, studyFlow, consentVersion }
   });
 
-  sendJson(res, 200, { ok: true, consentId, consentVersion });
+  sendJson(res, 200, { ok: true, consentId, studyFlow, consentVersion });
 }
 
 async function verifySubmissionConsent(record) {
@@ -1271,8 +1365,8 @@ async function verifySubmissionConsent(record) {
 
   if (dbPool && dbReady) {
     const result = await dbPool.query(
-      "SELECT consent_id FROM consents WHERE consent_id = $1 AND uhid = $2 AND hospital_id = $3",
-      [record.consentId, record.uhid, record.hospitalId]
+      "SELECT consent_id FROM consents WHERE consent_id = $1 AND uhid = $2 AND hospital_id = $3 AND study_flow = $4",
+      [record.consentId, record.uhid, record.hospitalId, record.studyFlow]
     );
     if (!result.rows[0]) {
       throw new Error("Consent record was not found for this patient. Please return to E-Consent and record consent again.");
@@ -1281,7 +1375,7 @@ async function verifySubmissionConsent(record) {
   }
 
   const consent = memoryConsents.get(record.consentId);
-  if (!consent || consent.uhid !== record.uhid || consent.hospitalId !== record.hospitalId) {
+  if (!consent || consent.uhid !== record.uhid || consent.hospitalId !== record.hospitalId || consent.studyFlow !== record.studyFlow) {
     throw new Error("Consent record was not found for this patient. Please return to E-Consent and record consent again.");
   }
 }
@@ -1348,6 +1442,7 @@ async function finalizeSubmissionBatch({ normalizedSubmissions, session, req }) 
       hospitalId:           item.hospitalId,
       hospitalName:         item.hospitalName,
       consentId:            item.consentId || null,
+      studyFlow:            item.studyFlow,
       studyId:              item.studyId,
       enrollmentDate:       item.enrollmentDate,
       siteCenter:           item.siteCenter,
@@ -1375,6 +1470,7 @@ async function finalizeSubmissionBatch({ normalizedSubmissions, session, req }) 
       cardiovascularDisease:  item.cardiovascularDisease,
       familyKidneyHistory:    item.familyKidneyHistory,
       ultrasoundFindings:    item.ultrasoundFindings,
+      kfreForm:              item.kfreForm,
       dataQualityWarnings:  item.dataQualityWarnings || [],
       reviewedAt:           item.reviewedAt || null,
       files:                storedFiles
@@ -1401,7 +1497,7 @@ async function finalizeSubmissionBatch({ normalizedSubmissions, session, req }) 
       event: "submission_created",
       userId: session.userId, hospitalId: record.hospitalId, recordId: record.recordId,
       ip: req.socket?.remoteAddress, req,
-      details: { batchId, uploadMode: record.uploadMode }
+      details: { batchId, studyFlow: record.studyFlow, uploadMode: record.uploadMode }
     });
   }
 
@@ -1802,6 +1898,7 @@ async function handleGetSubmissions(req, res) {
       hospitalId:   r.hospitalId,
       hospitalName: r.hospitalName,
       uhid:         r.uhid,
+      studyFlow:    r.studyFlow || "egfr",
       age:          r.age,
       sex:          r.sex,
       ckdStage:     r.ckdStage,
@@ -1907,7 +2004,7 @@ async function handleExportSubmissions(req, res) {
     all = applySubmissionFilters(all, { reviewed, search, dateFrom, dateTo });
 
     const cols = [
-      "recordId", "batchId", "hospitalId", "hospitalName", "uhid",
+      "recordId", "batchId", "studyFlow", "hospitalId", "hospitalName", "uhid",
       "age", "sex", "heightCm", "weight", "bmi", "ethnicity", "occupation",
       "ckdStage", "ckdStageRemarks", "knownCkd", "ckdDuration", "dialysis", "dialysisFrequency",
       "diabetic", "diabeticStage", "diabetesDuration",
@@ -1917,7 +2014,7 @@ async function handleExportSubmissions(req, res) {
     ];
 
     const headers = [
-      "Record ID", "Batch ID", "Hospital ID", "Hospital Name", "Patient ID (UHID)",
+      "Record ID", "Batch ID", "Study Pathway", "Hospital ID", "Hospital Name", "Patient ID (UHID)",
       "Age", "Sex", "Height (cm)", "Weight (kg)", "BMI", "Ethnicity", "Occupation",
       "Kidney Status / CKD Stage", "CKD Stage Remarks", "Known CKD", "CKD Duration", "Dialysis", "Dialysis Frequency",
       "Diabetic", "Diabetic Stage", "Diabetes Duration",
@@ -2034,6 +2131,7 @@ async function getFilesystemSummary(scopeHospitalId = null) {
     hospitalId:  r.hospitalId,
     hospitalName:r.hospitalName,
     uhid:        r.uhid,
+    studyFlow:   r.studyFlow || "egfr",
     uploadMode:  r.uploadMode,
     receivedAt:  r.receivedAt,
     reviewedAt:  r.reviewedAt || null

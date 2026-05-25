@@ -89,6 +89,25 @@
               </button>
             </div>
           </div>
+          <fieldset class="ls-study-picker">
+            <legend class="ls-label">Choose study pathway</legend>
+            <div class="ls-study-options">
+              <label class="ls-study-option">
+                <input type="radio" name="loginStudyFlow" value="egfr" checked />
+                <span>
+                  <strong>eGFR Study</strong>
+                  <small>Ultrasound and clinical data intake</small>
+                </span>
+              </label>
+              <label class="ls-study-option">
+                <input type="radio" name="loginStudyFlow" value="kfre" />
+                <span>
+                  <strong>KFRE Study</strong>
+                  <small>Clinical document-based risk study</small>
+                </span>
+              </label>
+            </div>
+          </fieldset>
           <p class="ls-error hidden" id="login-error" role="alert"></p>
           <button class="ls-btn" type="submit">
             <span class="ls-btn-label">Sign In</span>
@@ -117,7 +136,7 @@
         <button class="nav-link active" data-tab="landing" type="button">Home</button>
         <button class="nav-link workflow-nav is-locked" id="consent-nav" data-tab="consent" type="button"><span>E-Consent Form</span><small class="nav-gate-badge">Locked</small></button>
         <button class="nav-link workflow-nav is-locked" id="questionnaire-nav" data-tab="questionnaire" type="button"><span>Questionnaire</span><small class="nav-gate-badge">Locked</small></button>
-        <button class="nav-link workflow-nav is-locked" id="egfr-nav" data-tab="egfr" type="button"><span>eGFR Flow</span><small class="nav-gate-badge">Locked</small></button>
+        <button class="nav-link workflow-nav is-locked" id="egfr-nav" data-tab="egfr" type="button"><span id="clinical-flow-nav-label">eGFR Flow</span><small class="nav-gate-badge">Locked</small></button>
         <button class="nav-link" data-tab="dashboard" type="button">Dashboard</button>
         <button class="nav-link" id="submissions-nav" data-tab="submissions" type="button">Submissions</button>
       </nav>
@@ -178,7 +197,7 @@
             <svg class="stp-check" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </div>
           <div class="stp-label-wrap">
-            <span class="stp-label">Upload &amp; Submit</span>
+            <span class="stp-label" id="clinical-step-label">Upload &amp; Submit</span>
             <span class="stp-sub">Files &amp; final submission</span>
           </div>
         </li>
@@ -206,9 +225,9 @@
         <section class="landing-hero-stage">
           <article class="landing-hero">
             <div class="landing-copy">
-              <span class="eyebrow">AI-Based eGFR Research Registry</span>
-              <h1>Secure Renal Data Capture for Partner Hospitals</h1>
-              <p>Collect consented kidney ultrasound data, clinical reports, and questionnaire details in one guided workflow.</p>
+              <span class="eyebrow" id="landing-study-eyebrow">AI-Based eGFR Research Registry</span>
+              <h1 id="landing-study-title">Secure Renal Data Capture for Partner Hospitals</h1>
+              <p id="landing-study-description">Collect consented kidney ultrasound data, clinical reports, and questionnaire details in one guided workflow.</p>
               <div class="hero-highlights" aria-label="Portal capability">
                 <span>Patient-linked consent</span>
               </div>
@@ -251,8 +270,8 @@
             </div>
             <div class="flow-step reveal-item">
               <span>4</span>
-              <strong>Records Upload</strong>
-              <small>Files + reports</small>
+              <strong id="workflow-records-title">Records Upload</strong>
+              <small id="workflow-records-subtitle">Files + reports</small>
             </div>
           </div>
           <div class="handoff-actions">
@@ -281,7 +300,7 @@
                 </div>
               </div>
               <div class="field-block">
-                <label for="landing-hospital">Hospital *</label>
+                <label for="landing-hospital">Hospital <span class="required-marker">*</span></label>
                 <select id="landing-hospital" required>
                   <option value="" selected disabled>Select hospital</option>
                 </select>
@@ -309,7 +328,7 @@
                 <span id="active-hospital-id">Save hospital session first</span>
               </div>
               <div class="field-block">
-                <label for="landing-uhid">Patient Unique ID *</label>
+                <label for="landing-uhid">Patient Unique ID <span class="required-marker">*</span></label>
                 <input id="landing-uhid" type="text" placeholder="Enter anonymized patient ID" required disabled />
               </div>
               <div class="field-block">
@@ -335,9 +354,9 @@
 
     <section class="tab-panel" id="tab-consent" aria-labelledby="E-Consent Form">
       <div class="page-hero form-hero">
-        <h1>E-Consent Form</h1>
+        <h1 id="consent-page-title">E-Consent Form</h1>
         <p>Participant information linked to the current patient intake session</p>
-        <span class="hero-meta">Please verify the patient context before continuing</span>
+        <span class="hero-meta" id="consent-page-meta">eGFR Study · Please verify the patient context before continuing</span>
       </div>
       <div class="stage-access-banner hidden" id="consent-access-banner" role="status">
         <span class="stage-access-badge">Preview only</span>
@@ -361,6 +380,7 @@
           </div>
           <button class="btn-ghost" data-tab-jump="landing" type="button">Edit Patient Setup</button>
         </div>
+        <div class="consent-flow-panel" data-consent-flow="egfr">
         <div class="consent-study-info">
           <div class="csi-row"><span class="csi-label">Study Title :</span><span class="csi-val">AI-Based Multimodal Estimation of eGFR Using Kidney Ultrasound and Clinical Parameters</span></div>
           <div class="csi-row"><span class="csi-label">Sponsor :</span><span class="csi-val">TANUH Foundation</span></div>
@@ -428,11 +448,88 @@
           </li>
         </ol>
         <div class="consent-thanks">Thank you for taking part in the study!</div>
-        <div class="consent-acceptance">
+        <div class="consent-confirmation-group">
           <label class="consent-check">
             <input id="consent-checkbox" type="checkbox" />
             <span>I confirm that this consent review is linked to the patient intake shown above, and that I have read and understood the participant information before proceeding.</span>
           </label>
+        </div>
+        </div>
+
+        <div class="consent-flow-panel hidden" data-consent-flow="kfre">
+          <div class="consent-study-info">
+            <div class="csi-row"><span class="csi-label">Study Title :</span><span class="csi-val">Recalibration and Validation of the Kidney Failure Risk Equation in an Indian Chronic Kidney Disease Cohort</span></div>
+            <div class="csi-row"><span class="csi-label">Sponsor :</span><span class="csi-val">TANUH Foundation</span></div>
+            <!-- <div class="csi-row"><span class="csi-label">Study Pathway :</span><span class="csi-val">KFRE Clinical Document Intake</span></div> -->
+            <div class="csi-row"><span class="csi-label">IEC Approval :</span><span class="csi-val">Ethics committee approval received from Clinicom vide letter no: 02436 dated 24th March, 2026</span></div>
+            <!-- <div class="csi-row"><span class="csi-label">CTRI Approval :</span><span class="csi-val">CTRI committee registration done with CTRI no: CTRI/2026/05/110766 dated 21st May, 2026</span></div> -->
+          </div>
+          <div class="consent-intro">
+            <h2>Recalibration and Validation of the Kidney Failure Risk Equation in an Indian Chronic Kidney Disease Cohort</h2>
+            <p>You are being invited to take part in a research study titled “Recalibration and Validation of the Kidney Failure Risk Equation in an Indian Chronic Kidney Disease Cohort”. Before you decide, it is important for you to understand why the research is being done and what it will involve. Please take time to read the following information carefully and discuss it with friends, relatives and your doctors if you wish. Ask us if there is anything that is not clear or if you would like more information. Thank you for reading this.</p>
+          </div>
+          <ol class="consent-list">
+            <li>
+              <h3>What is the purpose of the study?</h3>
+              <p>The purpose of this study is to improve the prediction of kidney failure risk in Indian patients with chronic kidney disease by adapting an existing risk prediction model using Indian patient data.</p>
+            </li>
+            <li>
+              <h3>Why have I been chosen?</h3>
+              <p>You have been chosen to participate because your medical records include kidney-related tests that are useful for understanding kidney health. The clinical information in the records is sufficient to train and test the AI model to assess the kidney function.</p>
+            </li>
+            <li>
+              <h3>Do I have to take part?</h3>
+              <p>Your participation is completely voluntary and will not affect your level of medical care at the Health Centre. You may opt not to participate in the study at any time.</p>
+            </li>
+            <li>
+              <h3>What will happen to me if I take part?</h3>
+              <p>If you agree to participate, you will allow the research team to access and use your laboratory reports related to kidney function. These data will be de-identified and analyzed using artificial intelligence-based methods to develop and validate models for estimating kidney function by estimating an individual’s 2-year and 5-year risk of progression to kidney failure.</p>
+            </li>
+            <li>
+              <h3>What do I have to do?</h3>
+              <p>You will not be required to attend any extra appointments or undergo additional tests. Your anonymized data will be used for research purposes. No identifiable information will be accessed, and you will not be contacted.</p>
+            </li>
+            <li>
+              <h3>What are the possible risks of taking part?</h3>
+              <p>Participation in this research study does not involve any known risks.</p>
+            </li>
+            <li>
+              <h3>What are the possible benefits of taking part?</h3>
+              <p>You may not receive direct personal benefit from participating in this study, as no changes will be made to your medical care based on the study findings. However, the knowledge gained may help improve assessment and management of kidney disease for future patients.</p>
+            </li>
+            <li>
+              <h3>Will my taking part in this study be kept confidential?</h3>
+              <p>Your information will be handled in a confidential manner and protected according to institutional policies and applicable laws. The research dataset will no longer contain your name or any other direct identifiers. Data will be kept in a safe, password-protected system with controlled access.</p>
+            </li>
+            <li>
+              <h3>What will happen to the results of the research study?</h3>
+              <p>The study results will be used for research and academic purposes to improve prediction of kidney failure risk in Indian CKD patients. Results may be published or presented in summary form, without revealing any personal identity. About 20% of the total data, collected in an irreversible anonymised manner, will be part of benchmarking and open data initiative of TANUH for evaluation of AI algorithms.</p>
+            </li>
+            <li>
+              <h3>Who is organising and funding the research?</h3>
+              <p>The research study is being organized at the TANUH, AI Centre of Excellence, Indian Institute of Science, Bangalore 560012 and funded by a research grant from Ministry of Education, Government of India.</p>
+            </li>
+            <li>
+              <h3>Who has reviewed the study?</h3>
+              <p>The research study has been reviewed by the CLINICOM, Independent Ethics Committee for Evaluation of Protocols for Clinical Research, Bangalore 560003.</p>
+            </li>
+            <li>
+              <h3>Who can I contact for further information?</h3>
+              <p>If you have any questions about the study you may contact Dr. S. Hema Priyadarshini, <a href="mailto:hema.priya@tanuh.ai">hema.priya@tanuh.ai</a>, +91 9945334356.</p>
+              <p>If you wish to speak to someone independent of the study as well as withdrawal of the consent, you may contact the Institutional Ethics Committee (IEC).</p>
+              <p>Name: Dr. Sri Vidhya Jagadish<br />Member Secretary, IEC, TANUH<br />Email: <a href="mailto:secretary.iec@tanuh.ai">secretary.iec@tanuh.ai</a><br />Phone# 080 - 2293 4106 / 2293 4107</p>
+            </li>
+          </ol>
+          <div class="consent-thanks">Thank you for taking part in the study!</div>
+          <div class="consent-confirmation-group">
+            <label class="consent-check">
+              <input id="kfre-consent-checkbox" type="checkbox" />
+              <span>I confirm that this KFRE consent review is linked to the patient intake shown above, and that I have read and understood the participant information before proceeding.</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="consent-acceptance consent-action-bar">
           <div class="consent-record-status" id="consent-record-status" role="status">Consent is not recorded yet.</div>
           <button class="btn-premium" id="consent-continue" type="button" disabled>Accept & Continue</button>
         </div>
@@ -443,7 +540,7 @@
       <div class="page-hero form-hero">
         <h1>Questionnaire</h1>
         <p>Patient identification, demographics, and clinical history</p>
-        <span class="hero-meta">Research Intake Questionnaire</span>
+        <span class="hero-meta" id="questionnaire-page-meta">eGFR Research Intake Questionnaire</span>
       </div>
       <div class="stage-access-banner hidden" id="questionnaire-access-banner" role="status">
         <span class="stage-access-badge">Preview only</span>
@@ -454,10 +551,11 @@
         <button class="btn-ghost" data-tab-jump="consent" type="button">Go to E-Consent</button>
       </div>
       <div class="consent-study-info">
-          <div class="csi-row"><span class="csi-label">Study Title :</span><span class="csi-val">AI-Based Multimodal Estimation of eGFR Using Kidney Ultrasound and Clinical Parameters</span></div>
+          <div class="csi-row"><span class="csi-label">Study Title :</span><span class="csi-val" id="questionnaire-study-title">AI-Based Multimodal Estimation of eGFR Using Kidney Ultrasound and Clinical Parameters</span></div>
           <div class="csi-row"><span class="csi-label">Sponsor :</span><span class="csi-val">TANUH Foundation</span></div>
-          <div class="csi-row"><span class="csi-label">IEC Approval :</span><span class="csi-val">Ethics committee approval received from Clinicom vide letter no: 02437 dated 24th March, 2026</span></div>
-          <div class="csi-row"><span class="csi-label">CTRI Approval :</span><span class="csi-val">CTRI committee registration done with CTRI no: CTRI/2026/05/110765 dated 21st May, 2026</span></div>
+          <div class="csi-row" id="questionnaire-egfr-iec"><span class="csi-label">IEC Approval :</span><span class="csi-val">Ethics committee approval received from Clinicom vide letter no: 02437 dated 24th March, 2026</span></div>
+          <div class="csi-row" id="questionnaire-egfr-ctri"><span class="csi-label">CTRI Approval :</span><span class="csi-val">CTRI committee registration done with CTRI no: CTRI/2026/05/110765 dated 21st May, 2026</span></div>
+          <div class="csi-row hidden" id="questionnaire-kfre-iec"><span class="csi-label">IEC Approval :</span><span class="csi-val">Ethics committee approval received from Clinicom vide letter no: 02436 dated 24th March, 2026</span></div>
         </div>
       <article class="panel-card flow-card form-card">
         <form id="questionnaire-form" class="form-grid" novalidate>
@@ -473,17 +571,17 @@
                 <input id="study-id" name="studyId" type="text" placeholder="Enter study ID" />
               </div>
               <div class="field-block">
-                <label for="hospital-name">Hospital *</label>
+                <label for="hospital-name">Hospital <span class="required-marker">*</span></label>
                 <select id="hospital-name" name="hospitalName" required disabled>
                   <option value="" selected disabled>Select hospital</option>
                 </select>
               </div>
               <div class="field-block">
-                <label for="hospital-id">Hospital ID *</label>
+                <label for="hospital-id">Hospital ID <span class="required-marker">*</span></label>
                 <input id="hospital-id" name="hospitalId" type="text" placeholder="Auto-filled from hospital" readonly required />
               </div>
               <div class="field-block">
-                <label for="uhid">Patient Unique ID *</label>
+                <label for="uhid">Patient Unique ID <span class="required-marker">*</span></label>
                 <input id="uhid" name="uhid" type="text" placeholder="Unique patient ID" readonly required />
               </div>
               <div class="field-block">
@@ -512,7 +610,7 @@
             <div class="section-title"><span class="section-index">2.</span> Demographics</div>
             <div class="section-grid">
               <div class="field-block">
-                <label for="patient-age">Age *</label>
+                <label for="patient-age">Age <span class="required-marker">*</span></label>
                 <input id="patient-age" name="age" type="number" min="18" max="120" step="1" placeholder="Age in years" required />
                 <small class="field-help">Adults only; accepted range is 18 to 120 years.</small>
               </div>
@@ -526,12 +624,12 @@
                 </div>
               </div>
               <div class="field-block">
-                <label for="questionnaire-height">Height (cm) *</label>
+                <label for="questionnaire-height">Height (cm) <span class="required-marker">*</span></label>
                 <input id="questionnaire-height" name="questionnaireHeight" type="number" min="50" max="250" step="0.1" placeholder="Height in cm" required />
                 <small class="field-help">Required for BMI calculation; measured value in centimetres.</small>
               </div>
               <div class="field-block">
-                <label for="patient-weight">Weight (kg) *</label>
+                <label for="patient-weight">Weight (kg) <span class="required-marker">*</span></label>
                 <input id="patient-weight" name="weight" type="number" min="10" max="400" step="0.1" placeholder="Weight in kg" required />
                 <small class="field-help">Enter measured weight in kilograms.</small>
               </div>
@@ -567,7 +665,7 @@
                     </div>
                   </div>
                   <div class="field-block clinical-card">
-                    <label for="ckd-stage">Kidney Status / CKD Stage *</label>
+                    <label for="ckd-stage">Kidney Status / CKD Stage <span class="required-marker">*</span></label>
                     <select id="ckd-stage" name="ckdStage" required>
                       <option value="" selected disabled>Select stage</option>
                       <option value="Normal">Normal (No CKD)</option>
@@ -581,7 +679,7 @@
                     </select>
                   </div>
                   <div class="field-block clinical-card full-span hidden" id="ckd-stage-remarks-block">
-                    <label for="ckd-stage-remarks">Other stage remarks *</label>
+                    <label for="ckd-stage-remarks">Other stage remarks <span class="required-marker">*</span></label>
                     <input id="ckd-stage-remarks" name="ckdStageRemarks" type="text" maxlength="240" placeholder="Specify the clinical classification or reason" />
                     <small class="field-help">Required when Other is selected.</small>
                   </div>
@@ -685,9 +783,9 @@
 
     <section class="tab-panel" id="tab-egfr" aria-labelledby="eGFR Flow">
       <div class="page-hero form-hero">
-        <h1>Clinical Data Collection</h1>
-        <p>Comprehensive Medical Research Encounter Form</p>
-        <span class="hero-meta">Session ID: EGFR-INTAKE-2026</span>
+        <h1 id="clinical-page-title">Clinical Data Collection</h1>
+        <p id="clinical-page-subtitle">Ultrasound findings and clinical record uploads</p>
+        <span class="hero-meta" id="clinical-page-meta">eGFR Study · Ultrasound and clinical files</span>
       </div>
       <div class="stage-access-banner hidden" id="egfr-access-banner" role="status">
         <span class="stage-access-badge">Preview only</span>
@@ -714,7 +812,7 @@
             </div>
           </div>
 
-          <div class="form-section">
+          <div class="form-section" id="egfr-ultrasound-section">
             <div class="section-title"><span class="section-index">1.</span> Ultrasound Findings <span class="section-note">Enter findings available in the examination report</span></div>
             <div class="renal-findings-grid">
               <section class="renal-finding-card right-kidney-card" aria-labelledby="right-kidney-findings-title">
@@ -881,7 +979,7 @@
             </div>
           </div>
 
-          <div class="form-section">
+          <div class="form-section" id="egfr-upload-method-section">
             <div class="section-title"><span class="section-index">2.</span> Upload Method</div>
             <div class="upload-mode-grid" role="radiogroup" aria-label="Upload method">
               <label class="upload-mode-card selected" data-upload-mode-card="separate">
@@ -929,7 +1027,7 @@
             </div>
           </div>
 
-          <div class="form-section">
+          <div class="form-section" id="egfr-video-section">
             <div class="section-title"><span class="section-index">4.</span> Ultrasound Video <span class="section-note">(Optional)</span></div>
             <div class="upload-grid">
               <label class="upload-tile wide">
@@ -940,8 +1038,147 @@
             </div>
           </div>
 
+          <div class="kfre-structured-form hidden" id="kfre-structured-form">
+            <div class="form-section">
+              <div class="section-title"><span class="section-index">1.</span> Clinical Examination</div>
+              <p class="section-description">Record measurements taken during clinical assessment.</p>
+              <div class="section-grid kfre-clinical-grid">
+                <div class="field-block">
+                  <label for="kfre-systolic-bp">Systolic Blood Pressure (mmHg) <span class="required-marker">*</span></label>
+                  <input id="kfre-systolic-bp" type="number" min="50" max="300" step="1" placeholder="e.g., 120" />
+                </div>
+                <div class="field-block">
+                  <label for="kfre-diastolic-bp">Diastolic Blood Pressure (mmHg) <span class="required-marker">*</span></label>
+                  <input id="kfre-diastolic-bp" type="number" min="30" max="200" step="1" placeholder="e.g., 80" />
+                </div>
+                <div class="field-block">
+                  <label for="kfre-heart-rate">Heart Rate (bpm) <span class="required-marker">*</span></label>
+                  <input id="kfre-heart-rate" type="number" min="20" max="250" step="1" placeholder="e.g., 72" />
+                </div>
+                <div class="field-block">
+                  <label for="kfre-waist-hip-ratio">Waist-to-Hip Ratio <span class="required-marker">*</span></label>
+                  <input id="kfre-waist-hip-ratio" type="number" min="0.3" max="3" step="0.01" placeholder="e.g., 0.92" />
+                </div>
+              </div>
+            </div>
+
+            <div class="form-section">
+              <div class="section-title"><span class="section-index">2.</span> Follow-up <span class="section-note">(Prospective Component)</span></div>
+              <div class="section-grid">
+                <div class="field-block full-span">
+                  <label for="kfre-followup-status">Follow-up record available?</label>
+                  <select id="kfre-followup-status">
+                    <option value="None" selected>None / No follow-up data available</option>
+                    <option value="Available">Yes, record a follow-up timepoint</option>
+                  </select>
+                </div>
+              </div>
+              <div class="kfre-followup-panel hidden" id="kfre-followup-fields">
+                <div class="section-grid">
+                  <div class="field-block">
+                    <label for="kfre-followup-visit">Follow-up Visit <span class="required-marker">*</span></label>
+                    <input id="kfre-followup-visit" type="text" maxlength="4" pattern="T[1-9][0-9]*" placeholder="e.g., T1 or T2" />
+                  </div>
+                  <div class="field-block">
+                    <label for="kfre-followup-months">Follow-up Timepoint (months) <span class="required-marker">*</span></label>
+                    <input id="kfre-followup-months" type="number" min="0" max="240" step="0.1" placeholder="Months since baseline" />
+                  </div>
+                  <div class="field-block">
+                    <label for="kfre-repeat-creatinine">Repeat Creatinine (mg/dL) <span class="required-marker">*</span></label>
+                    <input id="kfre-repeat-creatinine" type="number" min="0.01" max="100" step="0.01" placeholder="e.g., 1.25" />
+                  </div>
+                  <div class="field-block">
+                    <label for="kfre-updated-egfr">Updated eGFR (mL/min/1.73 m²) <span class="required-marker">*</span></label>
+                    <input id="kfre-updated-egfr" type="number" min="0" max="250" step="0.1" placeholder="e.g., 56.4" />
+                  </div>
+                  <div class="field-block full-span">
+                    <label for="kfre-ckd-progression">Change in CKD Stage / CKD Progression <span class="required-marker">*</span></label>
+                    <select id="kfre-ckd-progression">
+                      <option value="" selected disabled>Select follow-up assessment</option>
+                      <option value="No change">No change in stage</option>
+                      <option value="Improved">Improved to a lower severity stage</option>
+                      <option value="Progressed">Progressed to a higher severity stage</option>
+                      <option value="Kidney failure">Progressed to kidney failure</option>
+                      <option value="Not assessed">Not assessed / unavailable</option>
+                    </select>
+                  </div>
+                  <div class="field-block">
+                    <label for="kfre-hospitalization">Hospitalization <span class="required-marker">*</span></label>
+                    <select id="kfre-hospitalization"><option value="" selected disabled>Select</option><option value="Yes">Yes</option><option value="No">No</option></select>
+                  </div>
+                  <div class="field-block">
+                    <label for="kfre-dialysis-initiated">Dialysis Initiated <span class="required-marker">*</span></label>
+                    <select id="kfre-dialysis-initiated"><option value="" selected disabled>Select</option><option value="Yes">Yes</option><option value="No">No</option></select>
+                  </div>
+                  <div class="field-block">
+                    <label for="kfre-transplant">Transplant <span class="required-marker">*</span></label>
+                    <select id="kfre-transplant"><option value="" selected disabled>Select</option><option value="Yes">Yes</option><option value="No">No</option></select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-section">
+              <div class="section-title"><span class="section-index">3.</span> Outcome Labels <span class="section-note"></span></div>
+              <div class="section-grid">
+                <div class="field-block">
+                  <label for="kfre-outcome-ckd-stage">CKD Stage <span class="required-marker">*</span></label>
+                  <select id="kfre-outcome-ckd-stage">
+                    <option value="" selected disabled>Select stage</option>
+                    <option value="1">Stage 1 (G1)</option>
+                    <option value="2">Stage 2 (G2)</option>
+                    <option value="3a">Stage 3a (G3a)</option>
+                    <option value="3b">Stage 3b (G3b)</option>
+                    <option value="4">Stage 4 (G4)</option>
+                    <option value="5">Stage 5 (G5 / Kidney Failure)</option>
+                  </select>
+                </div>
+                <div class="field-block">
+                  <label for="kfre-rapid-progression">Rapid Progression <span class="required-marker">*</span></label>
+                  <select id="kfre-rapid-progression"><option value="" selected disabled>Select</option><option value="Yes">Yes</option><option value="No">No</option></select>
+                </div>
+                <div class="field-block">
+                  <label for="kfre-kidney-failure-event">Kidney Failure Event <span class="required-marker">*</span></label>
+                  <select id="kfre-kidney-failure-event"><option value="" selected disabled>Select</option><option value="Yes">Yes</option><option value="No">No</option></select>
+                </div>
+              </div>
+              <div class="kfre-event-panel hidden" id="kfre-kidney-failure-details">
+                <p class="section-description">Complete these details when a kidney failure event is recorded.</p>
+                <div class="section-grid">
+                  <div class="field-block">
+                    <label for="kfre-kidney-failure-date">Event Date <span class="required-marker">*</span></label>
+                    <div class="date-input-shell">
+                      <span class="date-icon" aria-hidden="true">Date</span>
+                      <input id="kfre-kidney-failure-date" type="date" max="9999-12-31" />
+                    </div>
+                  </div>
+                  <div class="field-block">
+                    <label for="kfre-kidney-failure-type">Event Type <span class="required-marker">*</span></label>
+                    <select id="kfre-kidney-failure-type">
+                      <option value="" selected disabled>Select event type</option>
+                      <option value="Dialysis">Dialysis</option>
+                      <option value="Transplant">Transplant</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section hidden" id="kfre-document-section">
+            <div class="section-title"><span class="section-index">4.</span> Kidney Function Clinical Document <span class="section-note">(Required)</span></div>
+            <p class="section-description">Upload the laboratory or clinical report used for the KFRE research record. Ultrasound images and videos are not required in this pathway.</p>
+            <div class="upload-grid">
+              <label class="upload-tile wide">
+                <input id="kfre-clinical-document" name="kfreClinicalDocumentFile" type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" />
+                <span class="upload-title">UPLOAD CLINICAL DOCUMENT</span>
+                <span class="upload-subtitle">Kidney-related laboratory or clinical report</span>
+              </label>
+            </div>
+          </div>
+
           <div class="actions">
-            <button class="btn-premium" type="submit">Submit eGFR Record</button>
+            <button class="btn-premium" id="clinical-submit-button" type="submit">Submit eGFR Record</button>
           </div>
         </form>
       </article>

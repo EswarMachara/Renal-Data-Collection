@@ -5,6 +5,7 @@ const state = {
   hospitalSession: null,
   backendDashboard: null,
   authSession: null,   // { token, userId, hospitalId, hospitalName, role, expiresAt }
+  studyFlow: "egfr",
   consentId: null,     // set after /api/consent succeeds
   questionnaireCompleted: false,
   currentUploadSession: null
@@ -12,6 +13,7 @@ const state = {
 
 const HOSPITAL_SESSION_KEY = "renalPortalHospitalSession";
 const AUTH_SESSION_KEY     = "renalPortalAuthSession";
+const STUDY_FLOW_KEY       = "renalPortalStudyFlow";
 const RESUMABLE_UPLOAD_RETRIES = 3;
 
 // Populated from /api/hospitals after login (or at startup when auth is disabled)
@@ -26,6 +28,24 @@ const loginError    = document.getElementById("login-error");
 const navbarAuth    = document.getElementById("navbar-auth");
 const navbarUserLabel = document.getElementById("navbar-user-label");
 const logoutBtn     = document.getElementById("logout-btn");
+
+function normalizedStudyFlow(value) {
+  return value === "kfre" ? "kfre" : "egfr";
+}
+
+function saveStudyFlow(value) {
+  state.studyFlow = normalizedStudyFlow(value);
+  try { sessionStorage.setItem(STUDY_FLOW_KEY, state.studyFlow); } catch { /* ignore */ }
+}
+
+function loadStudyFlow() {
+  try {
+    state.studyFlow = normalizedStudyFlow(sessionStorage.getItem(STUDY_FLOW_KEY));
+  } catch {
+    state.studyFlow = "egfr";
+  }
+  return state.studyFlow;
+}
 
 function authedFetch(url, options = {}) {
   const headers = { ...(options.headers || {}) };
@@ -183,12 +203,68 @@ const startPatientConsentBtn = document.getElementById("start-patient-consent");
 const activeHospitalName = document.getElementById("active-hospital-name");
 const activeHospitalId = document.getElementById("active-hospital-id");
 const consentCheckbox = document.getElementById("consent-checkbox");
+const kfreConsentCheckbox = document.getElementById("kfre-consent-checkbox");
 const consentContinueBtn = document.getElementById("consent-continue");
 const questionnaireContinueBtn = document.getElementById("questionnaire-continue");
 const questionnaireHeightInput = document.getElementById("questionnaire-height");
 const questionnaireWeightInput = document.getElementById("patient-weight");
 const questionnaireBmiInput = document.getElementById("questionnaire-bmi");
 const syncChoiceInputs = document.querySelectorAll("[data-sync-target]");
+const consentFlowPanels = document.querySelectorAll("[data-consent-flow]");
+const landingStudyEyebrow = document.getElementById("landing-study-eyebrow");
+const landingStudyDescription = document.getElementById("landing-study-description");
+const workflowRecordsTitle = document.getElementById("workflow-records-title");
+const workflowRecordsSubtitle = document.getElementById("workflow-records-subtitle");
+const consentPageMeta = document.getElementById("consent-page-meta");
+const questionnairePageMeta = document.getElementById("questionnaire-page-meta");
+const questionnaireStudyTitle = document.getElementById("questionnaire-study-title");
+const questionnaireEgfrIec = document.getElementById("questionnaire-egfr-iec");
+const questionnaireEgfrCtri = document.getElementById("questionnaire-egfr-ctri");
+const questionnaireKfreIec = document.getElementById("questionnaire-kfre-iec");
+const clinicalFlowNavLabel = document.getElementById("clinical-flow-nav-label");
+const clinicalStepLabel = document.getElementById("clinical-step-label");
+const clinicalPageTitle = document.getElementById("clinical-page-title");
+const clinicalPageSubtitle = document.getElementById("clinical-page-subtitle");
+const clinicalPageMeta = document.getElementById("clinical-page-meta");
+
+function isConsentConfirmed() {
+  return state.studyFlow === "kfre"
+    ? Boolean(kfreConsentCheckbox.checked)
+    : Boolean(consentCheckbox.checked);
+}
+
+function applyStudyFlowUI() {
+  const isKfre = state.studyFlow === "kfre";
+  consentFlowPanels.forEach((panel) => {
+    panel.classList.toggle("hidden", panel.dataset.consentFlow !== state.studyFlow);
+  });
+  landingStudyEyebrow.textContent = isKfre ? "Kidney Failure Risk Equation Study" : "AI-Based eGFR Research Registry";
+  landingStudyDescription.textContent = isKfre
+    ? "Collect consented kidney-related clinical reports for KFRE recalibration and validation in a guided workflow."
+    : "Collect consented kidney ultrasound data, clinical reports, and questionnaire details in one guided workflow.";
+  workflowRecordsTitle.textContent = isKfre ? "KFRE Clinical Record" : "eGFR Record Upload";
+  workflowRecordsSubtitle.textContent = isKfre ? "Clinical data + report" : "Ultrasound + reports";
+  consentPageMeta.textContent = isKfre
+    ? "KFRE Study · Please verify the patient context before continuing"
+    : "eGFR Study · Please verify the patient context before continuing";
+  questionnairePageMeta.textContent = isKfre ? "KFRE Research Intake Questionnaire" : "eGFR Research Intake Questionnaire";
+  questionnaireStudyTitle.textContent = isKfre
+    ? "Recalibration and Validation of the Kidney Failure Risk Equation in an Indian Chronic Kidney Disease Cohort"
+    : "AI-Based Multimodal Estimation of eGFR Using Kidney Ultrasound and Clinical Parameters";
+  questionnaireEgfrIec.classList.toggle("hidden", isKfre);
+  questionnaireEgfrCtri.classList.toggle("hidden", isKfre);
+  questionnaireKfreIec.classList.toggle("hidden", !isKfre);
+  clinicalFlowNavLabel.textContent = isKfre ? "KFRE Flow" : "eGFR Flow";
+  clinicalStepLabel.textContent = isKfre ? "Document & Submit" : "Upload & Submit";
+  clinicalPageTitle.textContent = isKfre ? "KFRE Clinical Record Collection" : "Clinical Data Collection";
+  clinicalPageSubtitle.textContent = isKfre
+    ? "Capture clinical assessment, follow-up outcomes, and the supporting document"
+    : "Ultrasound findings and clinical record uploads";
+  clinicalPageMeta.textContent = isKfre ? "KFRE Study · Clinical document only" : "eGFR Study · Ultrasound and clinical files";
+  questionnaireContinueBtn.textContent = isKfre ? "Continue to KFRE Flow" : "Continue to eGFR Flow";
+  updateStudySpecificUploadVisibility();
+  updateWorkflowAccess();
+}
 
 function getWorkflowAccess() {
   const patientReady = Boolean(hospitalIdInput?.value.trim() && uhidInput?.value.trim());
@@ -200,8 +276,56 @@ function getWorkflowAccess() {
   };
 }
 
+const previewSnapshots = new WeakMap();
+
+function capturePreviewValues(form) {
+  form.querySelectorAll("input, select, textarea").forEach((control) => {
+    previewSnapshots.set(control, { value: control.value, checked: control.checked });
+  });
+}
+
+function restorePreviewValue(control) {
+  const snapshot = previewSnapshots.get(control);
+  if (!snapshot) return;
+  control.value = snapshot.value;
+  if (control.type === "checkbox" || control.type === "radio") {
+    control.checked = snapshot.checked;
+  }
+}
+
+function showPreviewLockedNotice(form) {
+  const message = form === questionnaireForm
+    ? "Complete and record e-consent to enter questionnaire details."
+    : "Complete the questionnaire to enter clinical record details.";
+  showToast(message);
+}
+
+function installPreviewGate(form) {
+  if (!form || form.dataset.previewGateReady) return;
+  form.dataset.previewGateReady = "true";
+  form.addEventListener("click", (event) => {
+    if (!form.classList.contains("preview-locked")) return;
+    const control = event.target.closest("input, button");
+    if (!control || control.matches("[data-tab-jump]")) return;
+    if (control.matches("input[type='checkbox'], input[type='radio'], input[type='file'], button")) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      showPreviewLockedNotice(form);
+    }
+  }, true);
+  ["input", "change"].forEach((eventName) => {
+    form.addEventListener(eventName, (event) => {
+      if (!form.classList.contains("preview-locked") || !event.target.matches("select")) return;
+      restorePreviewValue(event.target);
+      event.stopImmediatePropagation();
+      if (eventName === "change") showPreviewLockedNotice(form);
+    }, true);
+  });
+}
+
 function setPreviewFormLocked(form, locked) {
   if (!form) return;
+  installPreviewGate(form);
   form.classList.toggle("preview-locked", locked);
   form.setAttribute("aria-disabled", String(locked));
   form.querySelectorAll("input, select, textarea, button").forEach((control) => {
@@ -209,17 +333,25 @@ function setPreviewFormLocked(form, locked) {
     if (locked) {
       if (!control.hasAttribute("data-gate-locked")) {
         control.dataset.gatePreviouslyDisabled = String(control.disabled);
+        control.dataset.gatePreviouslyReadonly = String(Boolean(control.readOnly));
         control.setAttribute("data-gate-locked", "");
       }
-      control.disabled = true;
+      if (control.matches("button, input[type='file']")) {
+        control.disabled = true;
+      } else if (control.matches("input:not([type='checkbox']):not([type='radio']), textarea")) {
+        control.readOnly = true;
+      }
       return;
     }
     if (control.hasAttribute("data-gate-locked")) {
       control.disabled = control.dataset.gatePreviouslyDisabled === "true";
+      if ("readOnly" in control) control.readOnly = control.dataset.gatePreviouslyReadonly === "true";
       delete control.dataset.gatePreviouslyDisabled;
+      delete control.dataset.gatePreviouslyReadonly;
       control.removeAttribute("data-gate-locked");
     }
   });
+  if (locked) capturePreviewValues(form);
 }
 
 function setWorkflowNavState(nav, banner, unlocked, title) {
@@ -237,11 +369,13 @@ function updateWorkflowAccess() {
   setWorkflowNavState(egfrNav, egfrAccessBanner, access.egfr, "eGFR Flow");
 
   document.getElementById("tab-consent")?.classList.toggle("preview-locked", !access.consent);
-  consentCheckbox.disabled = !access.consent;
+  [consentCheckbox, kfreConsentCheckbox].forEach((checkbox) => {
+    checkbox.disabled = !access.consent || Boolean(state.consentId);
+  });
   if (!access.consent || state.consentId) {
     consentContinueBtn.disabled = true;
   } else {
-    consentContinueBtn.disabled = !consentCheckbox.checked;
+    consentContinueBtn.disabled = !isConsentConfirmed();
   }
 
   setPreviewFormLocked(questionnaireForm, !access.questionnaire);
@@ -320,6 +454,33 @@ const rightKidneyFileInput = document.getElementById("right-kidney-file");
 const egfrReportInput = document.getElementById("egfr-report");
 const patientPackageFileInput = document.getElementById("patient-package-file");
 const ultrasoundVideoFileInput = document.getElementById("ultrasound-video-file");
+const kfreClinicalDocumentInput = document.getElementById("kfre-clinical-document");
+const egfrUltrasoundSection = document.getElementById("egfr-ultrasound-section");
+const egfrUploadMethodSection = document.getElementById("egfr-upload-method-section");
+const egfrVideoSection = document.getElementById("egfr-video-section");
+const kfreStructuredForm = document.getElementById("kfre-structured-form");
+const kfreDocumentSection = document.getElementById("kfre-document-section");
+const clinicalSubmitButton = document.getElementById("clinical-submit-button");
+const kfreSystolicBpInput = document.getElementById("kfre-systolic-bp");
+const kfreDiastolicBpInput = document.getElementById("kfre-diastolic-bp");
+const kfreHeartRateInput = document.getElementById("kfre-heart-rate");
+const kfreWaistHipRatioInput = document.getElementById("kfre-waist-hip-ratio");
+const kfreFollowupStatusInput = document.getElementById("kfre-followup-status");
+const kfreFollowupFields = document.getElementById("kfre-followup-fields");
+const kfreFollowupVisitInput = document.getElementById("kfre-followup-visit");
+const kfreFollowupMonthsInput = document.getElementById("kfre-followup-months");
+const kfreRepeatCreatinineInput = document.getElementById("kfre-repeat-creatinine");
+const kfreUpdatedEgfrInput = document.getElementById("kfre-updated-egfr");
+const kfreCkdProgressionInput = document.getElementById("kfre-ckd-progression");
+const kfreHospitalizationInput = document.getElementById("kfre-hospitalization");
+const kfreDialysisInitiatedInput = document.getElementById("kfre-dialysis-initiated");
+const kfreTransplantInput = document.getElementById("kfre-transplant");
+const kfreOutcomeCkdStageInput = document.getElementById("kfre-outcome-ckd-stage");
+const kfreRapidProgressionInput = document.getElementById("kfre-rapid-progression");
+const kfreKidneyFailureEventInput = document.getElementById("kfre-kidney-failure-event");
+const kfreKidneyFailureDetails = document.getElementById("kfre-kidney-failure-details");
+const kfreKidneyFailureDateInput = document.getElementById("kfre-kidney-failure-date");
+const kfreKidneyFailureTypeInput = document.getElementById("kfre-kidney-failure-type");
 const toast = document.getElementById("toast");
 
 const uploadProgressPanel = document.getElementById("upload-progress-panel");
@@ -579,7 +740,10 @@ function validateDateInput(input) {
   return true;
 }
 
+let globalValidationInitialized = false;
 function initializeGlobalValidation() {
+  if (globalValidationInitialized) return;
+  globalValidationInitialized = true;
   document.querySelectorAll("input[type='number']").forEach((input) => {
     input.inputMode = input.step === "1" ? "numeric" : "decimal";
     input.addEventListener("keydown", (event) => {
@@ -703,7 +867,8 @@ function getUploadLabel(fieldName) {
     rightKidney: "Right Kidney",
     egfrReport: "Clinical Report",
     patientPackage: "ZIP Package",
-    ultrasoundVideo: "Ultrasound Video"
+    ultrasoundVideo: "Ultrasound Video",
+    clinicalDocument: "KFRE Clinical Document"
   };
 
   return labels[fieldName] || "Upload";
@@ -783,13 +948,17 @@ function clearFilePreviews() {
   });
 }
 
+let filePreviewsInitialized = false;
 function initializeFilePreviews() {
+  if (filePreviewsInitialized) return;
+  filePreviewsInitialized = true;
   [
     [leftKidneyFileInput, "leftKidney"],
     [rightKidneyFileInput, "rightKidney"],
     [egfrReportInput, "egfrReport"],
     [patientPackageFileInput, "patientPackage"],
-    [ultrasoundVideoFileInput, "ultrasoundVideo"]
+    [ultrasoundVideoFileInput, "ultrasoundVideo"],
+    [kfreClinicalDocumentInput, "clinicalDocument"]
   ].forEach(([input, fieldName]) => {
     renderFilePreview(input, fieldName);
     input.addEventListener("change", () => renderFilePreview(input, fieldName));
@@ -891,7 +1060,7 @@ function updateStepper(tabKey) {
 function draftKey() {
   const hid  = state.hospitalSession?.id || "";
   const uhid = uhidInput?.value.trim() || "";
-  return hid && uhid ? `tanuh_qdraft_${hid}_${uhid}` : null;
+  return hid && uhid ? `tanuh_qdraft_${state.studyFlow}_${hid}_${uhid}` : null;
 }
 
 const DRAFT_FIELDS = [
@@ -1012,7 +1181,13 @@ document.querySelectorAll("[data-tab-jump]").forEach((btn) => {
 consentCheckbox.addEventListener("change", () => {
   if (!state.consentId && getWorkflowAccess().consent) {
     consentContinueBtn.textContent = "Accept & Continue";
-    consentContinueBtn.disabled = !consentCheckbox.checked;
+    consentContinueBtn.disabled = !isConsentConfirmed();
+  }
+});
+kfreConsentCheckbox.addEventListener("change", () => {
+  if (!state.consentId && getWorkflowAccess().consent) {
+    consentContinueBtn.textContent = "Accept & Continue";
+    consentContinueBtn.disabled = !isConsentConfirmed();
   }
 });
 
@@ -1077,6 +1252,7 @@ patientStartForm.addEventListener("submit", (event) => {
   resetConsentRecord();
   state.currentUploadSession = null;
   consentCheckbox.checked = false;
+  kfreConsentCheckbox.checked = false;
   consentContinueBtn.disabled = true;
   updateWorkflowAccess();
   activateTab("consent");
@@ -1098,7 +1274,7 @@ consentContinueBtn.addEventListener("click", async () => {
     const response = await authedFetch("/api/consent", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ uhid: uhidInput.value.trim(), hospitalId: hospitalIdInput.value })
+      body:    JSON.stringify({ uhid: uhidInput.value.trim(), hospitalId: hospitalIdInput.value, studyFlow: state.studyFlow })
     });
     if (response.status === 401) { handle401(); return; }
     const result = await response.json();
@@ -1112,7 +1288,7 @@ consentContinueBtn.addEventListener("click", async () => {
     setConsentRecordStatus("Consent recording failed. Please retry.", "error");
     showToast(err.message || "Consent recording failed. Please retry.");
     consentContinueBtn.textContent = "Accept & Continue";
-    consentContinueBtn.disabled = !consentCheckbox.checked;
+    consentContinueBtn.disabled = !isConsentConfirmed();
     return;
   }
 
@@ -1246,10 +1422,66 @@ hospitalNameInput.addEventListener("change", updateHospitalId);
 enrollmentDateInput.addEventListener("change", updateConsentContext);
 
 function getUploadMode() {
+  if (state.studyFlow === "kfre") {
+    return "clinical_document";
+  }
   return document.querySelector("input[name='uploadMode']:checked")?.value || "separate";
 }
 
+function updateStudySpecificUploadVisibility() {
+  const isKfre = state.studyFlow === "kfre";
+  [egfrUltrasoundSection, egfrUploadMethodSection, separateUploadSection, packageUploadSection, egfrVideoSection]
+    .forEach((section) => section?.classList.toggle("hidden", isKfre));
+  kfreStructuredForm?.classList.toggle("hidden", !isKfre);
+  kfreDocumentSection?.classList.toggle("hidden", !isKfre);
+  kfreClinicalDocumentInput.required = isKfre;
+  clinicalSubmitButton.textContent = isKfre ? "Submit KFRE Record" : "Submit eGFR Record";
+  updateKfreConditionalFields();
+
+  if (isKfre) {
+    [leftKidneyFileInput, rightKidneyFileInput, egfrReportInput, patientPackageFileInput, ultrasoundVideoFileInput]
+      .forEach((input) => { input.required = false; });
+  } else {
+    kfreClinicalDocumentInput.value = "";
+    renderFilePreview(kfreClinicalDocumentInput, "clinicalDocument");
+    updateUploadModeVisibility();
+  }
+}
+
+function clearControlsInPanel(panel) {
+  panel?.querySelectorAll("input, select").forEach((input) => {
+    input.value = "";
+  });
+}
+
+function updateKfreConditionalFields({ clearHidden = false } = {}) {
+  const isKfre = state.studyFlow === "kfre";
+  const followupAvailable = isKfre && kfreFollowupStatusInput.value === "Available";
+  const kidneyFailureRecorded = isKfre && kfreKidneyFailureEventInput.value === "Yes";
+  const alwaysRequired = [
+    kfreSystolicBpInput, kfreDiastolicBpInput, kfreHeartRateInput, kfreWaistHipRatioInput,
+    kfreOutcomeCkdStageInput, kfreRapidProgressionInput, kfreKidneyFailureEventInput
+  ];
+  const followupRequired = [
+    kfreFollowupVisitInput, kfreFollowupMonthsInput, kfreRepeatCreatinineInput, kfreUpdatedEgfrInput,
+    kfreCkdProgressionInput, kfreHospitalizationInput, kfreDialysisInitiatedInput, kfreTransplantInput
+  ];
+
+  alwaysRequired.forEach((input) => { input.required = isKfre; });
+  followupRequired.forEach((input) => { input.required = followupAvailable; });
+  kfreKidneyFailureDateInput.required = kidneyFailureRecorded;
+  kfreKidneyFailureTypeInput.required = kidneyFailureRecorded;
+  kfreFollowupFields.classList.toggle("hidden", !followupAvailable);
+  kfreKidneyFailureDetails.classList.toggle("hidden", !kidneyFailureRecorded);
+
+  if (clearHidden && !followupAvailable) clearControlsInPanel(kfreFollowupFields);
+  if (clearHidden && !kidneyFailureRecorded) clearControlsInPanel(kfreKidneyFailureDetails);
+}
+
 function updateUploadModeVisibility() {
+  if (state.studyFlow === "kfre") {
+    return;
+  }
   const mode = getUploadMode();
   separateUploadSection.classList.toggle("hidden", mode !== "separate");
   packageUploadSection.classList.toggle("hidden", mode !== "package");
@@ -1279,6 +1511,9 @@ function updateUploadModeVisibility() {
 uploadModeInputs.forEach((input) => {
   input.addEventListener("change", updateUploadModeVisibility);
 });
+kfreFollowupStatusInput.addEventListener("change", () => updateKfreConditionalFields({ clearHidden: true }));
+kfreKidneyFailureEventInput.addEventListener("change", () => updateKfreConditionalFields({ clearHidden: true }));
+kfreKidneyFailureDateInput.addEventListener("change", () => validateDateInput(kfreKidneyFailureDateInput));
 
 function updateDialysisVisibility() {
   const stage = ckdStageInput.value;
@@ -1349,7 +1584,7 @@ function redrawRecentUploads() {
       <td>${escapeHTML(item.batchId)}</td>
       <td>${escapeHTML(item.hospitalId)}</td>
       <td>${escapeHTML(item.uhid)}</td>
-      <td>${escapeHTML(item.uploadMode === "package" ? "Single ZIP" : "Separate Files")}</td>
+      <td>${escapeHTML(subUploadMode(item.uploadMode))}</td>
       <td>${item.files.map(escapeHTML).join(", ")}</td>
       <td>${escapeHTML(item.gcsPath || item.localPath || "-")}</td>
       <td>${escapeHTML(item.status)}</td>
@@ -1500,7 +1735,7 @@ function renderRecentRecordsTable(tbodyId, records, cols) {
       if (c === "reviewedAt") return r.reviewedAt
         ? `<td><span class="sub-badge sub-badge-reviewed">Reviewed</span></td>`
         : `<td><span class="sub-badge sub-badge-pending">Pending</span></td>`;
-      if (c === "uploadMode") return `<td>${r.uploadMode === "package" ? "ZIP" : "Separate"}</td>`;
+      if (c === "uploadMode") return `<td>${escapeHTML(subUploadMode(r.uploadMode))}</td>`;
       return `<td>${escapeHTML(String(r[c] || "—"))}</td>`;
     }).join("");
     return `<tr>${cells}</tr>`;
@@ -1864,8 +2099,69 @@ function getKidneyFindingReviewRows(label, findings) {
   ];
 }
 
+function collectKfreForm() {
+  const hasFollowup = kfreFollowupStatusInput.value === "Available";
+  const hasKidneyFailureEvent = kfreKidneyFailureEventInput.value === "Yes";
+  return {
+    clinicalExamination: {
+      systolicBp: kfreSystolicBpInput.value.trim(),
+      diastolicBp: kfreDiastolicBpInput.value.trim(),
+      heartRate: kfreHeartRateInput.value.trim(),
+      waistHipRatio: kfreWaistHipRatioInput.value.trim()
+    },
+    followUp: hasFollowup ? {
+      visit: kfreFollowupVisitInput.value,
+      months: kfreFollowupMonthsInput.value.trim(),
+      repeatCreatinine: kfreRepeatCreatinineInput.value.trim(),
+      updatedEgfr: kfreUpdatedEgfrInput.value.trim(),
+      ckdProgression: kfreCkdProgressionInput.value,
+      hospitalization: kfreHospitalizationInput.value,
+      dialysisInitiated: kfreDialysisInitiatedInput.value,
+      transplant: kfreTransplantInput.value
+    } : null,
+    outcomes: {
+      ckdStage: kfreOutcomeCkdStageInput.value,
+      rapidProgression: kfreRapidProgressionInput.value,
+      kidneyFailureEvent: kfreKidneyFailureEventInput.value,
+      eventDate: hasKidneyFailureEvent ? kfreKidneyFailureDateInput.value : "-",
+      eventType: hasKidneyFailureEvent ? kfreKidneyFailureTypeInput.value : "-"
+    }
+  };
+}
+
+function getKfreReviewRows(kfreForm) {
+  if (!kfreForm) return [];
+  const examination = kfreForm.clinicalExamination || {};
+  const followUp = kfreForm.followUp;
+  const outcomes = kfreForm.outcomes || {};
+  const rows = [
+    ["Blood Pressure", `${examination.systolicBp}/${examination.diastolicBp} mmHg`],
+    ["Heart Rate", `${examination.heartRate} bpm`],
+    ["Waist-to-Hip Ratio", examination.waistHipRatio],
+    ["Follow-up", followUp ? `${followUp.visit} · ${followUp.months} months` : "None"],
+    ["Outcome CKD Stage", formatCkdStage(outcomes.ckdStage)],
+    ["Rapid Progression", outcomes.rapidProgression],
+    ["Kidney Failure Event", outcomes.kidneyFailureEvent]
+  ];
+  if (followUp) {
+    rows.push(
+      ["Repeat Creatinine", `${followUp.repeatCreatinine} mg/dL`],
+      ["Updated eGFR", `${followUp.updatedEgfr} mL/min/1.73 m²`],
+      ["CKD Progression", followUp.ckdProgression],
+      ["Hospitalization", followUp.hospitalization],
+      ["Dialysis Initiated", followUp.dialysisInitiated],
+      ["Transplant", followUp.transplant]
+    );
+  }
+  if (outcomes.kidneyFailureEvent === "Yes") {
+    rows.push(["Failure Event Date", outcomes.eventDate], ["Failure Event Type", outcomes.eventType]);
+  }
+  return rows;
+}
+
 function buildSubmissionFromForm() {
   const selectedHospital = hospitals.find((hospital) => hospital.id === hospitalNameInput.value);
+  const isKfre = state.studyFlow === "kfre";
   const uploadMode = getUploadMode();
   const studyId = studyIdInput.value.trim();
   const hospitalId = hospitalIdInput.value.trim();
@@ -1894,7 +2190,7 @@ function buildSubmissionFromForm() {
   const hypertensionDuration = hypertensionDurationInput.value.trim();
   const cardiovascularDisease = getCheckedValue(cardiovascularDiseaseInputs);
   const familyKidneyHistory = getCheckedValue(familyKidneyHistoryInputs);
-  const ultrasoundFindings = {
+  const ultrasoundFindings = isKfre ? null : {
     right: collectKidneyFindings("right"),
     left: collectKidneyFindings("left")
   };
@@ -1903,6 +2199,7 @@ function buildSubmissionFromForm() {
   const egfrReportFile = egfrReportInput.files[0];
   const patientPackageFile = patientPackageFileInput.files[0];
   const ultrasoundVideoFile = ultrasoundVideoFileInput.files[0];
+  const kfreClinicalDocumentFile = kfreClinicalDocumentInput.files[0];
 
   if (!hospitalName || !hospitalId || !uhid) {
     showToast("Hospital, Hospital ID, and UHID are required.");
@@ -1919,7 +2216,24 @@ function buildSubmissionFromForm() {
     return null;
   }
 
-  const invalidKidneyMeasurement = Array.from(kidneyMeasurementInputs)
+  if (isKfre && !egfrForm.checkValidity()) {
+    egfrForm.reportValidity();
+    showToast("Complete all required KFRE clinical and outcome fields.");
+    return null;
+  }
+
+  if (isKfre && Number(kfreSystolicBpInput.value) <= Number(kfreDiastolicBpInput.value)) {
+    showToast("Systolic blood pressure must be greater than diastolic blood pressure.");
+    kfreSystolicBpInput.focus();
+    return null;
+  }
+
+  if (isKfre && kfreKidneyFailureEventInput.value === "Yes" && !validateDateInput(kfreKidneyFailureDateInput)) {
+    kfreKidneyFailureDateInput.reportValidity();
+    return null;
+  }
+
+  const invalidKidneyMeasurement = !isKfre && Array.from(kidneyMeasurementInputs)
     .find((input) => input.value.trim() && !validateNumericInput(input));
   if (invalidKidneyMeasurement) {
     invalidKidneyMeasurement.reportValidity();
@@ -1969,7 +2283,13 @@ function buildSubmissionFromForm() {
 
   let uploadFiles = [];
 
-  if (uploadMode === "separate") {
+  if (isKfre) {
+    if (!kfreClinicalDocumentFile) {
+      showToast("Upload the KFRE clinical document.");
+      return null;
+    }
+    uploadFiles = [{ fieldName: "clinicalDocument", file: kfreClinicalDocumentFile }];
+  } else if (uploadMode === "separate") {
     if (!leftKidneyFile || !rightKidneyFile) {
       showToast("Upload both left and right kidney files.");
       return null;
@@ -1996,7 +2316,7 @@ function buildSubmissionFromForm() {
     ];
   }
 
-  if (ultrasoundVideoFile) {
+  if (!isKfre && ultrasoundVideoFile) {
     uploadFiles.push({ fieldName: "ultrasoundVideo", file: ultrasoundVideoFile });
   }
 
@@ -2007,6 +2327,7 @@ function buildSubmissionFromForm() {
     hospitalSessionId: state.hospitalSession?.id || hospitalId,
     hospitalSessionName: state.hospitalSession?.name || hospitalName,
     consentId: state.consentId || null,
+    studyFlow: state.studyFlow,
     studyId: studyId || "-",
     enrollmentDate: enrollmentDate || "-",
     siteCenter: siteCenter || "-",
@@ -2034,10 +2355,11 @@ function buildSubmissionFromForm() {
     cardiovascularDisease: cardiovascularDisease || "-",
     familyKidneyHistory: familyKidneyHistory || "-",
     ultrasoundFindings,
+    kfreForm: isKfre ? collectKfreForm() : null,
     files: uploadFiles.map((upload) => upload.file.name),
     fileCount: uploadFiles.length,
     totalBytes,
-    hasVideo: Boolean(ultrasoundVideoFile),
+    hasVideo: Boolean(!isKfre && ultrasoundVideoFile),
     uploadFiles,
     progress: 0,
     status: "Pending Review",
@@ -2052,6 +2374,7 @@ function renderReviewSubmission(submission) {
     ? state.currentUploadSession
     : null;
   const detailRows = [
+    ["Study Pathway", submission.studyFlow === "kfre" ? "KFRE Study" : "eGFR Study"],
     ["Hospital", submission.hospitalName],
     ["Hospital ID", submission.hospitalId],
     ["Patient ID", submission.uhid],
@@ -2059,7 +2382,7 @@ function renderReviewSubmission(submission) {
     ["Study ID", submission.studyId || "-"],
     ["Enrollment Date", submission.enrollmentDate || "-"],
     ["Consent Obtained", submission.consentObtained || "-"],
-    ["Upload Method", submission.uploadMode === "package" ? "Single ZIP Package" : "Separate Files"],
+    ["Upload Method", subUploadMode(submission.uploadMode)],
     ["Age", submission.age],
     ["Sex", submission.sex],
     ["Height", submission.heightCm && submission.heightCm !== "-" ? `${submission.heightCm} cm` : "-"],
@@ -2079,7 +2402,7 @@ function renderReviewSubmission(submission) {
     ...getKidneyFindingReviewRows("Right Kidney", submission.ultrasoundFindings?.right),
     ...getKidneyFindingReviewRows("Left Kidney", submission.ultrasoundFindings?.left)
   ].filter(([, value]) => value !== "-");
-  const ultrasoundFindingBlock = ultrasoundFindingRows.length ? `
+  const ultrasoundFindingBlock = submission.studyFlow === "kfre" ? "" : ultrasoundFindingRows.length ? `
     <div class="review-files">
       <h3>Ultrasound Findings</h3>
       <div class="review-grid">
@@ -2096,6 +2419,20 @@ function renderReviewSubmission(submission) {
       No structured ultrasound findings were entered for this record.
     </div>
   `;
+  const kfreRows = getKfreReviewRows(submission.kfreForm);
+  const kfreBlock = submission.studyFlow === "kfre" ? `
+    <div class="review-files">
+      <h3>KFRE Clinical and Outcome Data</h3>
+      <div class="review-grid">
+        ${kfreRows.map(([label, value]) => `
+          <div class="review-item">
+            <span>${escapeHTML(label)}</span>
+            <strong>${escapeHTML(value || "-")}</strong>
+          </div>
+        `).join("")}
+      </div>
+    </div>
+  ` : "";
 
   const fileRows = submission.uploadFiles.map((upload) => `
     <div class="review-file">
@@ -2130,6 +2467,7 @@ function renderReviewSubmission(submission) {
       `).join("")}
     </div>
     ${ultrasoundFindingBlock}
+    ${kfreBlock}
     <div class="review-files">
       <h3>Selected Files (${submission.fileCount})</h3>
       ${fileRows}
@@ -2160,6 +2498,7 @@ function closeReviewSubmission({ keepPending = false } = {}) {
 function resetEgfrForm() {
   egfrForm.reset();
   clearFilePreviews();
+  updateKfreConditionalFields();
   updateUploadModeVisibility();
   updateDialysisVisibility();
   updateDiabeticVisibility();
@@ -2176,6 +2515,7 @@ function resetPatientIntakeForNextRecord() {
   hospitalNameInput.value = landingHospitalInput.value;
   hospitalIdInput.value = landingHospitalIdInput.value;
   consentCheckbox.checked = false;
+  kfreConsentCheckbox.checked = false;
   consentContinueBtn.disabled = true;
   consentContinueBtn.textContent = "Accept & Continue";
   updateQuestionnaireBmi();
@@ -2310,6 +2650,7 @@ function subBadge(reviewed) {
 }
 
 function subUploadMode(mode) {
+  if (mode === "clinical_document") return "Clinical Document";
   return mode === "package" ? "ZIP Package" : "Separate Files";
 }
 
@@ -2367,7 +2708,7 @@ function renderSubmissionsTable(items) {
       <td class="sub-hospital" title="${escapeHTML(item.hospitalName || "")}">${escapeHTML(item.hospitalId)}</td>
       <td>${escapeHTML(item.age || "—")} / ${escapeHTML(item.sex || "—")}</td>
       <td><span class="sub-stage-badge stage-${getCkdStageClass(item.ckdStage)}">${escapeHTML(formatCkdStage(item.ckdStage))}</span></td>
-      <td>${escapeHTML(subUploadMode(item.uploadMode))}</td>
+      <td>${escapeHTML(item.studyFlow === "kfre" ? "KFRE · Clinical Document" : subUploadMode(item.uploadMode))}</td>
       <td>${item.fileCount}</td>
       <td class="sub-date">${subFormatDate(item.receivedAt)}</td>
       <td>${subBadge(item.reviewedAt)}</td>
@@ -2428,6 +2769,13 @@ function renderSubmissionDetail(s) {
       ${ultrasoundFindingRows.map(([label, value]) => field(label, value)).join("")}
     </section>
   ` : "";
+  const kfreRows = getKfreReviewRows(s.kfreForm);
+  const kfreSection = s.studyFlow === "kfre" && kfreRows.length ? `
+    <section class="sub-detail-section">
+      <h3 class="sub-detail-section-title">KFRE Clinical and Outcome Data</h3>
+      ${kfreRows.map(([label, value]) => field(label, value)).join("")}
+    </section>
+  ` : "";
   const qualitySection = qualityWarnings.length ? `
     <section class="sub-detail-section sub-quality-section">
       <h3 class="sub-detail-section-title">Data Quality Checks</h3>
@@ -2466,9 +2814,11 @@ function renderSubmissionDetail(s) {
       ${field("Family Kidney Hist.",  s.familyKidneyHistory)}
     </section>
     ${ultrasoundFindingSection}
+    ${kfreSection}
     <section class="sub-detail-section">
       <h3 class="sub-detail-section-title">Submission</h3>
       ${field("Hospital",       s.hospitalName || s.hospitalId)}
+      ${field("Study Pathway",  s.studyFlow === "kfre" ? "KFRE Study" : "eGFR Study")}
       ${field("Upload Mode",    subUploadMode(s.uploadMode))}
       ${field("Enrollment Date",s.enrollmentDate)}
       ${field("Consent ID",     s.consentId)}
@@ -2644,9 +2994,16 @@ loginForm?.addEventListener("submit", async (event) => {
       role:         result.user.role,
       expiresAt:    result.expiresAt
     });
+    saveStudyFlow(document.querySelector("input[name='loginStudyFlow']:checked")?.value);
 
     await loadHospitalsFromApi();
     showApp();
+    applyStudyFlowUI();
+    initializeGlobalValidation();
+    initializeFilePreviews();
+    updateUploadModeVisibility();
+    updateDialysisVisibility();
+    updateDiabeticVisibility();
     applyHospitalAuthContext();
     landingEnrollmentDateInput.value = new Date().toISOString().slice(0, 10);
     loadHospitalSession();
@@ -2689,6 +3046,9 @@ document.getElementById("ls-pw-toggle")?.addEventListener("click", () => {
 
 (async function init() {
   initializeLandingReveal();
+  loadStudyFlow();
+  const storedStudyChoice = document.querySelector(`input[name='loginStudyFlow'][value='${state.studyFlow}']`);
+  if (storedStudyChoice) storedStudyChoice.checked = true;
 
   // Check if server requires auth
   let serverAuthConfigured = true;
@@ -2732,6 +3092,7 @@ document.getElementById("ls-pw-toggle")?.addEventListener("click", () => {
   }
 
   // These run only when the session is ready
+  applyStudyFlowUI();
   populateHospitals();
   landingEnrollmentDateInput.value = new Date().toISOString().slice(0, 10);
   updateLandingHospitalId();

@@ -135,6 +135,11 @@ body {
   text-transform: uppercase;
 }
 
+.required-marker {
+  color: #92400e;
+  font-weight: 800;
+}
+
 .workflow-nav.is-locked .nav-gate-badge {
   display: inline-flex;
 }
@@ -688,16 +693,39 @@ body {
   line-height: 1.45;
 }
 
-.preview-locked input:disabled,
-.preview-locked select:disabled,
-.preview-locked textarea:disabled {
-  cursor: not-allowed;
-}
-
 .preview-locked .choice-tile,
 .preview-locked .upload-tile,
 .preview-locked .upload-mode-card {
   cursor: not-allowed;
+}
+
+.preview-locked input:not([type="file"]):not([readonly]),
+.preview-locked select,
+.preview-locked textarea {
+  border-color: #f5d58a;
+  background: #fffdf8;
+}
+
+.preview-locked select {
+  cursor: pointer;
+}
+
+.preview-locked #package-upload-section.hidden,
+.preview-locked .kfre-followup-panel.hidden,
+.preview-locked .kfre-event-panel.hidden {
+  display: block !important;
+  opacity: 0.82;
+}
+
+.preview-locked #ckd-stage-remarks-block.hidden,
+.preview-locked #diabetic-stage-block.hidden {
+  display: flex !important;
+  opacity: 0.82;
+}
+
+.preview-locked #dialysis-block.hidden {
+  display: grid !important;
+  opacity: 0.82;
 }
 
 .consent-context-card {
@@ -754,6 +782,10 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
+}
+
+.consent-flow-panel {
+  animation: panel-enter 0.24s ease;
 }
 .csi-row {
   display: flex;
@@ -825,6 +857,38 @@ body {
   text-align: center;
 }
 
+.consent-confirmation-group {
+  display: grid;
+  gap: 0.8rem;
+  margin: 1.6rem 0;
+  border: 1px solid #cfe5e1;
+  border-radius: 16px;
+  background: #f7fcfb;
+  padding: 1rem;
+}
+
+.consent-paper-fields {
+  margin: 1.5rem 0;
+  border: 1px solid #d8e7e8;
+  border-radius: 16px;
+  background: #fbfdfd;
+  padding: 1rem 1.2rem;
+  color: #334155;
+  line-height: 1.7;
+}
+
+.consent-paper-fields p {
+  margin: 0.4rem 0;
+}
+
+.consent-witness-heading {
+  margin-top: 1rem !important;
+  padding-top: 0.8rem;
+  border-top: 1px dashed #cbd5e1;
+  color: var(--teal-dark);
+  font-weight: 700;
+}
+
 .consent-acceptance {
   position: sticky;
   bottom: 0;
@@ -837,6 +901,10 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+}
+
+.consent-action-bar {
+  justify-content: flex-end;
 }
 
 .consent-check {
@@ -1328,6 +1396,35 @@ body {
 
 .upload-tile.wide {
   grid-column: 1 / -1;
+}
+
+.section-description {
+  margin: 0 0 1.1rem;
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+.kfre-structured-form {
+  display: grid;
+  gap: 1.4rem;
+}
+
+.kfre-structured-form.hidden {
+  display: none;
+}
+
+.kfre-followup-panel,
+.kfre-event-panel {
+  margin-top: 1.15rem;
+  padding: 1.2rem;
+  border: 1px solid #dcebea;
+  border-radius: 14px;
+  background: #f8fbfb;
+}
+
+.kfre-clinical-grid {
+  align-items: start;
 }
 
 .file-preview {
@@ -2886,6 +2983,56 @@ th {
   display: flex;
   flex-direction: column;
   gap: 0.48rem;
+}
+
+.ls-study-picker {
+  margin: 0.2rem 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.ls-study-options {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 0.5rem;
+}
+
+.ls-study-option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1.5px solid var(--border-color);
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 0.72rem 0.85rem;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.ls-study-option:has(input:checked) {
+  border-color: var(--teal-primary);
+  background: #f0fafb;
+  box-shadow: 0 0 0 3px rgba(20, 134, 140, 0.08);
+}
+
+.ls-study-option input {
+  accent-color: var(--teal-primary);
+}
+
+.ls-study-option strong,
+.ls-study-option small {
+  display: block;
+}
+
+.ls-study-option strong {
+  color: var(--text-primary);
+  font-size: 0.86rem;
+}
+
+.ls-study-option small {
+  margin-top: 0.16rem;
+  color: var(--text-secondary);
+  font-size: 0.74rem;
 }
 
 .ls-label {
