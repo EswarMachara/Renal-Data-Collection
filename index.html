@@ -501,6 +501,7 @@
               <div class="field-block">
                 <label for="patient-age">Age *</label>
                 <input id="patient-age" name="age" type="number" min="18" max="120" step="1" placeholder="Age in years" required />
+                <small class="field-help">Adults only; accepted range is 18 to 120 years.</small>
               </div>
               <div class="field-block">
                 <label>Sex</label>
@@ -512,12 +513,14 @@
                 </div>
               </div>
               <div class="field-block">
-                <label for="questionnaire-height">Height (cm)</label>
-                <input id="questionnaire-height" name="questionnaireHeight" type="number" min="30" max="250" step="0.1" placeholder="Height in cm" />
+                <label for="questionnaire-height">Height (cm) *</label>
+                <input id="questionnaire-height" name="questionnaireHeight" type="number" min="50" max="250" step="0.1" placeholder="Height in cm" required />
+                <small class="field-help">Required for BMI calculation; measured value in centimetres.</small>
               </div>
               <div class="field-block">
                 <label for="patient-weight">Weight (kg) *</label>
-                <input id="patient-weight" name="weight" type="number" min="1" max="300" step="0.1" placeholder="Weight in kg" required />
+                <input id="patient-weight" name="weight" type="number" min="10" max="400" step="0.1" placeholder="Weight in kg" required />
+                <small class="field-help">Enter measured weight in kilograms.</small>
               </div>
               <div class="field-block">
                 <label for="questionnaire-bmi">BMI (auto-calculated)</label>
@@ -551,14 +554,21 @@
                     </div>
                   </div>
                   <div class="field-block clinical-card">
-                    <label for="ckd-stage">CKD Stage *</label>
+                    <label for="ckd-stage">Kidney Status / CKD Stage *</label>
                     <select id="ckd-stage" name="ckdStage" required>
                       <option value="" selected disabled>Select stage</option>
+                      <option value="Normal">Normal</option>
                       <option value="1">Stage 1</option>
                       <option value="2">Stage 2</option>
                       <option value="3">Stage 3</option>
                       <option value="4">Stage 4</option>
+                      <option value="Other">Other</option>
                     </select>
+                  </div>
+                  <div class="field-block clinical-card full-span hidden" id="ckd-stage-remarks-block">
+                    <label for="ckd-stage-remarks">Other stage remarks *</label>
+                    <input id="ckd-stage-remarks" name="ckdStageRemarks" type="text" maxlength="240" placeholder="Specify the clinical classification or reason" />
+                    <small class="field-help">Required when Other is selected.</small>
                   </div>
                   <div class="field-block clinical-card">
                     <label for="ckd-duration">Duration of CKD (if known)</label>
@@ -684,7 +694,7 @@
               <div><small>Hospital ID</small><b id="linked-hospital-id">--</b></div>
               <div><small>Patient ID</small><b id="linked-uhid">--</b></div>
               <div><small>Age / Sex</small><b id="linked-age-sex">--</b></div>
-              <div><small>CKD Stage</small><b id="linked-ckd">--</b></div>
+              <div><small>Kidney Status</small><b id="linked-ckd">--</b></div>
               <div><small>Diabetes</small><b id="linked-diabetic">--</b></div>
             </div>
           </div>
@@ -692,7 +702,7 @@
           <div class="form-section">
             <div class="section-title"><span class="section-index">1.</span> Ultrasound Findings <span class="section-note">Enter findings available in the examination report</span></div>
             <div class="renal-findings-grid">
-              <section class="renal-finding-card" aria-labelledby="right-kidney-findings-title">
+              <section class="renal-finding-card right-kidney-card" aria-labelledby="right-kidney-findings-title">
                 <header class="renal-finding-header">
                   <span class="kidney-side-mark">R</span>
                   <div>
@@ -773,7 +783,7 @@
                 </div>
               </section>
 
-              <section class="renal-finding-card" aria-labelledby="left-kidney-findings-title">
+              <section class="renal-finding-card left-kidney-card" aria-labelledby="left-kidney-findings-title">
                 <header class="renal-finding-header">
                   <span class="kidney-side-mark left">L</span>
                   <div>
@@ -947,10 +957,10 @@
         <div class="viz-grid">
           <section class="viz-card">
             <div class="viz-header">
-              <h3>CKD Stage Distribution</h3>
+              <h3>Recorded Kidney Status Distribution</h3>
             </div>
             <div class="donut-wrap">
-              <div class="donut" id="ckd-stage-donut" aria-label="CKD stage distribution"></div>
+              <div class="donut" id="ckd-stage-donut" aria-label="Recorded kidney status distribution"></div>
               <div class="donut-center" id="ckd-stage-center">--</div>
             </div>
             <div class="viz-legend" id="ckd-stage-legend"></div>
@@ -1072,7 +1082,7 @@
                 <th>Patient ID</th>
                 <th>Hospital</th>
                 <th>Age / Sex</th>
-                <th>CKD Stage</th>
+                <th>Kidney Status</th>
                 <th>Mode</th>
                 <th>Files</th>
                 <th>Received</th>

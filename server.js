@@ -57,7 +57,7 @@ const hospitals = [
 const allowedUploadModes  = new Set(["separate", "package"]);
 const allowedSexValues    = new Set(["Male", "Female", "Other"]);
 const allowedYesNoValues  = new Set(["Yes", "No"]);
-const allowedCkdStages    = new Set(["1", "2", "3", "4"]);
+const allowedCkdStages    = new Set(["Normal", "1", "2", "3", "4", "Other"]);
 const allowedEchogenicityValues = new Set(["Normal", "Mild Increased", "Moderate Increased", "Severe Increased"]);
 const allowedKidneySizeValues = new Set(["Normal", "Small", "Enlarged"]);
 const allowedParenchymalTextureValues = new Set(["Normal", "Altered"]);
@@ -549,7 +549,8 @@ async function initializeDatabase() {
         occupation           text,
         known_ckd            text,
         ckd_duration         text,
-        ckd_stage            integer NOT NULL,
+        ckd_stage            text NOT NULL,
+        ckd_stage_remarks    text,
         dialysis             text,
         dialysis_frequency   integer,
         diabetic             text NOT NULL,
@@ -570,6 +571,21 @@ async function initializeDatabase() {
 
     // Add consent_id to existing tables if upgrading (idempotent)
     await client.query("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS consent_id text REFERENCES consents(consent_id)");
+    await client.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'submissions'
+            AND column_name = 'ckd_stage'
+            AND data_type <> 'text'
+        ) THEN
+          ALTER TABLE submissions ALTER COLUMN ckd_stage TYPE text USING ckd_stage::text;
+        END IF;
+      END $$;
+    `);
+    await client.query("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS ckd_stage_remarks text");
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS submission_files (
@@ -643,7 +659,7 @@ async function persistRecordsToDatabase({ batchId, batchDir, records, gcsResult 
            consent_id,
            study_id, enrollment_date, site_center, consent_obtained,
            upload_mode, uhid, age, sex, height_cm, weight_kg,
-           bmi, ethnicity, occupation, known_ckd, ckd_duration, ckd_stage,
+           bmi, ethnicity, occupation, known_ckd, ckd_duration, ckd_stage, ckd_stage_remarks,
            dialysis, dialysis_frequency, diabetic, diabetic_stage, diabetes_duration,
            hypertension, hypertension_duration, cardiovascular_disease,
            family_kidney_history, reviewed_at, local_path, gcs_synced, gcs_path, metadata
@@ -655,10 +671,10 @@ async function persistRecordsToDatabase({ batchId, batchDir, records, gcsResult 
            $8,
            $9,  $10, $11, $12,
            $13, $14, $15, $16, $17, $18,
-           $19, $20, $21, $22, $23, $24,
-           $25, $26, $27, $28, $29,
-           $30, $31, $32,
-           $33, $34, $35, $36, $37, $38
+           $19, $20, $21, $22, $23, $24, $25,
+           $26, $27, $28, $29, $30,
+           $31, $32, $33,
+           $34, $35, $36, $37, $38, $39
          )
          ON CONFLICT (record_id) DO UPDATE SET
            gcs_synced = EXCLUDED.gcs_synced,
@@ -675,7 +691,7 @@ async function persistRecordsToDatabase({ batchId, batchDir, records, gcsResult 
           toNumberOrNull(record.heightCm), Number(record.weight),
           toNumberOrNull(record.bmi), toNullable(record.ethnicity),
           toNullable(record.occupation), toNullable(record.knownCkd),
-          toNullable(record.ckdDuration), Number(record.ckdStage),
+          toNullable(record.ckdDuration), record.ckdStage, toNullable(record.ckdStageRemarks),
           toNullable(record.dialysis), toNumberOrNull(record.dialysisFrequency),
           record.diabetic, toNullable(record.diabeticStage),
           toNumberOrNull(record.diabetesDuration), toNullable(record.hypertension),
@@ -716,11 +732,14 @@ async function getDatabaseSummary(scopeHospitalId = null) {
        JOIN submissions s ON sf.record_id = s.record_id
        WHERE s.hospital_id = $1 AND sf.field_name = 'ultrasoundVideo'`
     : `SELECT COUNT(DISTINCT record_id)::int AS value FROM submission_files WHERE field_name = 'ultrasoundVideo'`;
+  const diabeticCond = scopeHospitalId
+    ? "WHERE hospital_id = $1 AND ckd_stage <> 'Normal'"
+    : "WHERE ckd_stage <> 'Normal'";
 
   const [summary, stages, diabetic, videos, recent] = await Promise.all([
     dbPool.query(`SELECT COUNT(DISTINCT hospital_id)::int AS hospitals, COUNT(*)::int AS patients FROM submissions ${cond}`, filter),
-    dbPool.query(`SELECT ckd_stage::text AS label, COUNT(*)::int AS value FROM submissions ${cond} GROUP BY ckd_stage ORDER BY ckd_stage`, filter),
-    dbPool.query(`SELECT diabetic AS label, COUNT(*)::int AS value FROM submissions ${cond} GROUP BY diabetic`, filter),
+    dbPool.query(`SELECT ckd_stage AS label, COUNT(*)::int AS value FROM submissions ${cond} GROUP BY ckd_stage ORDER BY CASE ckd_stage WHEN 'Normal' THEN 0 WHEN '1' THEN 1 WHEN '2' THEN 2 WHEN '3' THEN 3 WHEN '4' THEN 4 WHEN 'Other' THEN 5 ELSE 6 END`, filter),
+    dbPool.query(`SELECT diabetic AS label, COUNT(*)::int AS value FROM submissions ${diabeticCond} GROUP BY diabetic`, filter),
     dbPool.query(videoQuery, filter),
     dbPool.query(`SELECT record_id, batch_id, hospital_id, hospital_name, uhid, upload_mode, received_at, gcs_path, gcs_synced FROM submissions ${cond} ORDER BY received_at DESC LIMIT 10`, filter)
   ]);
@@ -930,6 +949,13 @@ function normalizeSubmission(item, options = {}) {
   const uploadMode = requiredChoice(item, "uploadMode", "Upload mode", allowedUploadModes);
   const files      = normalizeFiles(item.files, options);
   const consentId  = cleanText(item.consentId || item.consent_id, 100) || null;
+  const heightCm   = requiredNumber(item, "heightCm", "Height", { min: 50, max: 250 });
+  const weight     = requiredNumber(item, "weight", "Weight", { min: 10, max: 400 });
+  const bmiValue   = Number((Number(weight) / ((Number(heightCm) / 100) ** 2)).toFixed(2));
+  if (bmiValue < 5 || bmiValue > 100) {
+    throw new Error("Height and weight produce an implausible BMI; verify both measurements.");
+  }
+  const bmi        = String(bmiValue);
 
   const normalized = {
     hospitalSessionId:    hospitalId,
@@ -945,14 +971,15 @@ function normalizeSubmission(item, options = {}) {
     uhid,
     age:                  requiredNumber(item, "age", "Age", { min: 18, max: 120, integer: true }),
     sex:                  requiredChoice(item, "sex", "Sex", allowedSexValues),
-    heightCm:             optionalNumber(item, "heightCm", "Height", { min: 30, max: 250 }),
-    weight:               requiredNumber(item, "weight", "Weight", { min: 1, max: 300 }),
-    bmi:                  optionalNumber(item, "bmi", "BMI", { min: 5, max: 80 }),
+    heightCm,
+    weight,
+    bmi,
     ethnicity:            optionalText(item.ethnicity, 100),
     occupation:           optionalText(item.occupation, 120),
     knownCkd:             optionalYesNo(item, "knownCkd", "Known CKD"),
     ckdDuration:          optionalText(item.ckdDuration, 80),
     ckdStage:             requiredChoice(item, "ckdStage", "CKD stage", allowedCkdStages),
+    ckdStageRemarks:      optionalText(item.ckdStageRemarks, 240),
     dialysis:             optionalYesNo(item, "dialysis", "Dialysis"),
     dialysisFrequency:    optionalNumber(item, "dialysisFrequency", "Dialysis frequency", { min: 0, max: 21, integer: true }),
     diabetic:             requiredChoice(item, "diabetic", "Diabetic status", allowedYesNoValues),
@@ -979,6 +1006,12 @@ function normalizeSubmission(item, options = {}) {
   }
   if ((normalized.ckdStage === "3" || normalized.ckdStage === "4") && normalized.dialysis === "-") {
     throw new Error("Dialysis status is required for CKD stage 3 or 4.");
+  }
+  if (normalized.ckdStage === "Other" && normalized.ckdStageRemarks === "-") {
+    throw new Error("Remarks are required when CKD stage is Other.");
+  }
+  if (normalized.ckdStage !== "Other") {
+    normalized.ckdStageRemarks = "-";
   }
   if (normalized.dialysis === "Yes" && normalized.dialysisFrequency === "-") {
     throw new Error("Dialysis frequency is required when dialysis is Yes.");
@@ -1331,6 +1364,7 @@ async function finalizeSubmissionBatch({ normalizedSubmissions, session, req }) 
       knownCkd:             item.knownCkd,
       ckdDuration:          item.ckdDuration,
       ckdStage:             item.ckdStage,
+      ckdStageRemarks:      item.ckdStageRemarks,
       dialysis:             item.dialysis,
       dialysisFrequency:    item.dialysisFrequency,
       diabetic:             item.diabetic,
@@ -1875,7 +1909,7 @@ async function handleExportSubmissions(req, res) {
     const cols = [
       "recordId", "batchId", "hospitalId", "hospitalName", "uhid",
       "age", "sex", "heightCm", "weight", "bmi", "ethnicity", "occupation",
-      "ckdStage", "knownCkd", "ckdDuration", "dialysis", "dialysisFrequency",
+      "ckdStage", "ckdStageRemarks", "knownCkd", "ckdDuration", "dialysis", "dialysisFrequency",
       "diabetic", "diabeticStage", "diabetesDuration",
       "hypertension", "hypertensionDuration", "cardiovascularDisease", "familyKidneyHistory",
       "uploadMode", "fileCount", "consentId", "enrollmentDate", "receivedAt",
@@ -1885,7 +1919,7 @@ async function handleExportSubmissions(req, res) {
     const headers = [
       "Record ID", "Batch ID", "Hospital ID", "Hospital Name", "Patient ID (UHID)",
       "Age", "Sex", "Height (cm)", "Weight (kg)", "BMI", "Ethnicity", "Occupation",
-      "CKD Stage", "Known CKD", "CKD Duration", "Dialysis", "Dialysis Frequency",
+      "Kidney Status / CKD Stage", "CKD Stage Remarks", "Known CKD", "CKD Duration", "Dialysis", "Dialysis Frequency",
       "Diabetic", "Diabetic Stage", "Diabetes Duration",
       "Hypertension", "Hypertension Duration", "Cardiovascular Disease", "Family Kidney History",
       "Upload Mode", "File Count", "Consent ID", "Enrollment Date", "Received At",

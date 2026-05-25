@@ -294,6 +294,8 @@ const occupationInput = document.getElementById("occupation");
 const knownCkdInputs = document.querySelectorAll("input[name='knownCkd']");
 const ckdDurationInput = document.getElementById("ckd-duration");
 const ckdStageInput = document.getElementById("ckd-stage");
+const ckdStageRemarksBlock = document.getElementById("ckd-stage-remarks-block");
+const ckdStageRemarksInput = document.getElementById("ckd-stage-remarks");
 const dialysisBlock = document.getElementById("dialysis-block");
 const dialysisInput = document.getElementById("dialysis-yes-no");
 const dialysisFrequencyInput = document.getElementById("dialysis-frequency");
@@ -309,6 +311,9 @@ const uploadModeInputs = document.querySelectorAll("input[name='uploadMode']");
 const uploadModeCards = document.querySelectorAll("[data-upload-mode-card]");
 const separateUploadSection = document.getElementById("separate-upload-section");
 const packageUploadSection = document.getElementById("package-upload-section");
+const renalFindingsGrid = document.querySelector(".renal-findings-grid");
+const leftKidneyCard = document.querySelector(".left-kidney-card");
+const rightKidneyCard = document.querySelector(".right-kidney-card");
 const kidneyMeasurementInputs = document.querySelectorAll(".renal-measurement-grid input[type='number']");
 const leftKidneyFileInput = document.getElementById("left-kidney-file");
 const rightKidneyFileInput = document.getElementById("right-kidney-file");
@@ -342,10 +347,14 @@ const reviewCloseBtn = document.getElementById("review-close");
 const reviewEditBtn = document.getElementById("review-edit");
 const reviewProceedBtn = document.getElementById("review-proceed");
 
+if (renalFindingsGrid && leftKidneyCard && rightKidneyCard) {
+  renalFindingsGrid.insertBefore(leftKidneyCard, rightKidneyCard);
+}
+
 const USE_DUMMY_DASHBOARD = false;
 const dummyDashboard = {
   summary: { patients: 101, hospitals: 5, findings: 10 },
-  stages: { "1": 32, "2": 28, "3": 25, "4": 16 },
+  stages: { Normal: 0, "1": 32, "2": 28, "3": 25, "4": 16, Other: 0 },
   diabetic: { yes: 38, no: 62 },
   stage34: { yes: 41, no: 59 },
   dialysis: { yes: 22, no: 78 },
@@ -400,6 +409,17 @@ function escapeHTML(value) {
     "\"": "&quot;",
     "'": "&#39;"
   })[char]);
+}
+
+function formatCkdStage(value, remarks = "") {
+  if (!value) return "--";
+  if (value === "Normal") return "Normal";
+  if (value === "Other") return remarks ? `Other — ${remarks}` : "Other";
+  return `Stage ${value}`;
+}
+
+function getCkdStageClass(value) {
+  return String(value || "other").toLowerCase().replace(/[^a-z0-9_-]/g, "");
 }
 
 function populateHospitals() {
@@ -602,7 +622,7 @@ function updateLinkedPatientSummary() {
   linkedHospitalId.textContent = hospitalIdInput.value || "--";
   linkedUhid.textContent = patientId;
   linkedAgeSex.textContent = ageSex;
-  linkedCkd.textContent = ckdStageInput.value ? `Stage ${ckdStageInput.value}` : "--";
+  linkedCkd.textContent = formatCkdStage(ckdStageInput.value, ckdStageRemarksInput.value.trim());
   linkedDiabetic.textContent = diabeticInput.value || "--";
 }
 
@@ -664,7 +684,6 @@ function computeDataQualityWarnings(record) {
   if (Number.isFinite(age) && age >= 90) warnings.push("Patient age is 90 years or above; verify age entry.");
   if (Number.isFinite(weightKg) && (weightKg < 30 || weightKg > 180)) warnings.push("Weight is outside the usual adult range; verify weight entry.");
   if (Number.isFinite(heightCm) && (heightCm < 120 || heightCm > 210)) warnings.push("Height is outside the usual adult range; verify height entry.");
-  if (!Number.isFinite(heightCm)) warnings.push("Height is missing; BMI cannot be independently verified.");
   if (Number.isFinite(heightCm) && Number.isFinite(weightKg) && Number.isFinite(bmi)) {
     const calculatedBmi = weightKg / ((heightCm / 100) ** 2);
     if (Math.abs(calculatedBmi - bmi) > 1) warnings.push("BMI differs from height/weight calculation; verify BMI.");
@@ -860,7 +879,7 @@ function draftKey() {
 const DRAFT_FIELDS = [
   "study-id", "enrollment-date", "site-center",
   "patient-age", "questionnaire-height", "patient-weight",
-  "ethnicity", "occupation", "ckd-stage", "ckd-duration",
+  "ethnicity", "occupation", "ckd-stage", "ckd-stage-remarks", "ckd-duration",
   "dialysis-frequency", "diabetes-duration", "diabetic-stage",
   "hypertension-duration"
 ];
@@ -1088,7 +1107,7 @@ consentContinueBtn.addEventListener("click", async () => {
 function updateQuestionnaireBmi() {
   const heightCm = Number(questionnaireHeightInput.value);
   const weightKg = Number(questionnaireWeightInput.value);
-  if (!heightCm || !weightKg || heightCm < 30 || weightKg < 1) {
+  if (!heightCm || !weightKg || heightCm < 50 || heightCm > 250 || weightKg < 10 || weightKg > 400) {
     questionnaireBmiInput.value = "";
     return;
   }
@@ -1116,7 +1135,7 @@ function validateQuestionnaireForClinicalUpload() {
   }
 
   if (!ageInput.value.trim() || Number(ageInput.value) < 18 || Number(ageInput.value) > 120) {
-    showToast("Enter patient age, 18 years or above.");
+    showToast("Enter patient age between 18 and 120 years.");
     ageInput.focus();
     return false;
   }
@@ -1126,15 +1145,34 @@ function validateQuestionnaireForClinicalUpload() {
     return false;
   }
 
-  if (!weightInput.value.trim() || Number(weightInput.value) < 1 || Number(weightInput.value) > 300) {
-    showToast("Enter patient weight.");
+  if (!heightInput.value.trim() || Number(heightInput.value) < 50 || Number(heightInput.value) > 250) {
+    showToast("Enter measured height between 50 and 250 cm.");
+    heightInput.focus();
+    return false;
+  }
+
+  if (!weightInput.value.trim() || Number(weightInput.value) < 10 || Number(weightInput.value) > 400) {
+    showToast("Enter measured weight between 10 and 400 kg.");
     weightInput.focus();
+    return false;
+  }
+
+  const calculatedBmi = Number(bmiInput.value);
+  if (!Number.isFinite(calculatedBmi) || calculatedBmi < 5 || calculatedBmi > 100) {
+    showToast("Height and weight produce an implausible BMI; verify both measurements.");
+    heightInput.focus();
     return false;
   }
 
   if (!ckdStageInput.value) {
     showToast("Select CKD stage.");
     ckdStageInput.focus();
+    return false;
+  }
+
+  if (ckdStageInput.value === "Other" && !ckdStageRemarksInput.value.trim()) {
+    showToast("Enter remarks for Other CKD stage.");
+    ckdStageRemarksInput.focus();
     return false;
   }
 
@@ -1182,7 +1220,7 @@ questionnaireContinueBtn.addEventListener("click", () => {
 });
 
 hospitalNameInput.addEventListener("change", updateHospitalId);
-[studyIdInput, uhidInput, enrollmentDateInput, ageInput, sexInput, weightInput, ckdStageInput, diabeticInput].forEach((input) => {
+[studyIdInput, uhidInput, enrollmentDateInput, ageInput, sexInput, weightInput, ckdStageInput, ckdStageRemarksInput, diabeticInput].forEach((input) => {
   input.addEventListener("input", updateLinkedPatientSummary);
   input.addEventListener("change", updateLinkedPatientSummary);
 });
@@ -1227,7 +1265,10 @@ uploadModeInputs.forEach((input) => {
 function updateDialysisVisibility() {
   const stage = ckdStageInput.value;
   const shouldShow = stage === "3" || stage === "4";
+  const shouldShowRemarks = stage === "Other";
   dialysisBlock.classList.toggle("hidden", !shouldShow);
+  ckdStageRemarksBlock.classList.toggle("hidden", !shouldShowRemarks);
+  ckdStageRemarksInput.required = shouldShowRemarks;
 
   if (!shouldShow) {
     dialysisInput.value = "";
@@ -1235,6 +1276,10 @@ function updateDialysisVisibility() {
     document.querySelectorAll("input[name='dialysisChoice']").forEach((input) => {
       input.checked = false;
     });
+  }
+
+  if (!shouldShowRemarks) {
+    ckdStageRemarksInput.value = "";
   }
 
   updateLinkedPatientSummary();
@@ -1300,7 +1345,7 @@ function redrawRecentUploads() {
 }
 
 function updateDashboards() {
-  let stageCounts = { "1": 0, "2": 0, "3": 0, "4": 0 };
+  let stageCounts = { Normal: 0, "1": 0, "2": 0, "3": 0, "4": 0, Other: 0 };
   let diabeticYes = 0;
   let diabeticNo = 0;
   let ageBuckets = [];
@@ -1314,7 +1359,7 @@ function updateDashboards() {
     summaryHospitals = state.backendDashboard.summary?.hospitals || hospitals.length;
     summaryFindings = state.backendDashboard.summary?.patients || 0;
     summaryVideos = state.backendDashboard.summary?.videos || 0;
-    stageCounts = { "1": 0, "2": 0, "3": 0, "4": 0 };
+    stageCounts = { Normal: 0, "1": 0, "2": 0, "3": 0, "4": 0, Other: 0 };
     (state.backendDashboard.stages || []).forEach((item) => {
       stageCounts[item.label] = item.value;
     });
@@ -1331,10 +1376,12 @@ function updateDashboards() {
   } else {
     dashboardItems.forEach((item) => {
       stageCounts[item.ckdStage] = (stageCounts[item.ckdStage] || 0) + 1;
-      if (item.diabetic === "Yes") {
-        diabeticYes += 1;
-      } else {
-        diabeticNo += 1;
+      if (item.ckdStage !== "Normal") {
+        if (item.diabetic === "Yes") {
+          diabeticYes += 1;
+        } else {
+          diabeticNo += 1;
+        }
       }
     });
 
@@ -1355,10 +1402,12 @@ function updateDashboards() {
   }
 
   renderDonut("ckd-stage-donut", "ckd-stage-center", "ckd-stage-legend", [
+    { label: "Normal", value: stageCounts.Normal, color: "#0f9a87" },
     { label: "Stage 1", value: stageCounts["1"], color: "#2dd4bf" },
     { label: "Stage 2", value: stageCounts["2"], color: "#60a5fa" },
     { label: "Stage 3", value: stageCounts["3"], color: "#fbbf24" },
-    { label: "Stage 4", value: stageCounts["4"], color: "#f87171" }
+    { label: "Stage 4", value: stageCounts["4"], color: "#f87171" },
+    { label: "Other", value: stageCounts.Other, color: "#8b5cf6" }
   ], String(dashboardItems.length || Object.values(stageCounts).reduce((sum, val) => sum + val, 0)));
   renderHistogram("age-histogram", ageBuckets);
   renderDonut("diabetic-donut", "diabetic-center", "diabetic-legend", [
@@ -1481,7 +1530,6 @@ function buildSubmissionPayload(timestamp, submission) {
     const { uploadFiles, ...metadata } = item;
     return {
       ...metadata,
-      reviewed_at: timestamp,
       files: uploadFiles.map((upload) => ({
         fieldName: upload.fieldName,
         name: upload.file.name,
@@ -1745,6 +1793,7 @@ function buildSubmissionFromForm() {
   const knownCkd = getCheckedValue(knownCkdInputs);
   const ckdDuration = ckdDurationInput.value.trim();
   const ckdStage = ckdStageInput.value;
+  const ckdStageRemarks = ckdStageRemarksInput.value.trim();
   const dialysis = dialysisInput.value;
   const dialysisFrequency = dialysisFrequencyInput.value.trim();
   const diabetic = diabeticInput.value;
@@ -1787,8 +1836,8 @@ function buildSubmissionFromForm() {
     return null;
   }
 
-  if (!age || !sex || !weight) {
-    showToast("Age, sex, and weight are required.");
+  if (!age || !sex || !heightCm || !weight) {
+    showToast("Age, sex, height, and weight are required.");
     return null;
   }
 
@@ -1799,6 +1848,11 @@ function buildSubmissionFromForm() {
 
   if (!ckdStage) {
     showToast("Select CKD stage.");
+    return null;
+  }
+
+  if (ckdStage === "Other" && !ckdStageRemarks) {
+    showToast("Enter remarks for Other CKD stage.");
     return null;
   }
 
@@ -1878,6 +1932,7 @@ function buildSubmissionFromForm() {
     knownCkd: knownCkd || "-",
     ckdDuration: ckdDuration || "-",
     ckdStage,
+    ckdStageRemarks: ckdStage === "Other" ? ckdStageRemarks : "-",
     dialysis: ckdStage === "3" || ckdStage === "4" ? dialysis : "-",
     dialysisFrequency: ckdStage === "3" || ckdStage === "4" && dialysis === "Yes" ? dialysisFrequency : "-",
     diabetic,
@@ -1920,7 +1975,7 @@ function renderReviewSubmission(submission) {
     ["Weight", `${submission.weight} kg`],
     ["BMI", submission.bmi || "-"],
     ["Known CKD", submission.knownCkd || "-"],
-    ["CKD Stage", `Stage ${submission.ckdStage}`],
+    ["Kidney Status", formatCkdStage(submission.ckdStage, submission.ckdStageRemarks)],
     ["Dialysis", submission.dialysis || "-"],
     ["Dialysis / Week", submission.dialysisFrequency || "-"],
     ["Diabetic", submission.diabetic],
@@ -2220,7 +2275,7 @@ function renderSubmissionsTable(items) {
       <td class="sub-uhid">${escapeHTML(item.uhid)}</td>
       <td class="sub-hospital" title="${escapeHTML(item.hospitalName || "")}">${escapeHTML(item.hospitalId)}</td>
       <td>${escapeHTML(item.age || "—")} / ${escapeHTML(item.sex || "—")}</td>
-      <td><span class="sub-stage-badge stage-${escapeHTML(item.ckdStage)}">Stage ${escapeHTML(item.ckdStage)}</span></td>
+      <td><span class="sub-stage-badge stage-${getCkdStageClass(item.ckdStage)}">${escapeHTML(formatCkdStage(item.ckdStage))}</span></td>
       <td>${escapeHTML(subUploadMode(item.uploadMode))}</td>
       <td>${item.fileCount}</td>
       <td class="sub-date">${subFormatDate(item.receivedAt)}</td>
@@ -2306,7 +2361,7 @@ function renderSubmissionDetail(s) {
     </section>
     <section class="sub-detail-section">
       <h3 class="sub-detail-section-title">Clinical</h3>
-      ${field("CKD Stage",            s.ckdStage)}
+      ${field("Kidney Status",        formatCkdStage(s.ckdStage, s.ckdStageRemarks))}
       ${field("Known CKD",            s.knownCkd)}
       ${field("CKD Duration",         s.ckdDuration)}
       ${field("Dialysis",             s.dialysis)}
