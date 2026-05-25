@@ -689,7 +689,7 @@ function computeDataQualityWarnings(record) {
     if (Math.abs(calculatedBmi - bmi) > 1) warnings.push("BMI differs from height/weight calculation; verify BMI.");
     if (bmi < 16 || bmi > 40) warnings.push("BMI is outside the usual adult range; verify height and weight.");
   }
-  if ((record.ckdStage === "3" || record.ckdStage === "4") && record.knownCkd === "No") {
+  if (["3a", "3b", "4", "5"].includes(record.ckdStage) && record.knownCkd === "No") {
     warnings.push("Advanced CKD stage selected while Known CKD is No; verify clinical history.");
   }
   if (record.diabetic === "No" && record.diabetesDuration !== "-") warnings.push("Diabetes duration is present while Diabetes Mellitus is No.");
@@ -1176,12 +1176,12 @@ function validateQuestionnaireForClinicalUpload() {
     return false;
   }
 
-  if ((ckdStageInput.value === "3" || ckdStageInput.value === "4") && !dialysisInput.value) {
-    showToast("Select dialysis status for CKD stage 3 or 4.");
+  if (["3a", "3b", "4", "5"].includes(ckdStageInput.value) && !dialysisInput.value) {
+    showToast("Select dialysis status for CKD stage 3a, 3b, 4, or 5.");
     return false;
   }
 
-  if ((ckdStageInput.value === "3" || ckdStageInput.value === "4") && dialysisInput.value === "Yes" && !dialysisFrequencyInput.value.trim()) {
+  if (["3a", "3b", "4", "5"].includes(ckdStageInput.value) && dialysisInput.value === "Yes" && !dialysisFrequencyInput.value.trim()) {
     showToast("Enter dialysis frequency.");
     dialysisFrequencyInput.focus();
     return false;
@@ -1264,7 +1264,7 @@ uploadModeInputs.forEach((input) => {
 
 function updateDialysisVisibility() {
   const stage = ckdStageInput.value;
-  const shouldShow = stage === "3" || stage === "4";
+  const shouldShow = ["3a", "3b", "4", "5"].includes(stage);
   const shouldShowRemarks = stage === "Other";
   dialysisBlock.classList.toggle("hidden", !shouldShow);
   ckdStageRemarksBlock.classList.toggle("hidden", !shouldShowRemarks);
@@ -1345,7 +1345,7 @@ function redrawRecentUploads() {
 }
 
 function updateDashboards() {
-  let stageCounts = { Normal: 0, "1": 0, "2": 0, "3": 0, "4": 0, Other: 0 };
+  let stageCounts = { Normal: 0, "1": 0, "2": 0, "3a": 0, "3b": 0, "4": 0, "5": 0, Other: 0 };
   let diabeticYes = 0;
   let diabeticNo = 0;
   let ageBuckets = [];
@@ -1402,12 +1402,14 @@ function updateDashboards() {
   }
 
   renderDonut("ckd-stage-donut", "ckd-stage-center", "ckd-stage-legend", [
-    { label: "Normal", value: stageCounts.Normal, color: "#0f9a87" },
-    { label: "Stage 1", value: stageCounts["1"], color: "#2dd4bf" },
-    { label: "Stage 2", value: stageCounts["2"], color: "#60a5fa" },
-    { label: "Stage 3", value: stageCounts["3"], color: "#fbbf24" },
-    { label: "Stage 4", value: stageCounts["4"], color: "#f87171" },
-    { label: "Other", value: stageCounts.Other, color: "#8b5cf6" }
+    { label: "Normal",   value: stageCounts.Normal,  color: "#0f9a87" },
+    { label: "Stage 1",  value: stageCounts["1"],    color: "#2dd4bf" },
+    { label: "Stage 2",  value: stageCounts["2"],    color: "#60a5fa" },
+    { label: "Stage 3a", value: stageCounts["3a"],   color: "#fbbf24" },
+    { label: "Stage 3b", value: stageCounts["3b"],   color: "#f97316" },
+    { label: "Stage 4",  value: stageCounts["4"],    color: "#f87171" },
+    { label: "Stage 5",  value: stageCounts["5"],    color: "#dc2626" },
+    { label: "Other",    value: stageCounts.Other,   color: "#8b5cf6" }
   ], String(dashboardItems.length || Object.values(stageCounts).reduce((sum, val) => sum + val, 0)));
   renderHistogram("age-histogram", ageBuckets);
   renderDonut("diabetic-donut", "diabetic-center", "diabetic-legend", [

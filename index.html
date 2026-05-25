@@ -361,6 +361,12 @@
           </div>
           <button class="btn-ghost" data-tab-jump="landing" type="button">Edit Patient Setup</button>
         </div>
+        <div class="consent-study-info">
+          <div class="csi-row"><span class="csi-label">Study Title :</span><span class="csi-val">AI-Based Multimodal Estimation of eGFR Using Kidney Ultrasound and Clinical Parameters</span></div>
+          <div class="csi-row"><span class="csi-label">Sponsor :</span><span class="csi-val">TANUH Foundation</span></div>
+          <div class="csi-row"><span class="csi-label">IEC Approval :</span><span class="csi-val">Ethics committee approval received from Clinicom vide letter no: 02437 dated 24-Feb-2026</span></div>
+        </div>
+
         <div class="consent-intro">
           <h2>AI-Based Multimodal Estimation of eGFR Using Kidney Ultrasound and Clinical Parameters</h2>
           <p>You are being invited to take part in a research study titled “AI-Based Multimodal Estimation of eGFR Using Kidney Ultrasound and Clinical Parameters”. Before you decide, it is important for you to understand why the research is being done and what it will involve. Please take time to read the following information carefully and discuss it with friends, relatives and your doctors if you wish. Ask us if there is anything that is not clear or if you would like more information. Thank you for reading this.</p>
@@ -557,11 +563,13 @@
                     <label for="ckd-stage">Kidney Status / CKD Stage *</label>
                     <select id="ckd-stage" name="ckdStage" required>
                       <option value="" selected disabled>Select stage</option>
-                      <option value="Normal">Normal</option>
-                      <option value="1">Stage 1</option>
-                      <option value="2">Stage 2</option>
-                      <option value="3">Stage 3</option>
-                      <option value="4">Stage 4</option>
+                      <option value="Normal">Normal (No CKD)</option>
+                      <option value="1">CKD Stage 1</option>
+                      <option value="2">CKD Stage 2</option>
+                      <option value="3a">CKD Stage 3a</option>
+                      <option value="3b">CKD Stage 3b</option>
+                      <option value="4">CKD Stage 4</option>
+                      <option value="5">CKD Stage 5 (End-Stage)</option>
                       <option value="Other">Other</option>
                     </select>
                   </div>

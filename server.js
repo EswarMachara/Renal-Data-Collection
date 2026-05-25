@@ -57,7 +57,7 @@ const hospitals = [
 const allowedUploadModes  = new Set(["separate", "package"]);
 const allowedSexValues    = new Set(["Male", "Female", "Other"]);
 const allowedYesNoValues  = new Set(["Yes", "No"]);
-const allowedCkdStages    = new Set(["Normal", "1", "2", "3", "4", "Other"]);
+const allowedCkdStages    = new Set(["Normal", "1", "2", "3a", "3b", "4", "5", "Other"]);
 const allowedEchogenicityValues = new Set(["Normal", "Mild Increased", "Moderate Increased", "Severe Increased"]);
 const allowedKidneySizeValues = new Set(["Normal", "Small", "Enlarged"]);
 const allowedParenchymalTextureValues = new Set(["Normal", "Altered"]);
@@ -928,7 +928,7 @@ function computeDataQualityWarnings(record) {
     if (Math.abs(calculatedBmi - bmi) > 1) warnings.push("BMI differs from height/weight calculation; verify BMI.");
     if (bmi < 16 || bmi > 40) warnings.push("BMI is outside the usual adult range; verify height and weight.");
   }
-  if (record.ckdStage === "3" || record.ckdStage === "4") {
+  if (["3a", "3b", "4", "5"].includes(record.ckdStage)) {
     if (record.knownCkd === "No") warnings.push("Advanced CKD stage selected while Known CKD is No; verify clinical history.");
   }
   if (record.diabetic === "No" && record.diabetesDuration !== "-") warnings.push("Diabetes duration is present while Diabetes Mellitus is No.");
@@ -1004,8 +1004,8 @@ function normalizeSubmission(item, options = {}) {
   if (uploadMode === "package" && files.some((f) => f.fieldName === "patientPackage" && path.extname(f.name || "").toLowerCase() !== ".zip")) {
     throw new Error("Patient package must be a .zip file.");
   }
-  if ((normalized.ckdStage === "3" || normalized.ckdStage === "4") && normalized.dialysis === "-") {
-    throw new Error("Dialysis status is required for CKD stage 3 or 4.");
+  if (["3a", "3b", "4", "5"].includes(normalized.ckdStage) && normalized.dialysis === "-") {
+    throw new Error("Dialysis status is required for CKD stage 3a, 3b, 4, or 5.");
   }
   if (normalized.ckdStage === "Other" && normalized.ckdStageRemarks === "-") {
     throw new Error("Remarks are required when CKD stage is Other.");

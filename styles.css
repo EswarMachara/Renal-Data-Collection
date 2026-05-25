@@ -744,6 +744,33 @@ body {
   font-size: 0.88rem;
 }
 
+/* Study info card (shown at top of consent form) */
+.consent-study-info {
+  background: #eef9f8;
+  border: 1px solid #b2ddd9;
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.csi-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.csi-label {
+  font-weight: 700;
+  color: #0a4a4e;
+  white-space: nowrap;
+}
+.csi-val {
+  color: #1e293b;
+}
+
 .consent-intro {
   border: 1px solid #cfe5e1;
   border-radius: 18px;
@@ -3401,12 +3428,18 @@ th {
   font-weight: 700;
   letter-spacing: 0.03em;
 }
-.stage-1 { background: #d1fae5; color: #065f46; }
-.stage-2 { background: #dbeafe; color: #1e40af; }
-.stage-3 { background: #fef3c7; color: #92400e; }
-.stage-4 { background: #fee2e2; color: #991b1b; }
+.stage-Normal { background: #e2f7f3; color: #0f766e; }
+.stage-1      { background: #d1fae5; color: #065f46; }
+.stage-2      { background: #dbeafe; color: #1e40af; }
+.stage-3a     { background: #fef3c7; color: #92400e; }
+.stage-3b     { background: #fed7aa; color: #9a3412; }
+.stage-4      { background: #fee2e2; color: #991b1b; }
+.stage-5      { background: #fecaca; color: #7f1d1d; }
+.stage-Other  { background: #ede9fe; color: #5b21b6; }
+/* keep old names as fallback */
+.stage-3      { background: #fef3c7; color: #92400e; }
 .stage-normal { background: #e2f7f3; color: #0f766e; }
-.stage-other { background: #ede9fe; color: #5b21b6; }
+.stage-other  { background: #ede9fe; color: #5b21b6; }
 
 /* Reviewed / pending badges */
 .sub-badge {
