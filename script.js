@@ -721,23 +721,40 @@ function ensurePreview(input) {
 }
 
 function renderFilePreview(input, fieldName) {
+  const tile    = input.closest(".upload-tile");
   const preview = ensurePreview(input);
-  const file = input.files[0];
+  const file    = input.files[0];
+
   preview.innerHTML = "";
   preview.classList.remove("has-file");
+  tile.classList.remove("tile-has-file", "tile-loading");
 
   if (!file) {
     preview.textContent = "No file selected";
     return;
   }
 
+  // Animate the tile bar, then settle into success state
+  tile.classList.add("tile-loading");
+  setTimeout(() => {
+    tile.classList.remove("tile-loading");
+    tile.classList.add("tile-has-file");
+  }, 700);
+
   preview.classList.add("has-file");
+
   const details = document.createElement("div");
   details.className = "file-preview-details";
   details.innerHTML = `
     <strong>${escapeHTML(getUploadLabel(fieldName))}</strong>
-    <span>${escapeHTML(file.name)}</span>
-    <small>${escapeHTML(file.type || "Unknown file type")} • ${formatBytes(file.size)}</small>
+    <span class="file-preview-name">
+      <svg class="file-check-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <circle cx="8" cy="8" r="7" fill="#14868c"/>
+        <path d="M5 8.2l2.2 2.2L11 5.5" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      ${escapeHTML(file.name)}
+    </span>
+    <small>${escapeHTML(file.type || "Unknown type")} · ${formatBytes(file.size)}</small>
   `;
 
   if (file.type.startsWith("image/")) {
@@ -756,6 +773,7 @@ function renderFilePreview(input, fieldName) {
   }
 
   preview.appendChild(details);
+  showToast(`✓ ${file.name} attached and ready to upload`);
 }
 
 function clearFilePreviews() {

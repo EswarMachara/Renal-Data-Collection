@@ -1265,6 +1265,7 @@ body {
 }
 
 .upload-tile {
+  position: relative;
   border: 2px dashed #9fd5cc;
   border-radius: 16px;
   background: #f6fbfb;
@@ -1276,12 +1277,39 @@ body {
   flex-direction: column;
   gap: 0.4rem;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
 }
 
 .upload-tile:hover {
   border-color: #0f9a87;
   background: #eef9f7;
+}
+
+/* Animated fill bar while file is being read */
+.upload-tile.tile-loading {
+  overflow: hidden;
+}
+.upload-tile.tile-loading::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #0e6a6f, #6ee7e0);
+  animation: tileBarFill 0.7s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  border-radius: 0 0 14px 14px;
+}
+@keyframes tileBarFill {
+  from { width: 0%; }
+  to   { width: 100%; }
+}
+
+/* Success state after file selected */
+.upload-tile.tile-has-file {
+  border-color: #14868c;
+  border-style: solid;
+  background: linear-gradient(135deg, #f0fdfa 0%, #f6fbfb 100%);
+  box-shadow: 0 0 0 3px rgba(20, 134, 140, 0.1);
 }
 
 .upload-tile input {
@@ -1342,6 +1370,21 @@ body {
 .file-preview-details span,
 .file-preview-details small {
   overflow-wrap: anywhere;
+}
+
+.file-preview-name {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 600;
+  color: #0a4a4e;
+  word-break: break-all;
+}
+
+.file-check-icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
 }
 
 .summary-grid {
