@@ -1387,12 +1387,7 @@ body {
   height: 16px;
 }
 
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(180px, 1fr));
-  gap: 1.2rem;
-  margin-bottom: 1.8rem;
-}
+/* .summary-grid defined later with auto-fill for 3–5 cards */
 
 .summary-card {
   background: #ffffff;
@@ -1466,6 +1461,109 @@ body {
   font-size: 0.75rem;
   font-weight: 600;
   color: #0f172a;
+}
+
+/* ── Hospital breakdown (admin dashboard) ──────────────────────────────────── */
+
+.hosp-breakdown-section {
+  margin-bottom: 1.8rem;
+}
+
+.hosp-breakdown-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.hosp-breakdown-card {
+  background: #ffffff;
+  border: 1px solid #e2ecef;
+  border-radius: 14px;
+  padding: 1.1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.hosp-breakdown-card:hover {
+  box-shadow: 0 4px 16px rgba(14,106,111,0.1);
+  border-color: #b2ddd9;
+}
+.hosp-card-empty {
+  opacity: 0.55;
+}
+
+.hosp-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.hosp-card-header > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+.hosp-card-id {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #14868c;
+}
+.hosp-card-name {
+  font-size: 0.8rem;
+  color: #475569;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+.hosp-card-count {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #0a4a4e;
+  white-space: nowrap;
+}
+
+.hosp-bar-track {
+  height: 7px;
+  background: #e8f4f4;
+  border-radius: 99px;
+  overflow: hidden;
+}
+.hosp-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #0e6a6f, #2dd4bf);
+  border-radius: 99px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  min-width: 4px;
+}
+
+.hosp-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.hosp-meta-chip {
+  font-size: 0.72rem;
+  font-weight: 600;
+  border-radius: 99px;
+  padding: 0.18rem 0.6rem;
+  white-space: nowrap;
+}
+.hosp-meta-pct    { background: #e0f2fe; color: #0369a1; }
+.hosp-meta-video  { background: #ede9fe; color: #5b21b6; }
+.hosp-meta-review { background: #d1fae5; color: #065f46; }
+
+/* Summary grid extended (5 cards for admin) */
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1.2rem;
+  margin-bottom: 1.8rem;
 }
 
 .hospital-grid {

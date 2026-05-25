@@ -941,94 +941,167 @@
     </section>
 
     <section class="tab-panel" id="tab-dashboard" aria-labelledby="Dashboard">
-      <div class="page-hero dashboard-hero">
-        <h1>Data Collection Operations</h1>
-        <p>Hospital submissions, upload health, and renal data intake monitoring</p>
-        <span class="hero-update" id="dashboard-updated-at">Awaiting live submissions</span>
-        <div class="hero-divider"></div>
+      <!-- ── Admin dashboard ─────────────────────────────────────────────── -->
+      <div id="dash-admin-view" class="hidden">
+        <div class="page-hero dashboard-hero">
+          <h1>Data Collection Operations</h1>
+          <p>Monitor all partner hospital submissions, storage health, and renal data intake</p>
+          <span class="hero-update" id="dashboard-updated-at">Awaiting live data</span>
+          <div class="hero-divider"></div>
+        </div>
+        <article class="panel-card flow-card dashboard-card">
+          <div class="summary-grid">
+            <div class="summary-card">
+              <span class="summary-value" id="summary-hospitals">0</span>
+              <span class="summary-label">PARTNER HOSPITALS</span>
+            </div>
+            <div class="summary-card">
+              <span class="summary-value" id="summary-findings">0</span>
+              <span class="summary-label">PATIENT RECORDS RECEIVED</span>
+            </div>
+            <div class="summary-card">
+              <span class="summary-value" id="summary-videos">0</span>
+              <span class="summary-label">ULTRASOUND VIDEOS</span>
+            </div>
+            <div class="summary-card">
+              <span class="summary-value" id="summary-reviewed">0</span>
+              <span class="summary-label">RECORDS REVIEWED</span>
+            </div>
+            <div class="summary-card">
+              <span class="summary-value" id="summary-pending">0</span>
+              <span class="summary-label">PENDING REVIEW</span>
+            </div>
+          </div>
+
+          <!-- Per-hospital breakdown -->
+          <section class="hosp-breakdown-section">
+            <div class="viz-header">
+              <h3>Records per Partner Hospital</h3>
+              <span class="viz-note" id="hosp-breakdown-note">Loading…</span>
+            </div>
+            <div class="hosp-breakdown-grid" id="hosp-breakdown-grid">
+              <p class="empty">Loading hospital data…</p>
+            </div>
+          </section>
+
+          <div class="viz-grid">
+            <section class="viz-card">
+              <div class="viz-header"><h3>Kidney Status Distribution</h3></div>
+              <div class="donut-wrap">
+                <div class="donut" id="ckd-stage-donut" aria-label="Kidney status distribution"></div>
+                <div class="donut-center" id="ckd-stage-center">--</div>
+              </div>
+              <div class="viz-legend" id="ckd-stage-legend"></div>
+            </section>
+            <section class="viz-card">
+              <div class="viz-header">
+                <h3>Age Distribution</h3>
+                <span class="viz-note">Adults 18+, with 80+ grouped</span>
+              </div>
+              <div class="histogram" id="age-histogram" aria-label="Age distribution"></div>
+            </section>
+          </div>
+          <div class="viz-grid">
+            <section class="viz-card">
+              <div class="viz-header"><h3>CKD Diabetic vs Non-Diabetic</h3></div>
+              <div class="donut-wrap">
+                <div class="donut" id="diabetic-donut" aria-label="Diabetic distribution"></div>
+                <div class="donut-center" id="diabetic-center">--</div>
+              </div>
+              <div class="viz-legend" id="diabetic-legend"></div>
+            </section>
+          </div>
+
+          <section class="table-section">
+            <div class="viz-header">
+              <h3>Recent Records</h3>
+              <span class="viz-note">Latest submissions across all hospitals</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>Patient ID</th><th>Hospital</th><th>Method</th><th>Received</th><th>Status</th></tr>
+                </thead>
+                <tbody id="recent-body"></tbody>
+              </table>
+            </div>
+          </section>
+        </article>
       </div>
-      <article class="panel-card flow-card dashboard-card">
-        <div class="summary-grid">
-          <div class="summary-card">
-            <span class="summary-value" id="summary-hospitals">0</span>
-            <span class="summary-label">PARTNER HOSPITALS</span>
-          </div>
-          <div class="summary-card">
-            <span class="summary-value" id="summary-findings">0</span>
-            <span class="summary-label">PATIENT RECORDS RECEIVED</span>
-          </div>
-          <div class="summary-card">
-            <span class="summary-value" id="summary-videos">0</span>
-            <span class="summary-label">ULTRASOUND VIDEOS RECEIVED</span>
-          </div>
+
+      <!-- ── Hospital dashboard ──────────────────────────────────────────── -->
+      <div id="dash-hospital-view" class="hidden">
+        <div class="page-hero dashboard-hero">
+          <h1>My Upload Dashboard</h1>
+          <p id="dash-hospital-subtitle">Your submissions and storage metrics</p>
+          <span class="hero-update" id="dash-hospital-updated">Awaiting live data</span>
+          <div class="hero-divider"></div>
         </div>
-        <div class="viz-grid">
-          <section class="viz-card">
+        <article class="panel-card flow-card dashboard-card">
+          <div class="summary-grid">
+            <div class="summary-card">
+              <span class="summary-value" id="hosp-summary-patients">0</span>
+              <span class="summary-label">MY PATIENT RECORDS</span>
+            </div>
+            <div class="summary-card">
+              <span class="summary-value" id="hosp-summary-videos">0</span>
+              <span class="summary-label">ULTRASOUND VIDEOS</span>
+            </div>
+            <div class="summary-card">
+              <span class="summary-value" id="hosp-summary-reviewed">0</span>
+              <span class="summary-label">REVIEWED BY ADMIN</span>
+            </div>
+            <div class="summary-card">
+              <span class="summary-value" id="hosp-summary-pending">0</span>
+              <span class="summary-label">PENDING REVIEW</span>
+            </div>
+          </div>
+
+          <div class="viz-grid">
+            <section class="viz-card">
+              <div class="viz-header"><h3>My Kidney Status Distribution</h3></div>
+              <div class="donut-wrap">
+                <div class="donut" id="hosp-ckd-donut" aria-label="My kidney status distribution"></div>
+                <div class="donut-center" id="hosp-ckd-center">--</div>
+              </div>
+              <div class="viz-legend" id="hosp-ckd-legend"></div>
+            </section>
+            <section class="viz-card">
+              <div class="viz-header">
+                <h3>My Age Distribution</h3>
+                <span class="viz-note">Adults 18+, with 80+ grouped</span>
+              </div>
+              <div class="histogram" id="hosp-age-histogram" aria-label="My age distribution"></div>
+            </section>
+          </div>
+
+          <section class="table-section">
             <div class="viz-header">
-              <h3>Recorded Kidney Status Distribution</h3>
+              <h3>My Recent Submissions</h3>
+              <span class="viz-note">Latest records uploaded by your hospital</span>
             </div>
-            <div class="donut-wrap">
-              <div class="donut" id="ckd-stage-donut" aria-label="Recorded kidney status distribution"></div>
-              <div class="donut-center" id="ckd-stage-center">--</div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>Patient ID</th><th>Method</th><th>Received</th><th>Review Status</th></tr>
+                </thead>
+                <tbody id="hosp-recent-body"></tbody>
+              </table>
             </div>
-            <div class="viz-legend" id="ckd-stage-legend"></div>
           </section>
-          <section class="viz-card">
-            <div class="viz-header">
-              <h3>Age Distribution</h3>
-              <span class="viz-note">Adults 18+, with 80+ grouped</span>
-            </div>
-            <div class="histogram" id="age-histogram" aria-label="Age distribution"></div>
-          </section>
+        </article>
+      </div>
+
+      <!-- Upload progress (shown in dashboard while form is submitting) -->
+      <div class="upload-progress-panel hidden" id="upload-progress-panel">
+        <div class="upload-progress-header">
+          <span id="upload-progress-label">Preparing upload</span>
+          <strong id="upload-progress-percent">0%</strong>
         </div>
-        <div class="viz-grid">
-          <section class="viz-card">
-            <div class="viz-header">
-              <h3>CKD Diabetic Vs CKD Non-Diabetic</h3>
-            </div>
-            <div class="donut-wrap">
-              <div class="donut" id="diabetic-donut" aria-label="Diabetic distribution"></div>
-              <div class="donut-center" id="diabetic-center">--</div>
-            </div>
-            <div class="viz-legend" id="diabetic-legend"></div>
-          </section>
+        <div class="upload-progress-track" aria-label="Overall upload progress">
+          <div class="upload-progress-fill" id="upload-progress-fill"></div>
         </div>
-        <section class="table-section">
-          <div class="viz-header">
-            <h3>Recent Uploads</h3>
-            <span class="viz-note">Latest batches saved by this browser session</span>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Batch</th>
-                  <th>Hospital</th>
-                  <th>Patient ID</th>
-                  <th>Method</th>
-                  <th>Files</th>
-                  <th>Destination</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody id="recent-body">
-                <tr>
-                  <td colspan="7" class="empty">No uploads completed in this session.</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-        <div class="upload-progress-panel hidden" id="upload-progress-panel">
-          <div class="upload-progress-header">
-            <span id="upload-progress-label">Preparing upload</span>
-            <strong id="upload-progress-percent">0%</strong>
-          </div>
-          <div class="upload-progress-track" aria-label="Overall upload progress">
-            <div class="upload-progress-fill" id="upload-progress-fill"></div>
-          </div>
-        </div>
-      </article>
+      </div>
     </section>
 
     <!-- ── Submissions Panel ─────────────────────────────────────────── -->

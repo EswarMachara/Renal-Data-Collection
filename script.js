@@ -1321,20 +1321,16 @@ function refreshDashboard() {
 }
 
 async function loadBackendDashboard() {
-  if (window.location.protocol === "file:") {
-    return;
-  }
-
+  if (window.location.protocol === "file:") return;
   try {
     const response = await authedFetch("/api/dashboard-summary", { cache: "no-store" });
     if (response.status === 401) { handle401(); return; }
     const result = await response.json();
-    if (response.ok && result.ok && result.dbConfigured && result.summary) {
+    if (response.ok && result.ok && result.summary) {
       state.backendDashboard = result.summary;
       refreshDashboard();
     }
-  } catch {
-  }
+  } catch { /* network error — silently skip */ }
 }
 
 function redrawRecentUploads() {
@@ -1362,78 +1358,153 @@ function redrawRecentUploads() {
   });
 }
 
+const CKD_DONUT_SEGMENTS = (counts) => [
+  { label: "Normal",   value: counts["Normal"] || 0, color: "#0f9a87" },
+  { label: "Stage 1",  value: counts["1"]      || 0, color: "#2dd4bf" },
+  { label: "Stage 2",  value: counts["2"]      || 0, color: "#60a5fa" },
+  { label: "Stage 3a", value: counts["3a"]     || 0, color: "#fbbf24" },
+  { label: "Stage 3b", value: counts["3b"]     || 0, color: "#f97316" },
+  { label: "Stage 4",  value: counts["4"]      || 0, color: "#f87171" },
+  { label: "Stage 5",  value: counts["5"]      || 0, color: "#dc2626" },
+  { label: "Other",    value: counts["Other"]  || 0, color: "#8b5cf6" }
+];
+
 function updateDashboards() {
-  let stageCounts = { Normal: 0, "1": 0, "2": 0, "3a": 0, "3b": 0, "4": 0, "5": 0, Other: 0 };
-  let diabeticYes = 0;
-  let diabeticNo = 0;
-  let ageBuckets = [];
-  let summaryHospitals = 0;
-  let summaryFindings = 0;
-  let summaryVideos = 0;
+  const d    = state.backendDashboard;
+  const role = state.authSession?.role;
 
-  const dashboardItems = state.recentUploads || [];
+  // Show the correct view panel
+  const adminView  = document.getElementById("dash-admin-view");
+  const hospView   = document.getElementById("dash-hospital-view");
+  if (adminView)  adminView.classList.toggle("hidden",  role !== "admin");
+  if (hospView)   hospView.classList.toggle("hidden",   role === "admin");
 
-  if (state.backendDashboard) {
-    summaryHospitals = state.backendDashboard.summary?.hospitals || hospitals.length;
-    summaryFindings = state.backendDashboard.summary?.patients || 0;
-    summaryVideos = state.backendDashboard.summary?.videos || 0;
-    stageCounts = { Normal: 0, "1": 0, "2": 0, "3": 0, "4": 0, Other: 0 };
-    (state.backendDashboard.stages || []).forEach((item) => {
-      stageCounts[item.label] = item.value;
-    });
-    diabeticYes = (state.backendDashboard.diabetic || []).find((item) => item.label === "Yes")?.value || 0;
-    diabeticNo = (state.backendDashboard.diabetic || []).find((item) => item.label === "No")?.value || 0;
-    ageBuckets = buildAgeBuckets(dashboardItems);
-  } else if (USE_DUMMY_DASHBOARD) {
-    summaryHospitals = dummyDashboard.summary.hospitals;
-    summaryFindings = dummyDashboard.summary.findings;
-    stageCounts = { ...dummyDashboard.stages };
-    diabeticYes = dummyDashboard.diabetic.yes;
-    diabeticNo = dummyDashboard.diabetic.no;
-    ageBuckets = dummyDashboard.ageBuckets;
+  if (!d) return;
+
+  const nowStr = `Last updated: ${new Date().toLocaleTimeString()}`;
+
+  if (role === "admin") {
+    // ── Admin summary cards ───────────────────────────────────────────────
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    set("summary-hospitals", d.summary?.hospitals ?? 0);
+    set("summary-findings",  d.summary?.patients  ?? 0);
+    set("summary-videos",    d.summary?.videos    ?? 0);
+    set("summary-reviewed",  d.summary?.reviewed  ?? 0);
+    set("summary-pending",   d.summary?.pending   ?? 0);
+    const updEl = document.getElementById("dashboard-updated-at");
+    if (updEl) updEl.textContent = nowStr;
+
+    // ── Per-hospital breakdown ────────────────────────────────────────────
+    renderHospitalBreakdown(d.hospitalBreakdown || [], d.summary?.patients || 0);
+
+    // ── Charts ───────────────────────────────────────────────────────────
+    const stageCounts = {};
+    (d.stages || []).forEach((s) => { stageCounts[s.label] = s.value; });
+    const total = d.summary?.patients || 0;
+    renderDonut("ckd-stage-donut", "ckd-stage-center", "ckd-stage-legend",
+      CKD_DONUT_SEGMENTS(stageCounts), String(total));
+
+    const ageBuckets = (d.ageBuckets || []).map((b) => ({ label: b.bucket, value: b.count }));
+    renderHistogram("age-histogram", ageBuckets);
+
+    const diabYes = (d.diabetic || []).find((x) => x.label === "Yes")?.value || 0;
+    const diabNo  = (d.diabetic || []).find((x) => x.label === "No")?.value  || 0;
+    renderDonut("diabetic-donut", "diabetic-center", "diabetic-legend", [
+      { label: "CKD Diabetic",     value: diabYes, color: "#0f9a87" },
+      { label: "CKD Non-Diabetic", value: diabNo,  color: "#94a3b8" }
+    ]);
+
+    // ── Recent records table ──────────────────────────────────────────────
+    renderRecentRecordsTable("recent-body", d.recentRecords || [], ["uhid","hospitalId","uploadMode","receivedAt","reviewedAt"]);
+
   } else {
-    dashboardItems.forEach((item) => {
-      stageCounts[item.ckdStage] = (stageCounts[item.ckdStage] || 0) + 1;
-      if (item.ckdStage !== "Normal") {
-        if (item.diabetic === "Yes") {
-          diabeticYes += 1;
-        } else {
-          diabeticNo += 1;
-        }
-      }
-    });
+    // ── Hospital summary cards ────────────────────────────────────────────
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    set("hosp-summary-patients", d.summary?.patients  ?? 0);
+    set("hosp-summary-videos",   d.summary?.videos    ?? 0);
+    set("hosp-summary-reviewed", d.summary?.reviewed  ?? 0);
+    set("hosp-summary-pending",  d.summary?.pending   ?? 0);
 
-    summaryHospitals = hospitals.length;
-    summaryFindings = dashboardItems.length;
-    ageBuckets = buildAgeBuckets(dashboardItems);
-    summaryVideos = dashboardItems.filter((item) => item.hasVideo).length;
+    const subtitleEl = document.getElementById("dash-hospital-subtitle");
+    const hospName = state.authSession?.hospitalName || state.authSession?.hospitalId || "";
+    if (subtitleEl && hospName) subtitleEl.textContent = `Submissions and storage metrics for ${hospName}`;
+
+    const updEl = document.getElementById("dash-hospital-updated");
+    if (updEl) updEl.textContent = nowStr;
+
+    // ── Charts ───────────────────────────────────────────────────────────
+    const stageCounts = {};
+    (d.stages || []).forEach((s) => { stageCounts[s.label] = s.value; });
+    const total = d.summary?.patients || 0;
+    renderDonut("hosp-ckd-donut", "hosp-ckd-center", "hosp-ckd-legend",
+      CKD_DONUT_SEGMENTS(stageCounts), String(total));
+
+    const ageBuckets = (d.ageBuckets || []).map((b) => ({ label: b.bucket, value: b.count }));
+    renderHistogram("hosp-age-histogram", ageBuckets);
+
+    // ── Recent records table ──────────────────────────────────────────────
+    renderRecentRecordsTable("hosp-recent-body", d.recentRecords || [], ["uhid","uploadMode","receivedAt","reviewedAt"]);
+  }
+}
+
+function renderHospitalBreakdown(breakdown, grandTotal) {
+  const grid = document.getElementById("hosp-breakdown-grid");
+  const note = document.getElementById("hosp-breakdown-note");
+  if (!grid) return;
+
+  const maxPatients = Math.max(...breakdown.map((h) => h.patients), 1);
+  const totalWithData = breakdown.filter((h) => h.patients > 0).length;
+  if (note) note.textContent = `${totalWithData} of ${breakdown.length} hospitals have submitted records`;
+
+  if (!breakdown.length) {
+    grid.innerHTML = '<p class="empty">No data yet.</p>';
+    return;
   }
 
-  const summaryHospitalsEl = document.getElementById("summary-hospitals");
-  const summaryFindingsEl = document.getElementById("summary-findings");
-  if (summaryHospitalsEl) summaryHospitalsEl.textContent = summaryHospitals;
-  if (summaryFindingsEl) summaryFindingsEl.textContent = summaryFindings;
-  if (summaryVideosEl) summaryVideosEl.textContent = summaryVideos;
-  if (dashboardUpdatedAt) {
-    const latest = (state.recentUploads || [])[0]?.completedAt;
-    dashboardUpdatedAt.textContent = latest ? `Latest Upload: ${new Date(latest).toLocaleString()}` : "Awaiting live submissions";
-  }
+  grid.innerHTML = breakdown.map((h) => {
+    const pct      = grandTotal > 0 ? Math.round((h.patients / grandTotal) * 100) : 0;
+    const barWidth = Math.round((h.patients / maxPatients) * 100);
+    const reviewed = h.patients > 0 ? Math.round((h.reviewed / h.patients) * 100) : 0;
+    return `
+      <div class="hosp-breakdown-card ${h.patients === 0 ? "hosp-card-empty" : ""}">
+        <div class="hosp-card-header">
+          <div>
+            <span class="hosp-card-id">${escapeHTML(h.hospitalId)}</span>
+            <span class="hosp-card-name">${escapeHTML(h.hospitalName)}</span>
+          </div>
+          <span class="hosp-card-count">${h.patients} record${h.patients !== 1 ? "s" : ""}</span>
+        </div>
+        <div class="hosp-bar-track">
+          <div class="hosp-bar-fill" style="width:${barWidth}%"></div>
+        </div>
+        <div class="hosp-card-meta">
+          <span class="hosp-meta-chip hosp-meta-pct">${pct}% of total</span>
+          ${h.videos > 0 ? `<span class="hosp-meta-chip hosp-meta-video">${h.videos} video${h.videos !== 1 ? "s" : ""}</span>` : ""}
+          <span class="hosp-meta-chip hosp-meta-review">${h.reviewed}/${h.patients} reviewed (${reviewed}%)</span>
+        </div>
+      </div>`;
+  }).join("");
+}
 
-  renderDonut("ckd-stage-donut", "ckd-stage-center", "ckd-stage-legend", [
-    { label: "Normal",   value: stageCounts.Normal,  color: "#0f9a87" },
-    { label: "Stage 1",  value: stageCounts["1"],    color: "#2dd4bf" },
-    { label: "Stage 2",  value: stageCounts["2"],    color: "#60a5fa" },
-    { label: "Stage 3a", value: stageCounts["3a"],   color: "#fbbf24" },
-    { label: "Stage 3b", value: stageCounts["3b"],   color: "#f97316" },
-    { label: "Stage 4",  value: stageCounts["4"],    color: "#f87171" },
-    { label: "Stage 5",  value: stageCounts["5"],    color: "#dc2626" },
-    { label: "Other",    value: stageCounts.Other,   color: "#8b5cf6" }
-  ], String(dashboardItems.length || Object.values(stageCounts).reduce((sum, val) => sum + val, 0)));
-  renderHistogram("age-histogram", ageBuckets);
-  renderDonut("diabetic-donut", "diabetic-center", "diabetic-legend", [
-    { label: "CKD Diabetic", value: diabeticYes, color: "#0f9a87" },
-    { label: "CKD Non-Diabetic", value: diabeticNo, color: "#94a3b8" }
-  ]);
+function renderRecentRecordsTable(tbodyId, records, cols) {
+  const tbody = document.getElementById(tbodyId);
+  if (!tbody) return;
+  if (!records.length) {
+    const colCount = cols.length;
+    tbody.innerHTML = `<tr><td colspan="${colCount}" class="empty">No records yet.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = records.map((r) => {
+    const cells = cols.map((c) => {
+      if (c === "receivedAt") return `<td class="sub-date">${subFormatDate(r.receivedAt)}</td>`;
+      if (c === "reviewedAt") return r.reviewedAt
+        ? `<td><span class="sub-badge sub-badge-reviewed">Reviewed</span></td>`
+        : `<td><span class="sub-badge sub-badge-pending">Pending</span></td>`;
+      if (c === "uploadMode") return `<td>${r.uploadMode === "package" ? "ZIP" : "Separate"}</td>`;
+      return `<td>${escapeHTML(String(r[c] || "—"))}</td>`;
+    }).join("");
+    return `<tr>${cells}</tr>`;
+  }).join("");
 }
 
 function renderDonut(donutId, centerId, legendId, segments, centerValue) {

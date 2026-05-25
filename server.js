@@ -1977,21 +1977,106 @@ async function handleExportSubmissions(req, res) {
   }
 }
 
+// Compute full summary from filesystem (used when DB is not ready)
+async function getFilesystemSummary(scopeHospitalId = null) {
+  const all = await readAllSubmissions(scopeHospitalId);
+
+  // Seed hospital map from known hospitals list so zero-record hospitals still appear (admin only)
+  const hospitalMap = {};
+  if (!scopeHospitalId) {
+    for (const h of hospitals) {
+      hospitalMap[h.id] = { hospitalId: h.id, hospitalName: h.name, patients: 0, videos: 0, reviewed: 0 };
+    }
+  }
+
+  const stageCounts   = {};
+  const diabeticCounts = {};
+  const ageSeries     = {};
+  let totalVideos   = 0;
+  let totalReviewed = 0;
+
+  for (const r of all) {
+    const hid = r.hospitalId;
+    if (!hospitalMap[hid]) {
+      hospitalMap[hid] = { hospitalId: hid, hospitalName: r.hospitalName || hid, patients: 0, videos: 0, reviewed: 0 };
+    }
+    hospitalMap[hid].patients++;
+
+    const hasVideo = (r.files || []).some((f) => f.fieldName === "ultrasoundVideo");
+    if (hasVideo) { hospitalMap[hid].videos++; totalVideos++; }
+    if (r.reviewedAt) { hospitalMap[hid].reviewed++; totalReviewed++; }
+
+    // CKD stage distribution
+    const stage = r.ckdStage || "Other";
+    stageCounts[stage] = (stageCounts[stage] || 0) + 1;
+
+    // Diabetic split (exclude Normal kidney status)
+    if (r.ckdStage !== "Normal") {
+      const diab = r.diabetic === "Yes" ? "Yes" : "No";
+      diabeticCounts[diab] = (diabeticCounts[diab] || 0) + 1;
+    }
+
+    // Age buckets
+    const age = parseInt(r.age, 10);
+    if (!isNaN(age) && age >= 18) {
+      const low    = Math.floor(age / 10) * 10;
+      const bucket = age >= 80 ? "80+" : `${low}-${low + 9}`;
+      ageSeries[bucket] = (ageSeries[bucket] || 0) + 1;
+    }
+  }
+
+  const hospitalBreakdown = Object.values(hospitalMap)
+    .sort((a, b) => b.patients - a.patients);
+
+  const recentRecords = all.slice(0, 10).map((r) => ({
+    recordId:    r.recordId,
+    batchId:     r.batchId,
+    hospitalId:  r.hospitalId,
+    hospitalName:r.hospitalName,
+    uhid:        r.uhid,
+    uploadMode:  r.uploadMode,
+    receivedAt:  r.receivedAt,
+    reviewedAt:  r.reviewedAt || null
+  }));
+
+  const stageOrder = ["Normal","1","2","3a","3b","4","5","Other"];
+  const stages = Object.entries(stageCounts)
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => (stageOrder.indexOf(a.label) + 1 || 99) - (stageOrder.indexOf(b.label) + 1 || 99));
+
+  const ageBucketOrder = ["18-29","30-39","40-49","50-59","60-69","70-79","80+"];
+  const ageBuckets = Object.entries(ageSeries)
+    .map(([bucket, count]) => ({ bucket, count }))
+    .sort((a, b) => (ageBucketOrder.indexOf(a.bucket) + 1 || 99) - (ageBucketOrder.indexOf(b.bucket) + 1 || 99));
+
+  return {
+    summary: {
+      hospitals: Object.values(hospitalMap).filter((h) => h.patients > 0).length,
+      patients:  all.length,
+      videos:    totalVideos,
+      reviewed:  totalReviewed,
+      pending:   all.length - totalReviewed
+    },
+    stages,
+    diabetic:          Object.entries(diabeticCounts).map(([label, value]) => ({ label, value })),
+    hospitalBreakdown,
+    ageBuckets,
+    recentRecords
+  };
+}
+
 // GET /api/dashboard-summary
 async function handleDashboardSummary(req, res) {
   const session = await requireAuth(req, res);
   if (!session) return;
 
-  // Hospital users are scoped to their hospital; admin sees everything
   const scopeHospitalId = session.role === "hospital" ? session.hospitalId : null;
 
   try {
-    const summary = await getDatabaseSummary(scopeHospitalId);
-    if (!summary) {
-      sendJson(res, 200, { ok: true, dbConfigured: false, summary: null });
-      return;
-    }
-    sendJson(res, 200, { ok: true, dbConfigured: true, summary });
+    // Try PostgreSQL first; fall back to filesystem so metrics are always available
+    let summary = await getDatabaseSummary(scopeHospitalId);
+    if (!summary) summary = await getFilesystemSummary(scopeHospitalId);
+    sendJson(res, 200, { ok: true, dbConfigured: Boolean(dbPool && dbReady), summary });
   } catch (err) {
     sendJson(res, 500, { ok: false, error: err.message });
   }
