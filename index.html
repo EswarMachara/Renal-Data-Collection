@@ -109,7 +109,10 @@
               </label>
             </div>
           </fieldset>
-          <p class="ls-error hidden" id="login-error" role="alert"></p>
+          <div class="ls-error hidden" id="login-error" role="alert">
+            <span id="login-error-message"></span>
+            <button class="ls-error-retry hidden" id="login-error-retry" type="button">Retry</button>
+          </div>
           <button class="ls-btn" type="submit">
             <span class="ls-btn-label">Sign In</span>
             <svg class="ls-btn-arrow" viewBox="0 0 20 20" fill="none" aria-hidden="true">

@@ -25,9 +25,12 @@ const loginScreen   = document.getElementById("login-screen");
 const appNavbar     = document.getElementById("app-navbar");
 const loginForm     = document.getElementById("login-form");
 const loginError    = document.getElementById("login-error");
+const loginErrorMessage = document.getElementById("login-error-message");
+const loginErrorRetry = document.getElementById("login-error-retry");
 const navbarAuth    = document.getElementById("navbar-auth");
 const navbarUserLabel = document.getElementById("navbar-user-label");
 const logoutBtn     = document.getElementById("logout-btn");
+const LOGIN_REQUEST_TIMEOUT_MS = 12000;
 
 function normalizedStudyFlow(value) {
   return value === "kfre" ? "kfre" : "egfr";
@@ -77,16 +80,26 @@ function clearAuthSession() {
   try { sessionStorage.removeItem(HOSPITAL_SESSION_KEY); } catch { /* ignore */ }
 }
 
-function showLoginError(message) {
+function showLoginError(message, { retryable = false } = {}) {
   if (!loginError) return;
-  loginError.textContent = message;
+  if (loginErrorMessage) {
+    loginErrorMessage.textContent = message;
+  } else {
+    loginError.textContent = message;
+  }
+  loginErrorRetry?.classList.toggle("hidden", !retryable);
   loginError.classList.remove("hidden");
 }
 
 function hideLoginError() {
   if (!loginError) return;
   loginError.classList.add("hidden");
-  loginError.textContent = "";
+  if (loginErrorMessage) {
+    loginErrorMessage.textContent = "";
+  } else {
+    loginError.textContent = "";
+  }
+  loginErrorRetry?.classList.add("hidden");
 }
 
 function applyHospitalAuthContext() {
@@ -2968,6 +2981,11 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSubmi
 
 // ─── Login / logout event wiring ─────────────────────────────────────────────
 
+loginErrorRetry?.addEventListener("click", () => {
+  hideLoginError();
+  loginForm?.requestSubmit();
+});
+
 loginForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   hideLoginError();
@@ -2983,17 +3001,34 @@ loginForm?.addEventListener("submit", async (event) => {
   const submitBtn = loginForm.querySelector("[type='submit']");
   submitBtn.disabled = true;
   submitBtn.classList.add("is-loading");
+  const requestController = new AbortController();
+  const requestTimeout = window.setTimeout(() => requestController.abort(), LOGIN_REQUEST_TIMEOUT_MS);
 
   try {
     const response = await fetch("/api/auth/login", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ username, password })
+      body:    JSON.stringify({ username, password }),
+      signal:  requestController.signal
     });
-    const result = await response.json();
+    let result;
+    try {
+      result = await response.json();
+    } catch {
+      showLoginError(
+        response.status >= 500
+          ? "The portal server is temporarily unavailable. Please try again."
+          : "The portal returned an unexpected response. Please try again.",
+        { retryable: true }
+      );
+      return;
+    }
 
     if (!response.ok || !result.ok) {
-      showLoginError(result.error || "Login failed.");
+      showLoginError(
+        result.error || (response.status >= 500 ? "The portal server is temporarily unavailable. Please try again." : "Login failed."),
+        { retryable: response.status >= 500 }
+      );
       loginForm.classList.add("ls-shake");
       setTimeout(() => loginForm.classList.remove("ls-shake"), 500);
       return;
@@ -3023,11 +3058,18 @@ loginForm?.addEventListener("submit", async (event) => {
     updateConsentContext();
     updateLinkedPatientSummary();
     refreshDashboard();
-  } catch {
-    showLoginError("Network error. Please try again.");
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      showLoginError("The connection is taking too long. Please retry.", { retryable: true });
+    } else if (navigator.onLine === false) {
+      showLoginError("You appear to be offline. Check your internet connection and retry.", { retryable: true });
+    } else {
+      showLoginError("Could not reach the portal. Check your connection and retry.", { retryable: true });
+    }
     loginForm.classList.add("ls-shake");
     setTimeout(() => loginForm.classList.remove("ls-shake"), 500);
   } finally {
+    window.clearTimeout(requestTimeout);
     submitBtn.disabled = false;
     submitBtn.classList.remove("is-loading");
   }
