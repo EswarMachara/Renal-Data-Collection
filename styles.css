@@ -333,12 +333,70 @@ body {
   justify-content: center;
 }
 
+.kidney-model-placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 1.25rem;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.kidney-placeholder-organ {
+  position: relative;
+  display: block;
+  width: clamp(118px, 14vw, 148px);
+  aspect-ratio: 0.74;
+  border-radius: 58% 45% 48% 55% / 54% 44% 55% 48%;
+  background: linear-gradient(145deg, #ef9688 4%, #b84552 44%, #702d43 100%);
+  box-shadow:
+    inset 20px 18px 26px rgba(255, 218, 198, 0.32),
+    inset -18px -20px 28px rgba(57, 17, 37, 0.2),
+    0 18px 35px rgba(71, 39, 46, 0.16);
+  transform: rotate(10deg);
+}
+
+.kidney-placeholder-organ::after {
+  position: absolute;
+  top: 35%;
+  right: -2px;
+  width: 34%;
+  height: 32%;
+  content: "";
+  border-radius: 50% 0 0 50%;
+  background: #f3faf8;
+  box-shadow: -7px 0 12px rgba(106, 42, 54, 0.18);
+}
+
+.kidney-loading-label {
+  color: #64848a;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
 #kidney-model {
   width: 100%;
   height: 420px;
   background: transparent;
   --poster-color: transparent;
   border-radius: 20px;
+  opacity: 0;
+  transition: opacity 0.34s ease;
+}
+
+.renal-visual.is-model-ready #kidney-model {
+  opacity: 1;
+}
+
+.renal-visual.is-model-ready .kidney-model-placeholder {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.renal-visual.is-model-unavailable .kidney-loading-label {
+  color: #758a90;
 }
 
 .scroll-cue {
@@ -2471,6 +2529,10 @@ th {
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  .kidney-placeholder-organ {
+    animation: kidney-placeholder-float 2.8s ease-in-out infinite;
+  }
+
   .tab-panel.visible {
     animation: panel-enter 0.36s ease both;
   }
@@ -2511,6 +2573,16 @@ th {
 
   .reveal-enabled .handoff-card.is-revealed .reveal-item:nth-child(4) {
     transition-delay: 0.24s;
+  }
+}
+
+@keyframes kidney-placeholder-float {
+  0%,
+  100% {
+    transform: rotate(10deg) translateY(0);
+  }
+  50% {
+    transform: rotate(10deg) translateY(-7px);
   }
 }
 

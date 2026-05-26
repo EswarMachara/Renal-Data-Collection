@@ -232,6 +232,8 @@ const syncChoiceInputs = document.querySelectorAll("[data-sync-target]");
 const consentFlowPanels = document.querySelectorAll("[data-consent-flow]");
 const landingStudyEyebrow = document.getElementById("landing-study-eyebrow");
 const landingStudyDescription = document.getElementById("landing-study-description");
+const kidneyModel = document.getElementById("kidney-model");
+const kidneyVisual = kidneyModel?.closest(".renal-visual");
 const workflowRecordsTitle = document.getElementById("workflow-records-title");
 const workflowRecordsSubtitle = document.getElementById("workflow-records-subtitle");
 const consentPageMeta = document.getElementById("consent-page-meta");
@@ -422,6 +424,27 @@ function initializeLandingReveal() {
   }, { threshold: 0.18, rootMargin: "0px 0px -8% 0px" });
 
   revealSections.forEach((section) => observer.observe(section));
+}
+
+function initializeKidneyModelExperience() {
+  if (!kidneyModel || !kidneyVisual) return;
+
+  const markModelReady = () => {
+    kidneyVisual.classList.add("is-model-ready");
+    kidneyVisual.classList.remove("is-model-unavailable");
+  };
+
+  if (kidneyModel.loaded) {
+    markModelReady();
+    return;
+  }
+
+  kidneyModel.addEventListener("load", markModelReady, { once: true });
+  kidneyModel.addEventListener("error", () => {
+    kidneyVisual.classList.add("is-model-unavailable");
+    const loadingLabel = kidneyVisual.querySelector(".kidney-loading-label");
+    if (loadingLabel) loadingLabel.textContent = "Anatomy preview unavailable";
+  }, { once: true });
 }
 
 function scrollToLandingSection(section) {
@@ -3101,6 +3124,7 @@ document.getElementById("ls-pw-toggle")?.addEventListener("click", () => {
 
 (async function init() {
   initializeLandingReveal();
+  initializeKidneyModelExperience();
   loadStudyFlow();
   const storedStudyChoice = document.querySelector(`input[name='loginStudyFlow'][value='${state.studyFlow}']`);
   if (storedStudyChoice) storedStudyChoice.checked = true;

@@ -424,6 +424,7 @@ function serveStatic(req, res) {
   const decodedPath  = decodeURIComponent(requestUrl.pathname);
   const relativePath = decodedPath === "/" ? "index.html" : decodedPath.replace(/^\/+/, "");
   const filePath     = path.resolve(PUBLIC_DIR, relativePath);
+  const cacheControl = relativePath.startsWith("assets/") ? "public, max-age=86400" : "no-store";
 
   if (!filePath.startsWith(PUBLIC_DIR) || filePath.startsWith(DATA_DIR)) {
     sendJson(res, 403, { ok: false, error: "Forbidden." });
@@ -438,7 +439,7 @@ function serveStatic(req, res) {
     res.writeHead(200, {
       "Content-Type":  mimeTypes[path.extname(filePath)] || "application/octet-stream",
       "Content-Length": fileBuffer.length,
-      "Cache-Control":  "no-store",
+      "Cache-Control":  cacheControl,
       ...SECURITY_HEADERS
     });
     if (req.method === "HEAD") { res.end(); return; }
