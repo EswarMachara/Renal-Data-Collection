@@ -119,11 +119,12 @@ function applyHospitalAuthContext() {
     if (saveSessionButton) saveSessionButton.classList.add("hidden");
 
     // The authenticated hospital assignment is authoritative, even after account switches.
-    if (hospital) {
-      state.hospitalSession = { id: hospital.id, name: hospital.name };
-      try { sessionStorage.setItem(HOSPITAL_SESSION_KEY, JSON.stringify(state.hospitalSession)); } catch { /* ignore */ }
-      updateHospitalSessionUI();
-    }
+    // Fall back to hospitalName from auth session so patient fields unlock even if the hospitals
+    // API call hasn't completed yet when this function runs.
+    const hospitalName = hospital?.name || state.authSession.hospitalName || session.hospitalId;
+    state.hospitalSession = { id: session.hospitalId, name: hospitalName };
+    try { sessionStorage.setItem(HOSPITAL_SESSION_KEY, JSON.stringify(state.hospitalSession)); } catch { /* ignore */ }
+    updateHospitalSessionUI();
   }
 }
 
@@ -600,6 +601,9 @@ function populateHospitals() {
       select.appendChild(option);
     });
   });
+  // Re-apply hospital auth context so hospital users always see their pre-selected hospital
+  // after the options are refreshed (clearing them resets the selected value).
+  applyHospitalAuthContext();
 }
 
 function updateHospitalId() {
