@@ -574,6 +574,7 @@ const linkedCkd = document.getElementById("linked-ckd");
 const linkedDiabetic = document.getElementById("linked-diabetic");
 const reviewModal = document.getElementById("review-modal");
 const reviewContent = document.getElementById("review-content");
+const reviewTitle = document.getElementById("review-title");
 const reviewCloseBtn = document.getElementById("review-close");
 const reviewEditBtn = document.getElementById("review-edit");
 const reviewProceedBtn = document.getElementById("review-proceed");
@@ -1037,7 +1038,7 @@ function initializeFilePreviews() {
     [patientPackageFileInput, "patientPackage"],
     [ultrasoundVideoFileInput, "ultrasoundVideo"],
     [kfreClinicalDocumentInput, "clinicalDocument"]
-  ].forEach(([input, fieldName]) => {
+  ].filter(([input]) => input).forEach(([input, fieldName]) => {
     renderFilePreview(input, fieldName);
     input.addEventListener("change", () => renderFilePreview(input, fieldName));
   });
@@ -1519,6 +1520,7 @@ function updateStudySpecificUploadVisibility() {
 
   if (isKfre) {
     [leftKidneyFileInput, rightKidneyFileInput, egfrReportInput, patientPackageFileInput, ultrasoundVideoFileInput]
+      .filter(Boolean)
       .forEach((input) => { input.required = false; });
   } else {
     kfreClinicalDocumentInput.value = "";
@@ -1563,16 +1565,20 @@ function updateUploadModeVisibility() {
   }
   const mode = getUploadMode();
   separateUploadSection.classList.toggle("hidden", mode !== "separate");
-  packageUploadSection.classList.toggle("hidden", mode !== "package");
+  packageUploadSection?.classList.toggle("hidden", mode !== "package");
 
   leftKidneyFileInput.required = mode === "separate";
   rightKidneyFileInput.required = mode === "separate";
   egfrReportInput.required = mode === "separate";
-  patientPackageFileInput.required = mode === "package";
+  if (patientPackageFileInput) {
+    patientPackageFileInput.required = mode === "package";
+  }
 
   if (mode === "separate") {
-    patientPackageFileInput.value = "";
-    renderFilePreview(patientPackageFileInput, "patientPackage");
+    if (patientPackageFileInput) {
+      patientPackageFileInput.value = "";
+      renderFilePreview(patientPackageFileInput, "patientPackage");
+    }
   } else {
     leftKidneyFileInput.value = "";
     rightKidneyFileInput.value = "";
@@ -2274,7 +2280,7 @@ function buildSubmissionFromForm() {
   const leftKidneyFile = leftKidneyFileInput.files[0];
   const rightKidneyFile = rightKidneyFileInput.files[0];
   const egfrReportFile = egfrReportInput.files[0];
-  const patientPackageFile = patientPackageFileInput.files[0];
+  const patientPackageFile = patientPackageFileInput?.files[0];
   const ultrasoundVideoFile = ultrasoundVideoFileInput.files[0];
   const kfreClinicalDocumentFile = kfreClinicalDocumentInput.files[0];
 
@@ -2555,6 +2561,10 @@ function renderReviewSubmission(submission) {
 
 function showReviewSubmission(submission) {
   state.pendingSubmission = submission;
+  if (reviewTitle) {
+    reviewTitle.textContent = submission.studyFlow === "kfre" ? "Review KFRE Record" : "Review eGFR Record";
+  }
+  resetUploadProgress();
   renderReviewSubmission(submission);
   reviewProceedBtn.disabled = false;
   reviewProceedBtn.textContent = state.currentUploadSession?.signature === getSubmissionUploadSignature(submission)
@@ -2638,6 +2648,7 @@ async function uploadReviewedSubmission() {
     const submission = state.pendingSubmission;
     const result = await sendResumableSubmission(timestamp, submission);
     setUploadProgress(100, "Upload complete");
+    await new Promise((resolve) => window.setTimeout(resolve, 500));
 
     showToast(result.gcsSynced ? "Submission saved to VM and GCS." : "Submission saved to VM. Configure GCS_BUCKET for cloud sync.");
 

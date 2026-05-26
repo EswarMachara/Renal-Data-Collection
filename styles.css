@@ -2324,6 +2324,10 @@ body {
   transition: width 0.18s ease;
 }
 
+.review-dialog .upload-progress-panel {
+  margin: 0 1.4rem 1.2rem;
+}
+
 .review-overlay {
   position: fixed;
   inset: 0;
