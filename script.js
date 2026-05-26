@@ -29,6 +29,7 @@ const loginErrorMessage = document.getElementById("login-error-message");
 const loginErrorRetry = document.getElementById("login-error-retry");
 const navbarAuth    = document.getElementById("navbar-auth");
 const navbarUserLabel = document.getElementById("navbar-user-label");
+const navbarMenuToggle = document.getElementById("navbar-menu-toggle");
 const logoutBtn     = document.getElementById("logout-btn");
 const LOGIN_REQUEST_TIMEOUT_MS = 12000;
 
@@ -78,6 +79,31 @@ function clearAuthSession() {
   resetConsentRecord();
   try { sessionStorage.removeItem(AUTH_SESSION_KEY); } catch { /* ignore */ }
   try { sessionStorage.removeItem(HOSPITAL_SESSION_KEY); } catch { /* ignore */ }
+}
+
+function setMobileNavigationOpen(isOpen) {
+  if (!appNavbar || !navbarMenuToggle) return;
+  appNavbar.classList.toggle("mobile-menu-open", isOpen);
+  navbarMenuToggle.setAttribute("aria-expanded", String(isOpen));
+  navbarMenuToggle.setAttribute("aria-label", isOpen ? "Close navigation menu" : "Open navigation menu");
+}
+
+function initializeMobileNavigation() {
+  if (!appNavbar || !navbarMenuToggle) return;
+
+  navbarMenuToggle.addEventListener("click", () => {
+    setMobileNavigationOpen(!appNavbar.classList.contains("mobile-menu-open"));
+  });
+
+  appNavbar.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    setMobileNavigationOpen(false);
+    navbarMenuToggle.focus();
+  });
+
+  window.matchMedia("(min-width: 861px)").addEventListener("change", (event) => {
+    if (event.matches) setMobileNavigationOpen(false);
+  });
 }
 
 function showLoginError(message, { retryable = false } = {}) {
@@ -142,6 +168,7 @@ function applyHospitalAuthContext() {
 }
 
 function showApp() {
+  setMobileNavigationOpen(false);
   if (loginScreen)  loginScreen.classList.add("hidden");
   if (appNavbar)    appNavbar.classList.remove("hidden");
   document.querySelector(".app-container")?.classList.remove("hidden");
@@ -162,6 +189,7 @@ function showApp() {
 }
 
 function showLoginScreen() {
+  setMobileNavigationOpen(false);
   if (loginScreen)  loginScreen.classList.remove("hidden");
   if (appNavbar)    appNavbar.classList.add("hidden");
   document.querySelector(".app-container")?.classList.add("hidden");
@@ -1016,6 +1044,7 @@ function initializeFilePreviews() {
 }
 
 function activateTab(tabKey) {
+  setMobileNavigationOpen(false);
   updateWorkflowAccess();
   tabs.forEach((tab) => {
     const isActive = tab.dataset.tab === tabKey;
@@ -3125,6 +3154,7 @@ document.getElementById("ls-pw-toggle")?.addEventListener("click", () => {
 (async function init() {
   initializeLandingReveal();
   initializeKidneyModelExperience();
+  initializeMobileNavigation();
   loadStudyFlow();
   const storedStudyChoice = document.querySelector(`input[name='loginStudyFlow'][value='${state.studyFlow}']`);
   if (storedStudyChoice) storedStudyChoice.checked = true;

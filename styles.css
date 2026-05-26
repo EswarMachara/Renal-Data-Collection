@@ -79,6 +79,30 @@ body {
   mix-blend-mode: multiply;
 }
 
+.navbar-menu-toggle {
+  display: none;
+  width: 44px;
+  height: 44px;
+  border: 1px solid #d6e7e7;
+  border-radius: 12px;
+  background: #f4fbfa;
+  color: var(--teal-dark);
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 5px;
+  cursor: pointer;
+}
+
+.navbar-menu-toggle span {
+  display: block;
+  width: 20px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
 .navbar-tabs {
   display: flex;
   flex-wrap: wrap;
@@ -384,6 +408,10 @@ body {
   border-radius: 20px;
   opacity: 0;
   transition: opacity 0.34s ease;
+}
+
+#kidney-model::part(default-progress-bar) {
+  display: none;
 }
 
 .renal-visual.is-model-ready #kidney-model {
@@ -2599,10 +2627,73 @@ th {
 
 @media (max-width: 860px) {
   .navbar-content {
-    flex-direction: column;
+    padding: 0.7rem 1rem;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.65rem;
   }
 
-  .navbar-tabs,
+  .navbar-logo {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .navbar-menu-toggle {
+    display: inline-flex;
+    flex: 0 0 auto;
+  }
+
+  .navbar-container.mobile-menu-open .navbar-menu-toggle span:nth-child(1) {
+    transform: translateY(7px) rotate(45deg);
+  }
+
+  .navbar-container.mobile-menu-open .navbar-menu-toggle span:nth-child(2) {
+    opacity: 0;
+  }
+
+  .navbar-container.mobile-menu-open .navbar-menu-toggle span:nth-child(3) {
+    transform: translateY(-7px) rotate(-45deg);
+  }
+
+  .navbar-tabs {
+    order: 3;
+    flex: 1 0 100%;
+    display: none;
+    gap: 0.35rem;
+    padding-top: 0.65rem;
+    border-top: 1px solid #e6f0f1;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .navbar-container.mobile-menu-open .navbar-tabs {
+    display: flex;
+  }
+
+  .navbar-tabs .nav-link {
+    width: 100%;
+    min-height: 46px;
+    text-align: left;
+  }
+
+  .navbar-tabs .workflow-nav {
+    justify-content: space-between;
+  }
+
+  .navbar-auth {
+    order: 4;
+    width: 100%;
+    display: none;
+    margin: 0;
+    justify-content: space-between;
+    padding-top: 0.65rem;
+    border-top: 1px solid #e6f0f1;
+  }
+
+  .navbar-container.mobile-menu-open .navbar-auth {
+    display: flex;
+  }
+
   .consent-acceptance {
     flex-direction: column;
     align-items: stretch;
@@ -2620,7 +2711,17 @@ th {
   }
 
   .renal-visual {
-    min-height: 280px;
+    width: 100%;
+    min-height: clamp(280px, 70vw, 360px);
+    border-radius: 28px;
+    background: radial-gradient(circle, rgba(20, 134, 140, 0.1), transparent 66%);
+    overflow: hidden;
+  }
+
+  #kidney-model {
+    width: min(100%, 360px);
+    height: clamp(300px, 80vw, 360px);
+    margin: 0 auto;
   }
 
   .flow-strip,
@@ -2668,6 +2769,57 @@ th {
 }
 
 @media (max-width: 560px) {
+  .app-container {
+    padding: 0.7rem 0.75rem 2rem;
+  }
+
+  .logo-link {
+    gap: 0.42rem;
+  }
+
+  .logo-img {
+    height: 32px;
+  }
+
+  .nav-partner-logo {
+    width: 60px;
+  }
+
+  .nav-moe-logo {
+    height: 28px;
+  }
+
+  .nav-iisc-logo {
+    height: 35px;
+  }
+
+  .landing-shell {
+    gap: 2.25rem;
+  }
+
+  .landing-hero-stage {
+    gap: 1rem;
+    padding: 0.6rem 0 1.2rem;
+  }
+
+  .landing-hero {
+    padding: 1.45rem;
+    border-radius: 22px;
+  }
+
+  .landing-copy {
+    gap: 0.95rem;
+  }
+
+  .landing-copy h1 {
+    font-size: 1.72rem;
+    line-height: 1.2;
+  }
+
+  .landing-copy p {
+    line-height: 1.58;
+  }
+
   .landing-actions {
     align-items: stretch;
     flex-direction: column;
@@ -2679,11 +2831,34 @@ th {
   }
 
   .renal-visual {
-    min-height: 240px;
+    min-height: 294px;
   }
 
   #kidney-model {
-    height: 280px;
+    max-width: 312px;
+    height: 304px;
+  }
+
+  .scroll-cue {
+    display: none;
+  }
+
+  .handoff-card,
+  .intake-workspace,
+  .form-card,
+  .dashboard-card,
+  .consent-card {
+    padding: 1.25rem;
+    border-radius: 20px;
+  }
+
+  .flow-step {
+    min-height: auto;
+    padding: 1rem;
+  }
+
+  .renal-measurement-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -3324,6 +3499,7 @@ th {
   .ls-left { flex: 0 0 40%; padding: 2.5rem 2rem; }
   .ls-headline h2 { font-size: 1.7rem; }
   .ls-features { display: none; }
+  .navbar-container:not(.mobile-menu-open) .navbar-auth { display: none; }
 }
 
 @media (max-width: 640px) {
@@ -3333,7 +3509,10 @@ th {
   }
   .ls-form-wrap { max-width: 100%; }
   .ls-form-title { font-size: 1.75rem; }
-  .navbar-user-label { display: none; }
+  .navbar-user-label {
+    display: inline-flex;
+    max-width: calc(100vw - 124px);
+  }
 }
 
 /* ── Intake Stepper ──────────────────────────────────────────────────────────── */
@@ -3593,6 +3772,10 @@ th {
   .stp-meta { display: none; }
 }
 @media (max-width: 560px) {
+  .stp-inner { min-height: 58px; }
+  .stp-track { justify-content: space-between; }
+  .stp-label-wrap { display: none; }
+  .stp-connector { flex: 1; max-width: none; }
   .stp-label { font-size: 0.72rem; }
   .stp-node  { width: 28px; height: 28px; }
   .stp-num   { font-size: 0.75rem; }
