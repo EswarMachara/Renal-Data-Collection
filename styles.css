@@ -745,15 +745,17 @@ body {
 
 .consent-context-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.65rem;
+  grid-template-columns: 2fr 1.2fr 1fr 1.3fr;
+  gap: 0.75rem;
 }
 
 .consent-context-grid div {
   border: 1px solid #e2eef0;
   border-radius: 12px;
   background: #fff;
-  padding: 0.7rem;
+  padding: 0.85rem 1rem;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .consent-context-grid small {
@@ -767,9 +769,11 @@ body {
 
 .consent-context-grid b {
   display: block;
-  margin-top: 0.2rem;
+  margin-top: 0.25rem;
   color: #12343a;
   font-size: 0.88rem;
+  font-weight: 600;
+  word-break: break-word;
 }
 
 /* Study info card (shown at top of consent form) */
@@ -2052,15 +2056,33 @@ body {
 
 .linked-record-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
-  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.85rem;
 }
 
 .linked-record-grid div {
   border: 1px solid #e2eef0;
   border-radius: 12px;
   background: #fff;
-  padding: 0.75rem;
+  padding: 0.9rem 1rem;
+}
+
+.linked-record-grid small {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.linked-record-grid b {
+  display: block;
+  margin-top: 0.3rem;
+  color: #12343a;
+  font-size: 0.9rem;
+  font-weight: 600;
+  word-break: break-word;
 }
 
 .renal-findings-grid {
