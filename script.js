@@ -1770,8 +1770,9 @@ function updateDashboards() {
       ? "Clinical document submissions with prospective follow-up and outcome labels."
       : "Kidney ultrasound imaging and associated clinical submissions.");
     set("study-summary-records", pathway.summary?.patients ?? 0);
-    set("study-summary-files", isKfre ? pathway.summary?.documents ?? 0 : pathway.summary?.videos ?? 0);
-    set("study-summary-files-label", isKfre ? "CLINICAL DOCUMENTS" : "ULTRASOUND VIDEOS");
+    const kfreFollowUpCount = (pathway.followUp || []).find((item) => item.label === "Recorded")?.value || 0;
+    set("study-summary-files", isKfre ? kfreFollowUpCount : pathway.summary?.videos ?? 0);
+    set("study-summary-files-label", isKfre ? "FOLLOW-UP RECORDS" : "ULTRASOUND VIDEOS");
     set("study-summary-pending", pathway.summary?.pending ?? 0);
     set("admin-stage-title", isKfre ? "KFRE Cohort CKD Status" : "Kidney Status Distribution");
     set("admin-secondary-title", isKfre ? "Prospective Follow-up" : "Age Distribution");
