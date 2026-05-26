@@ -811,6 +811,93 @@ async function persistRecordsToDatabase({ batchId, batchDir, records, gcsResult 
   }
 }
 
+async function getDatabasePathwaySummary(studyFlow, scopeHospitalId = null) {
+  const filter = scopeHospitalId ? [studyFlow, scopeHospitalId] : [studyFlow];
+  const cond = scopeHospitalId
+    ? "WHERE study_flow = $1 AND hospital_id = $2"
+    : "WHERE study_flow = $1";
+  const joinedCond = scopeHospitalId
+    ? "WHERE s.study_flow = $1 AND s.hospital_id = $2"
+    : "WHERE s.study_flow = $1";
+  const diabeticCond = `${cond} AND ckd_stage <> 'Normal'`;
+
+  const [summary, stages, diabetic, files, recent, ages, kfreOutcome] = await Promise.all([
+    dbPool.query(`SELECT COUNT(*)::int AS patients, (COUNT(*) FILTER (WHERE reviewed_at IS NOT NULL))::int AS reviewed FROM submissions ${cond}`, filter),
+    dbPool.query(`SELECT ckd_stage AS label, COUNT(*)::int AS value FROM submissions ${cond} GROUP BY ckd_stage ORDER BY CASE ckd_stage WHEN 'Normal' THEN 0 WHEN '1' THEN 1 WHEN '2' THEN 2 WHEN '3a' THEN 3 WHEN '3b' THEN 4 WHEN '4' THEN 5 WHEN '5' THEN 6 WHEN 'Other' THEN 7 ELSE 8 END`, filter),
+    dbPool.query(`SELECT diabetic AS label, COUNT(*)::int AS value FROM submissions ${diabeticCond} GROUP BY diabetic`, filter),
+    dbPool.query(
+      `SELECT
+         COUNT(DISTINCT CASE WHEN sf.field_name = 'ultrasoundVideo' THEN s.record_id END)::int AS videos,
+         COUNT(DISTINCT CASE WHEN sf.field_name IN ('egfrReport', 'clinicalDocument') THEN s.record_id END)::int AS documents
+       FROM submissions s
+       LEFT JOIN submission_files sf ON sf.record_id = s.record_id
+       ${joinedCond}`,
+      filter
+    ),
+    dbPool.query(`SELECT record_id, participant_id, batch_id, hospital_id, hospital_name, uhid, study_flow, upload_mode, received_at, reviewed_at FROM submissions ${cond} ORDER BY received_at DESC LIMIT 10`, filter),
+    dbPool.query(`SELECT age FROM submissions ${cond}`, filter),
+    studyFlow === "kfre"
+      ? dbPool.query(
+        `SELECT
+           (COUNT(*) FILTER (WHERE kfre_data -> 'followUp' IS NOT NULL AND jsonb_typeof(kfre_data -> 'followUp') = 'object'))::int AS follow_up,
+           (COUNT(*) FILTER (WHERE kfre_data -> 'outcomes' ->> 'kidneyFailureEvent' = 'Yes'))::int AS failure_events
+         FROM submissions ${cond}`,
+        filter
+      )
+      : Promise.resolve({ rows: [{ follow_up: 0, failure_events: 0 }] })
+  ]);
+
+  const ageSeries = {};
+  ages.rows.forEach(({ age }) => {
+    const numericAge = Number(age);
+    if (!Number.isFinite(numericAge) || numericAge < 18) return;
+    const lowerBound = Math.floor(numericAge / 10) * 10;
+    const bucket = numericAge >= 80 ? "80+" : `${lowerBound}-${lowerBound + 9}`;
+    ageSeries[bucket] = (ageSeries[bucket] || 0) + 1;
+  });
+  const ageBucketOrder = ["18-29", "30-39", "40-49", "50-59", "60-69", "70-79", "80+"];
+  const ageBuckets = Object.entries(ageSeries)
+    .map(([bucket, count]) => ({ bucket, count }))
+    .sort((first, second) => ageBucketOrder.indexOf(first.bucket) - ageBucketOrder.indexOf(second.bucket));
+  const patients = summary.rows[0]?.patients || 0;
+  const reviewed = summary.rows[0]?.reviewed || 0;
+  const followUp = kfreOutcome.rows[0]?.follow_up || 0;
+  const failureEvents = kfreOutcome.rows[0]?.failure_events || 0;
+
+  return {
+    summary: {
+      patients,
+      videos: files.rows[0]?.videos || 0,
+      documents: files.rows[0]?.documents || 0,
+      reviewed,
+      pending: patients - reviewed
+    },
+    stages: stages.rows,
+    diabetic: diabetic.rows,
+    ageBuckets,
+    followUp: [
+      { label: "Recorded", value: followUp },
+      { label: "Baseline Only", value: patients - followUp }
+    ],
+    kidneyFailureEvents: [
+      { label: "Yes", value: failureEvents },
+      { label: "No", value: patients - failureEvents }
+    ],
+    recentRecords: recent.rows.map((row) => ({
+      recordId: row.record_id,
+      participantId: row.participant_id,
+      batchId: row.batch_id,
+      hospitalId: row.hospital_id,
+      hospitalName: row.hospital_name,
+      uhid: row.uhid,
+      studyFlow: row.study_flow || studyFlow,
+      uploadMode: row.upload_mode,
+      receivedAt: row.received_at,
+      reviewedAt: row.reviewed_at || null
+    }))
+  };
+}
+
 async function getDatabaseSummary(scopeHospitalId = null) {
   if (!dbPool || !dbReady) return null;
 
@@ -829,6 +916,8 @@ async function getDatabaseSummary(scopeHospitalId = null) {
   const hospitalBreakdownQuery = `
     SELECT h.hospital_id, h.hospital_name,
            COUNT(DISTINCT s.record_id)::int AS patients,
+           COUNT(DISTINCT CASE WHEN s.study_flow = 'egfr' THEN s.record_id END)::int AS egfr_patients,
+           COUNT(DISTINCT CASE WHEN s.study_flow = 'kfre' THEN s.record_id END)::int AS kfre_patients,
            COUNT(DISTINCT CASE WHEN sf.field_name = 'ultrasoundVideo' THEN s.record_id END)::int AS videos,
            COUNT(DISTINCT CASE WHEN s.reviewed_at IS NOT NULL THEN s.record_id END)::int AS reviewed
     FROM hospitals h
@@ -873,6 +962,12 @@ async function getDatabaseSummary(scopeHospitalId = null) {
     receivedAt: row.received_at,
     reviewedAt: row.reviewed_at || null
   }));
+  const pathwaySummaries = scopeHospitalId
+    ? null
+    : await Promise.all([
+      getDatabasePathwaySummary("egfr"),
+      getDatabasePathwaySummary("kfre")
+    ]);
 
   return {
     summary: {
@@ -888,11 +983,19 @@ async function getDatabaseSummary(scopeHospitalId = null) {
       hospitalId: row.hospital_id,
       hospitalName: row.hospital_name,
       patients: row.patients,
+      egfrPatients: row.egfr_patients,
+      kfrePatients: row.kfre_patients,
       videos: row.videos,
       reviewed: row.reviewed
     })),
     ageBuckets,
-    recentRecords
+    recentRecords,
+    ...(pathwaySummaries ? {
+      pathways: {
+        egfr: pathwaySummaries[0],
+        kfre: pathwaySummaries[1]
+      }
+    } : {})
   };
 }
 
@@ -2205,6 +2308,78 @@ async function handleExportSubmissions(req, res) {
   }
 }
 
+function getFilesystemPathwaySummary(records) {
+  const stageCounts = {};
+  const diabeticCounts = {};
+  const ageSeries = {};
+  let totalVideos = 0;
+  let totalDocuments = 0;
+  let totalReviewed = 0;
+  let followUp = 0;
+  let failureEvents = 0;
+
+  for (const record of records) {
+    const files = record.files || [];
+    if (files.some((file) => file.fieldName === "ultrasoundVideo")) totalVideos++;
+    if (files.some((file) => file.fieldName === "egfrReport" || file.fieldName === "clinicalDocument")) totalDocuments++;
+    if (record.reviewedAt) totalReviewed++;
+    const stage = record.ckdStage || "Other";
+    stageCounts[stage] = (stageCounts[stage] || 0) + 1;
+    if (stage !== "Normal") {
+      const diabetic = record.diabetic === "Yes" ? "Yes" : "No";
+      diabeticCounts[diabetic] = (diabeticCounts[diabetic] || 0) + 1;
+    }
+    const age = Number(record.age);
+    if (Number.isFinite(age) && age >= 18) {
+      const lowerBound = Math.floor(age / 10) * 10;
+      const bucket = age >= 80 ? "80+" : `${lowerBound}-${lowerBound + 9}`;
+      ageSeries[bucket] = (ageSeries[bucket] || 0) + 1;
+    }
+    if (record.kfreForm?.followUp) followUp++;
+    if (record.kfreForm?.outcomes?.kidneyFailureEvent === "Yes") failureEvents++;
+  }
+
+  const stageOrder = ["Normal", "1", "2", "3a", "3b", "4", "5", "Other"];
+  const ageBucketOrder = ["18-29", "30-39", "40-49", "50-59", "60-69", "70-79", "80+"];
+
+  return {
+    summary: {
+      patients: records.length,
+      videos: totalVideos,
+      documents: totalDocuments,
+      reviewed: totalReviewed,
+      pending: records.length - totalReviewed
+    },
+    stages: Object.entries(stageCounts)
+      .map(([label, value]) => ({ label, value }))
+      .sort((first, second) => (stageOrder.indexOf(first.label) + 1 || 99) - (stageOrder.indexOf(second.label) + 1 || 99)),
+    diabetic: Object.entries(diabeticCounts).map(([label, value]) => ({ label, value })),
+    ageBuckets: Object.entries(ageSeries)
+      .map(([bucket, count]) => ({ bucket, count }))
+      .sort((first, second) => (ageBucketOrder.indexOf(first.bucket) + 1 || 99) - (ageBucketOrder.indexOf(second.bucket) + 1 || 99)),
+    followUp: [
+      { label: "Recorded", value: followUp },
+      { label: "Baseline Only", value: records.length - followUp }
+    ],
+    kidneyFailureEvents: [
+      { label: "Yes", value: failureEvents },
+      { label: "No", value: records.length - failureEvents }
+    ],
+    recentRecords: records.slice(0, 10).map((record) => ({
+      recordId: record.recordId,
+      participantId: record.participantId || null,
+      batchId: record.batchId,
+      hospitalId: record.hospitalId,
+      hospitalName: record.hospitalName,
+      uhid: record.uhid,
+      studyFlow: record.studyFlow || "egfr",
+      uploadMode: record.uploadMode,
+      receivedAt: record.receivedAt,
+      reviewedAt: record.reviewedAt || null
+    }))
+  };
+}
+
 // Compute full summary from filesystem (used when DB is not ready)
 async function getFilesystemSummary(scopeHospitalId = null) {
   const all = await readAllSubmissions(scopeHospitalId);
@@ -2213,7 +2388,7 @@ async function getFilesystemSummary(scopeHospitalId = null) {
   const hospitalMap = {};
   if (!scopeHospitalId) {
     for (const h of hospitals) {
-      hospitalMap[h.id] = { hospitalId: h.id, hospitalName: h.name, patients: 0, videos: 0, reviewed: 0 };
+      hospitalMap[h.id] = { hospitalId: h.id, hospitalName: h.name, patients: 0, egfrPatients: 0, kfrePatients: 0, videos: 0, reviewed: 0 };
     }
   }
 
@@ -2226,9 +2401,11 @@ async function getFilesystemSummary(scopeHospitalId = null) {
   for (const r of all) {
     const hid = r.hospitalId;
     if (!hospitalMap[hid]) {
-      hospitalMap[hid] = { hospitalId: hid, hospitalName: r.hospitalName || hid, patients: 0, videos: 0, reviewed: 0 };
+      hospitalMap[hid] = { hospitalId: hid, hospitalName: r.hospitalName || hid, patients: 0, egfrPatients: 0, kfrePatients: 0, videos: 0, reviewed: 0 };
     }
     hospitalMap[hid].patients++;
+    if (r.studyFlow === "kfre") hospitalMap[hid].kfrePatients++;
+    else hospitalMap[hid].egfrPatients++;
 
     const hasVideo = (r.files || []).some((f) => f.fieldName === "ultrasoundVideo");
     if (hasVideo) { hospitalMap[hid].videos++; totalVideos++; }
@@ -2291,7 +2468,13 @@ async function getFilesystemSummary(scopeHospitalId = null) {
     diabetic:          Object.entries(diabeticCounts).map(([label, value]) => ({ label, value })),
     hospitalBreakdown,
     ageBuckets,
-    recentRecords
+    recentRecords,
+    ...(!scopeHospitalId ? {
+      pathways: {
+        egfr: getFilesystemPathwaySummary(all.filter((record) => record.studyFlow !== "kfre")),
+        kfre: getFilesystemPathwaySummary(all.filter((record) => record.studyFlow === "kfre"))
+      }
+    } : {})
   };
 }
 

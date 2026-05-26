@@ -1219,78 +1219,118 @@
           <span class="hero-update" id="dashboard-updated-at">Awaiting live data</span>
           <div class="hero-divider"></div>
         </div>
+        <div class="admin-pathway-switcher" role="tablist" aria-label="Select dashboard view">
+          <button class="admin-pathway-tab active" id="admin-overview-tab" type="button" role="tab" aria-selected="true" aria-controls="admin-overview-panel" tabindex="0" data-admin-dashboard-view="overview">
+            Overview
+          </button>
+          <button class="admin-pathway-tab" id="admin-egfr-tab" type="button" role="tab" aria-selected="false" aria-controls="admin-study-panel" tabindex="-1" data-admin-dashboard-view="egfr">
+            <span class="pathway-dot egfr"></span>eGFR Study <span class="pathway-count" id="admin-egfr-tab-count">0</span>
+          </button>
+          <button class="admin-pathway-tab" id="admin-kfre-tab" type="button" role="tab" aria-selected="false" aria-controls="admin-study-panel" tabindex="-1" data-admin-dashboard-view="kfre">
+            <span class="pathway-dot kfre"></span>KFRE Study <span class="pathway-count" id="admin-kfre-tab-count">0</span>
+          </button>
+        </div>
         <article class="panel-card flow-card dashboard-card">
-          <div class="summary-grid">
-            <div class="summary-card">
-              <span class="summary-value" id="summary-hospitals">0</span>
-              <span class="summary-label">COLLABORATING HOSPITALS</span>
+          <section class="admin-dashboard-panel visible" id="admin-overview-panel" role="tabpanel" aria-labelledby="admin-overview-tab" data-admin-panel="overview">
+            <div class="summary-grid admin-overview-summary">
+              <div class="summary-card">
+                <span class="summary-value" id="summary-hospitals">0</span>
+                <span class="summary-label">COLLABORATING HOSPITALS</span>
+              </div>
+              <div class="summary-card pathway-summary-egfr">
+                <span class="summary-value" id="summary-egfr-records">0</span>
+                <span class="summary-label">eGFR PATIENT RECORDS</span>
+              </div>
+              <div class="summary-card pathway-summary-kfre">
+                <span class="summary-value" id="summary-kfre-records">0</span>
+                <span class="summary-label">KFRE PATIENT RECORDS</span>
+              </div>
             </div>
-            <div class="summary-card">
-              <span class="summary-value" id="summary-findings">0</span>
-              <span class="summary-label">PATIENT RECORDS RECEIVED</span>
-            </div>
-            <div class="summary-card">
-              <span class="summary-value" id="summary-videos">0</span>
-              <span class="summary-label">ULTRASOUND VIDEOS</span>
-            </div>
-            <div class="summary-card">
-              <span class="summary-value" id="summary-pending">0</span>
-              <span class="summary-label">AWAITING ADMIN REVIEW</span>
-            </div>
-          </div>
 
-          <!-- Per-hospital breakdown -->
-          <section class="hosp-breakdown-section">
-            <div class="viz-header">
-              <h3>Records per Partner Hospital</h3>
-              <span class="viz-note" id="hosp-breakdown-note">Loading…</span>
-            </div>
-            <div class="hosp-breakdown-grid" id="hosp-breakdown-grid">
-              <p class="empty">Loading hospital data…</p>
-            </div>
+            <section class="hosp-breakdown-section">
+              <div class="viz-header">
+                <h3>Partner Hospital Participation</h3>
+                <span class="viz-note" id="hosp-breakdown-note">Loading…</span>
+              </div>
+              <div class="dashboard-context-note">
+                Compare contributions by study pathway without combining clinically different records.
+              </div>
+              <div class="hosp-breakdown-grid" id="hosp-breakdown-grid">
+                <p class="empty">Loading hospital data…</p>
+              </div>
+            </section>
           </section>
 
-          <div class="viz-grid">
-            <section class="viz-card">
-              <div class="viz-header"><h3>Kidney Status Distribution</h3></div>
-              <div class="donut-wrap">
-                <div class="donut" id="ckd-stage-donut" aria-label="Kidney status distribution"></div>
-                <div class="donut-center" id="ckd-stage-center">--</div>
+          <section class="admin-dashboard-panel" id="admin-study-panel" role="tabpanel" aria-label="Selected study dashboard" data-admin-panel="study">
+            <header class="admin-study-header" id="admin-study-header">
+              <div>
+                <span class="admin-study-badge" id="admin-study-badge">eGFR STUDY</span>
+                <h2 id="admin-study-title">Ultrasound and Clinical Intake</h2>
+                <p id="admin-study-description">Kidney imaging and associated clinical submissions.</p>
               </div>
-              <div class="viz-legend" id="ckd-stage-legend"></div>
-            </section>
-            <section class="viz-card">
-              <div class="viz-header">
-                <h3>Age Distribution</h3>
-                <span class="viz-note">Adults 18+, with 80+ grouped</span>
+            </header>
+            <div class="summary-grid study-summary-grid">
+              <div class="summary-card">
+                <span class="summary-value" id="study-summary-records">0</span>
+                <span class="summary-label">PATIENT RECORDS</span>
               </div>
-              <div class="histogram" id="age-histogram" aria-label="Age distribution"></div>
-            </section>
-          </div>
-          <div class="viz-grid">
-            <section class="viz-card">
-              <div class="viz-header"><h3>CKD Diabetic vs Non-Diabetic</h3></div>
-              <div class="donut-wrap">
-                <div class="donut" id="diabetic-donut" aria-label="Diabetic distribution"></div>
-                <div class="donut-center" id="diabetic-center">--</div>
+              <div class="summary-card">
+                <span class="summary-value" id="study-summary-files">0</span>
+                <span class="summary-label" id="study-summary-files-label">ULTRASOUND VIDEOS</span>
               </div>
-              <div class="viz-legend" id="diabetic-legend"></div>
-            </section>
-          </div>
+              <div class="summary-card">
+                <span class="summary-value" id="study-summary-pending">0</span>
+                <span class="summary-label">AWAITING ADMIN REVIEW</span>
+              </div>
+            </div>
 
-          <section class="table-section">
-            <div class="viz-header">
-              <h3>Recent Records</h3>
-              <span class="viz-note">Latest submissions across all hospitals</span>
+            <div class="viz-grid admin-viz-grid">
+              <section class="viz-card">
+                <div class="viz-header"><h3 id="admin-stage-title">Kidney Status Distribution</h3></div>
+                <div class="donut-wrap">
+                  <div class="donut" id="ckd-stage-donut" aria-label="Kidney status distribution"></div>
+                  <div class="donut-center" id="ckd-stage-center">--</div>
+                </div>
+                <div class="viz-legend" id="ckd-stage-legend"></div>
+              </section>
+              <section class="viz-card">
+                <div class="viz-header">
+                  <h3 id="admin-secondary-title">Age Distribution</h3>
+                  <span class="viz-note" id="admin-secondary-note">Adults 18+, with 80+ grouped</span>
+                </div>
+                <div class="histogram" id="age-histogram" aria-label="Age distribution"></div>
+                <div class="hidden" id="kfre-followup-widget">
+                  <div class="donut-wrap">
+                    <div class="donut" id="kfre-followup-donut" aria-label="KFRE follow-up availability"></div>
+                    <div class="donut-center" id="kfre-followup-center">--</div>
+                  </div>
+                  <div class="viz-legend" id="kfre-followup-legend"></div>
+                </div>
+              </section>
+              <section class="viz-card">
+                <div class="viz-header"><h3 id="admin-tertiary-title">CKD Diabetic vs Non-Diabetic</h3></div>
+                <div class="donut-wrap">
+                  <div class="donut" id="diabetic-donut" aria-label="Pathway outcome distribution"></div>
+                  <div class="donut-center" id="diabetic-center">--</div>
+                </div>
+                <div class="viz-legend" id="diabetic-legend"></div>
+              </section>
             </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr><th>Patient ID</th><th>Hospital</th><th>Method</th><th>Received</th><th>Status</th></tr>
-                </thead>
-                <tbody id="recent-body"></tbody>
-              </table>
-            </div>
+
+            <section class="table-section">
+              <div class="viz-header">
+                <h3 id="admin-recent-title">Recent eGFR Records</h3>
+                <span class="viz-note" id="admin-recent-note">Latest eGFR submissions across all hospitals</span>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr><th>Patient ID</th><th>Hospital</th><th>Method</th><th>Received</th><th>Status</th></tr>
+                  </thead>
+                  <tbody id="recent-body"></tbody>
+                </table>
+              </div>
+            </section>
           </section>
         </article>
       </div>

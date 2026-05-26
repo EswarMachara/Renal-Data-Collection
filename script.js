@@ -4,6 +4,7 @@ const state = {
   uploadProgress: 0,
   hospitalSession: null,
   backendDashboard: null,
+  adminDashboardView: "overview",
   authSession: null,   // { token, userId, hospitalId, hospitalName, role, expiresAt }
   studyFlow: "egfr",
   consentId: null,     // set after /api/consent succeeds
@@ -1654,6 +1655,7 @@ async function loadBackendDashboard() {
 }
 
 function redrawRecentUploads() {
+  if (state.authSession?.role === "admin" && state.backendDashboard) return;
   recentBody.innerHTML = "";
 
   if (!state.recentUploads?.length) {
@@ -1689,6 +1691,22 @@ const CKD_DONUT_SEGMENTS = (counts) => [
   { label: "Other",    value: counts["Other"]  || 0, color: "#8b5cf6" }
 ];
 
+const adminDashboardTabs = [...document.querySelectorAll("[data-admin-dashboard-view]")];
+adminDashboardTabs.forEach((button, index) => {
+  button.addEventListener("click", () => {
+    state.adminDashboardView = button.dataset.adminDashboardView;
+    updateDashboards();
+  });
+  button.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    const offset = event.key === "ArrowRight" ? 1 : -1;
+    const nextButton = adminDashboardTabs[(index + offset + adminDashboardTabs.length) % adminDashboardTabs.length];
+    nextButton.focus();
+    nextButton.click();
+  });
+});
+
 function updateDashboards() {
   const d    = state.backendDashboard;
   const role = state.authSession?.role;
@@ -1704,37 +1722,99 @@ function updateDashboards() {
   const nowStr = `Last updated: ${new Date().toLocaleTimeString()}`;
 
   if (role === "admin") {
-    // ── Admin summary cards ───────────────────────────────────────────────
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    const emptyPathway = {
+      summary: { patients: 0, videos: 0, documents: 0, pending: 0 },
+      stages: [],
+      diabetic: [],
+      ageBuckets: [],
+      followUp: [],
+      kidneyFailureEvents: [],
+      recentRecords: []
+    };
+    const egfr = d.pathways?.egfr || { ...emptyPathway, ...d, summary: d.summary || emptyPathway.summary };
+    const kfre = d.pathways?.kfre || emptyPathway;
+    const currentView = state.adminDashboardView === "egfr" || state.adminDashboardView === "kfre"
+      ? state.adminDashboardView
+      : "overview";
+
     set("summary-hospitals", d.summary?.hospitals ?? 0);
-    set("summary-findings",  d.summary?.patients  ?? 0);
-    set("summary-videos",    d.summary?.videos    ?? 0);
-    set("summary-pending",   d.summary?.pending   ?? 0);
+    set("summary-egfr-records", egfr.summary?.patients ?? 0);
+    set("summary-kfre-records", kfre.summary?.patients ?? 0);
+    set("admin-egfr-tab-count", egfr.summary?.patients ?? 0);
+    set("admin-kfre-tab-count", kfre.summary?.patients ?? 0);
     const updEl = document.getElementById("dashboard-updated-at");
     if (updEl) updEl.textContent = nowStr;
 
-    // ── Per-hospital breakdown ────────────────────────────────────────────
-    renderHospitalBreakdown(d.hospitalBreakdown || [], d.summary?.patients || 0);
+    document.querySelectorAll("[data-admin-dashboard-view]").forEach((button) => {
+      const isActive = button.dataset.adminDashboardView === currentView;
+      button.classList.toggle("active", isActive);
+      button.setAttribute("aria-selected", String(isActive));
+      button.setAttribute("tabindex", isActive ? "0" : "-1");
+    });
+    document.querySelectorAll("[data-admin-panel]").forEach((panel) => {
+      const panelView = panel.dataset.adminPanel;
+      panel.classList.toggle("visible", panelView === currentView || (panelView === "study" && currentView !== "overview"));
+    });
 
-    // ── Charts ───────────────────────────────────────────────────────────
+    renderHospitalBreakdown(d.hospitalBreakdown || [], d.summary?.patients || 0);
+    if (currentView === "overview") return;
+
+    const pathway = currentView === "kfre" ? kfre : egfr;
+    const isKfre = currentView === "kfre";
+    const studyHeader = document.getElementById("admin-study-header");
+    studyHeader?.classList.toggle("is-kfre", isKfre);
+    set("admin-study-badge", isKfre ? "KFRE STUDY" : "eGFR STUDY");
+    set("admin-study-title", isKfre ? "Kidney Failure Risk Assessment" : "Ultrasound and Clinical Intake");
+    set("admin-study-description", isKfre
+      ? "Clinical document submissions with prospective follow-up and outcome labels."
+      : "Kidney ultrasound imaging and associated clinical submissions.");
+    set("study-summary-records", pathway.summary?.patients ?? 0);
+    set("study-summary-files", isKfre ? pathway.summary?.documents ?? 0 : pathway.summary?.videos ?? 0);
+    set("study-summary-files-label", isKfre ? "CLINICAL DOCUMENTS" : "ULTRASOUND VIDEOS");
+    set("study-summary-pending", pathway.summary?.pending ?? 0);
+    set("admin-stage-title", isKfre ? "KFRE Cohort CKD Status" : "Kidney Status Distribution");
+    set("admin-secondary-title", isKfre ? "Prospective Follow-up" : "Age Distribution");
+    set("admin-secondary-note", isKfre ? "Follow-up information recorded" : "Adults 18+, with 80+ grouped");
+    set("admin-tertiary-title", isKfre ? "Kidney Failure Events" : "CKD Diabetic vs Non-Diabetic");
+    set("admin-recent-title", isKfre ? "Recent KFRE Records" : "Recent eGFR Records");
+    set("admin-recent-note", isKfre
+      ? "Latest clinical document submissions across all hospitals"
+      : "Latest eGFR submissions across all hospitals");
+
     const stageCounts = {};
-    (d.stages || []).forEach((s) => { stageCounts[s.label] = s.value; });
-    const total = d.summary?.patients || 0;
+    (pathway.stages || []).forEach((s) => { stageCounts[s.label] = s.value; });
+    const total = pathway.summary?.patients || 0;
     renderDonut("ckd-stage-donut", "ckd-stage-center", "ckd-stage-legend",
       CKD_DONUT_SEGMENTS(stageCounts), String(total));
 
-    const ageBuckets = (d.ageBuckets || []).map((b) => ({ label: b.bucket, value: b.count }));
-    renderHistogram("age-histogram", ageBuckets);
+    const ageHistogram = document.getElementById("age-histogram");
+    const followupWidget = document.getElementById("kfre-followup-widget");
+    ageHistogram?.classList.toggle("hidden", isKfre);
+    followupWidget?.classList.toggle("hidden", !isKfre);
+    if (isKfre) {
+      const followUp = Object.fromEntries((pathway.followUp || []).map((item) => [item.label, item.value]));
+      renderDonut("kfre-followup-donut", "kfre-followup-center", "kfre-followup-legend", [
+        { label: "Follow-up Recorded", value: followUp.Recorded || 0, color: "#2563eb" },
+        { label: "Baseline Only", value: followUp["Baseline Only"] || 0, color: "#cbd5e1" }
+      ], String(total));
+      const eventCounts = Object.fromEntries((pathway.kidneyFailureEvents || []).map((item) => [item.label, item.value]));
+      renderDonut("diabetic-donut", "diabetic-center", "diabetic-legend", [
+        { label: "Event Recorded", value: eventCounts.Yes || 0, color: "#dc2626" },
+        { label: "No Event Recorded", value: eventCounts.No || 0, color: "#2563eb" }
+      ], String(total));
+    } else {
+      const ageBuckets = (pathway.ageBuckets || []).map((b) => ({ label: b.bucket, value: b.count }));
+      renderHistogram("age-histogram", ageBuckets);
+      const diabYes = (pathway.diabetic || []).find((x) => x.label === "Yes")?.value || 0;
+      const diabNo  = (pathway.diabetic || []).find((x) => x.label === "No")?.value  || 0;
+      renderDonut("diabetic-donut", "diabetic-center", "diabetic-legend", [
+        { label: "CKD Diabetic",     value: diabYes, color: "#0f9a87" },
+        { label: "CKD Non-Diabetic", value: diabNo,  color: "#94a3b8" }
+      ]);
+    }
 
-    const diabYes = (d.diabetic || []).find((x) => x.label === "Yes")?.value || 0;
-    const diabNo  = (d.diabetic || []).find((x) => x.label === "No")?.value  || 0;
-    renderDonut("diabetic-donut", "diabetic-center", "diabetic-legend", [
-      { label: "CKD Diabetic",     value: diabYes, color: "#0f9a87" },
-      { label: "CKD Non-Diabetic", value: diabNo,  color: "#94a3b8" }
-    ]);
-
-    // ── Recent records table ──────────────────────────────────────────────
-    renderRecentRecordsTable("recent-body", d.recentRecords || [], ["uhid","hospitalId","uploadMode","receivedAt","reviewedAt"]);
+    renderRecentRecordsTable("recent-body", pathway.recentRecords || [], ["uhid","hospitalId","uploadMode","receivedAt","reviewedAt"]);
 
   } else {
     // ── Hospital summary cards ────────────────────────────────────────────
@@ -1781,7 +1861,10 @@ function renderHospitalBreakdown(breakdown, grandTotal) {
 
   grid.innerHTML = breakdown.map((h) => {
     const pct      = grandTotal > 0 ? Math.round((h.patients / grandTotal) * 100) : 0;
-    const barWidth = Math.round((h.patients / maxPatients) * 100);
+    const egfrPatients = h.egfrPatients ?? h.patients;
+    const kfrePatients = h.kfrePatients ?? 0;
+    const egfrWidth = Math.round((egfrPatients / maxPatients) * 100);
+    const kfreWidth = Math.round((kfrePatients / maxPatients) * 100);
     const reviewed = h.patients > 0 ? Math.round((h.reviewed / h.patients) * 100) : 0;
     return `
       <div class="hosp-breakdown-card ${h.patients === 0 ? "hosp-card-empty" : ""}">
@@ -1792,12 +1875,16 @@ function renderHospitalBreakdown(breakdown, grandTotal) {
           </div>
           <span class="hosp-card-count">${h.patients} record${h.patients !== 1 ? "s" : ""}</span>
         </div>
+        <div class="hosp-pathway-totals">
+          <div class="hosp-pathway-total"><span>eGFR</span><strong>${egfrPatients}</strong></div>
+          <div class="hosp-pathway-total kfre"><span>KFRE</span><strong>${kfrePatients}</strong></div>
+        </div>
         <div class="hosp-bar-track">
-          <div class="hosp-bar-fill" style="width:${barWidth}%"></div>
+          ${egfrPatients ? `<div class="hosp-bar-fill" style="width:${egfrWidth}%"></div>` : ""}
+          ${kfrePatients ? `<div class="hosp-bar-fill kfre" style="width:${kfreWidth}%"></div>` : ""}
         </div>
         <div class="hosp-card-meta">
           <span class="hosp-meta-chip hosp-meta-pct">${pct}% of total</span>
-          ${h.videos > 0 ? `<span class="hosp-meta-chip hosp-meta-video">${h.videos} video${h.videos !== 1 ? "s" : ""}</span>` : ""}
           <span class="hosp-meta-chip hosp-meta-review">${h.reviewed}/${h.patients} reviewed (${reviewed}%)</span>
         </div>
       </div>`;

@@ -1651,6 +1651,7 @@ body {
 }
 
 .hosp-bar-track {
+  display: flex;
   height: 7px;
   background: #e8f4f4;
   border-radius: 99px;
@@ -1662,6 +1663,10 @@ body {
   border-radius: 99px;
   transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
   min-width: 4px;
+}
+
+.hosp-bar-fill.kfre {
+  background: linear-gradient(90deg, #2563eb, #60a5fa);
 }
 
 .hosp-card-meta {
@@ -1686,6 +1691,180 @@ body {
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 1.2rem;
   margin-bottom: 1.8rem;
+}
+
+.admin-pathway-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem;
+  margin: 0 0 1.15rem;
+  border: 1px solid #d8e8eb;
+  border-radius: 16px;
+  background: #f3f8f8;
+}
+
+.admin-pathway-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 46px;
+  padding: 0.65rem 1.15rem;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #526376;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 0.2s ease, box-shadow 0.2s ease, color 0.2s ease;
+}
+
+.admin-pathway-tab:hover {
+  background: rgba(255, 255, 255, 0.7);
+  color: #123f47;
+}
+
+.admin-pathway-tab.active {
+  background: #ffffff;
+  color: #103f45;
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.08);
+}
+
+.pathway-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+}
+
+.pathway-dot.egfr {
+  background: #0f9a87;
+}
+
+.pathway-dot.kfre {
+  background: #2563eb;
+}
+
+.pathway-count {
+  min-width: 22px;
+  padding: 0.12rem 0.42rem;
+  border-radius: 99px;
+  background: #e8f4f4;
+  color: #0e6a6f;
+  font-size: 0.74rem;
+  text-align: center;
+}
+
+.admin-pathway-tab[data-admin-dashboard-view="kfre"] .pathway-count {
+  background: #e8f0fe;
+  color: #2359ae;
+}
+
+.admin-dashboard-panel {
+  display: none;
+}
+
+.admin-dashboard-panel.visible {
+  display: block;
+}
+
+.admin-overview-summary {
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+}
+
+.pathway-summary-egfr .summary-value {
+  color: #0f9a87;
+}
+
+.pathway-summary-kfre .summary-value {
+  color: #2563eb;
+}
+
+.dashboard-context-note {
+  margin-top: 0.75rem;
+  color: #64748b;
+  font-size: 0.88rem;
+}
+
+.admin-study-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.4rem;
+  padding: 1.15rem 1.3rem;
+  border-radius: 16px;
+  border: 1px solid #d4eeeb;
+  background: linear-gradient(110deg, #f0fbf9, #ffffff);
+}
+
+.admin-study-header.is-kfre {
+  border-color: #d9e7ff;
+  background: linear-gradient(110deg, #f3f7ff, #ffffff);
+}
+
+.admin-study-badge {
+  display: inline-flex;
+  margin-bottom: 0.42rem;
+  padding: 0.22rem 0.62rem;
+  border-radius: 999px;
+  background: #dcf6f2;
+  color: #087b6d;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+}
+
+.admin-study-header.is-kfre .admin-study-badge {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.admin-study-header h2 {
+  margin: 0 0 0.32rem;
+  color: #122b42;
+  font-size: 1.28rem;
+}
+
+.admin-study-header p {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.92rem;
+}
+
+.study-summary-grid {
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+}
+
+.admin-viz-grid {
+  grid-template-columns: repeat(3, minmax(230px, 1fr));
+}
+
+.hosp-pathway-totals {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.45rem;
+}
+
+.hosp-pathway-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.48rem 0.62rem;
+  border-radius: 9px;
+  background: #f0faf9;
+  color: #087b6d;
+  font-size: 0.77rem;
+  font-weight: 650;
+}
+
+.hosp-pathway-total.kfre {
+  background: #eef4ff;
+  color: #2459b1;
+}
+
+.hosp-pathway-total strong {
+  font-size: 0.96rem;
 }
 
 .hospital-grid {
@@ -2569,6 +2748,10 @@ th {
     animation: panel-enter 0.36s ease both;
   }
 
+  .admin-dashboard-panel.visible {
+    animation: panel-enter 0.25s ease both;
+  }
+
   .reveal-enabled .reveal-section {
     opacity: 0;
     transform: translateY(48px) scale(0.985);
@@ -2755,6 +2938,35 @@ th {
     grid-template-columns: 1fr;
   }
 
+  .admin-pathway-switcher {
+    display: flex;
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .admin-pathway-switcher::-webkit-scrollbar {
+    display: none;
+  }
+
+  .admin-pathway-tab {
+    flex: 1 0 max-content;
+    justify-content: center;
+    padding-inline: 0.82rem;
+  }
+
+  .admin-study-header {
+    padding: 1rem;
+  }
+
+  .admin-viz-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hosp-breakdown-grid {
+    grid-template-columns: 1fr;
+  }
+
   .clinical-group-heading {
     flex-direction: column;
     gap: 0.25rem;
@@ -2775,6 +2987,16 @@ th {
 @media (max-width: 560px) {
   .app-container {
     padding: 0.7rem 0.75rem 2rem;
+  }
+
+  .admin-pathway-tab {
+    gap: 0.32rem;
+    padding-inline: 0.55rem;
+    font-size: 0.82rem;
+  }
+
+  .admin-pathway-tab .pathway-count {
+    display: none;
   }
 
   .logo-link {
