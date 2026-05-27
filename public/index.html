@@ -384,7 +384,7 @@
         <p>Participant information linked to the current patient intake session</p>
         <span class="hero-meta" id="consent-page-meta">eGFR Study · Please verify the patient context before continuing</span>
       </div>
-      <div class="stage-access-banner hidden" id="consent-access-banner" role="status">
+      <div class="stage-access-banner hidden" id="consent-access-banner" role="status" aria-live="polite">
         <span class="stage-access-badge">Preview only</span>
         <div>
           <strong>Patient setup is required before consent can be recorded.</strong>
@@ -568,7 +568,7 @@
         <p>Patient identification, demographics, and clinical history</p>
         <span class="hero-meta" id="questionnaire-page-meta">eGFR Research Intake Questionnaire</span>
       </div>
-      <div class="stage-access-banner hidden" id="questionnaire-access-banner" role="status">
+      <div class="stage-access-banner hidden" id="questionnaire-access-banner" role="status" aria-live="polite">
         <span class="stage-access-badge">Preview only</span>
         <div>
           <strong>Recorded e-consent is required before questionnaire entry.</strong>
@@ -813,7 +813,7 @@
         <p id="clinical-page-subtitle">Ultrasound findings and clinical record uploads</p>
         <span class="hero-meta" id="clinical-page-meta">eGFR Study · Ultrasound and clinical files</span>
       </div>
-      <div class="stage-access-banner hidden" id="egfr-access-banner" role="status">
+      <div class="stage-access-banner hidden" id="egfr-access-banner" role="status" aria-live="polite">
         <span class="stage-access-badge">Preview only</span>
         <div>
           <strong>Complete the questionnaire before clinical findings and files can be entered.</strong>
@@ -1542,7 +1542,7 @@
     </section>
   </div>
 
-  <div id="toast" class="toast" aria-live="polite"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <script src="./script.js"></script>
 </body>
