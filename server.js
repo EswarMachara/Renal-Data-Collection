@@ -1155,9 +1155,21 @@ function normalizeKidneyFinding(rawFinding, label) {
 
 function normalizeUltrasoundFindings(rawFindings) {
   const findings = rawFindings && typeof rawFindings === "object" && !Array.isArray(rawFindings) ? rawFindings : {};
+  const imageQuality = findings.imageQuality && typeof findings.imageQuality === "object" && !Array.isArray(findings.imageQuality)
+    ? findings.imageQuality
+    : {};
+  const annotationDetails = findings.annotationDetails && typeof findings.annotationDetails === "object" && !Array.isArray(findings.annotationDetails)
+    ? findings.annotationDetails
+    : {};
   return {
     right: normalizeKidneyFinding(findings.right, "Right"),
-    left:  normalizeKidneyFinding(findings.left, "Left")
+    left:  normalizeKidneyFinding(findings.left, "Left"),
+    imageQuality: {
+      adequateForAnalysis: optionalYesNo(imageQuality, "adequateForAnalysis", "Image adequate for analysis")
+    },
+    annotationDetails: {
+      kidneyBoundingPointsDetected: optionalYesNo(annotationDetails, "kidneyBoundingPointsDetected", "Kidney bounding points detected")
+    }
   };
 }
 

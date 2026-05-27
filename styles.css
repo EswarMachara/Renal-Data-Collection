@@ -2403,6 +2403,34 @@ body {
   background: #f8fafc;
 }
 
+.ultrasound-quality-card {
+  margin-top: 1.25rem;
+  border: 1px solid #d6e7e7;
+  border-radius: 20px;
+  background: linear-gradient(110deg, #f5fbfa, #ffffff);
+  padding: clamp(1rem, 2vw, 1.35rem);
+  display: grid;
+  gap: 1.1rem;
+}
+
+.ultrasound-quality-card h3 {
+  margin: 0 0 0.24rem;
+  color: #083f45;
+  font-size: 1.04rem;
+}
+
+.ultrasound-quality-card p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.86rem;
+}
+
+.ultrasound-quality-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
 .hint-box {
   border: 1px solid var(--border-color);
   border-radius: 10px;
@@ -2917,6 +2945,10 @@ th {
   .intake-session-grid,
   .renal-findings-grid,
   .renal-paired-choices {
+    grid-template-columns: 1fr;
+  }
+
+  .ultrasound-quality-grid {
     grid-template-columns: 1fr;
   }
 

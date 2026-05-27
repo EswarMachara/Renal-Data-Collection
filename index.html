@@ -57,7 +57,7 @@
           <span class="ls-portal-badge">Hospital Portal</span>
         </div>
         <h1 class="ls-form-title">Welcome back</h1>
-        <p class="ls-form-subtitle">Sign in with your hospital credentials to continue</p>
+        <p class="ls-form-subtitle">Sign in with your portal credentials to continue</p>
 
         <form id="login-form" class="ls-form" novalidate autocomplete="on">
           <div class="ls-field">
@@ -1003,6 +1003,28 @@
                 </div>
               </section>
             </div>
+            <section class="ultrasound-quality-card" aria-labelledby="ultrasound-quality-title">
+              <div>
+                <h3 id="ultrasound-quality-title">Image Quality</h3>
+                <p>Record suitability for analysis and annotation availability.</p>
+              </div>
+              <div class="ultrasound-quality-grid">
+                <div class="finding-choice-block">
+                  <label>Adequate for analysis</label>
+                  <div class="choice-row finding-choice-row compact-two">
+                    <label class="choice-tile"><input type="radio" name="imageQualityAdequate" value="Yes" /> Yes</label>
+                    <label class="choice-tile"><input type="radio" name="imageQualityAdequate" value="No" /> No</label>
+                  </div>
+                </div>
+                <div class="finding-choice-block">
+                  <label>Annotation Details: Kidney bounding points detected</label>
+                  <div class="choice-row finding-choice-row compact-two">
+                    <label class="choice-tile"><input type="radio" name="kidneyBoundingPointsDetected" value="Yes" /> Yes</label>
+                    <label class="choice-tile"><input type="radio" name="kidneyBoundingPointsDetected" value="No" /> No</label>
+                  </div>
+                </div>
+              </div>
+            </section>
           </div>
 
           <div class="form-section" id="egfr-upload-method-section">

@@ -134,10 +134,13 @@ function applyHospitalAuthContext() {
   const sessionInstruction = document.getElementById("hospital-session-instruction");
   const saveSessionButton = document.getElementById("save-hospital-session");
   if (!session || session.role === "admin") {
-    // Admin and unauthenticated: keep dropdown editable
     if (landingHospitalInput) landingHospitalInput.disabled = false;
     if (hospitalNameInput)    hospitalNameInput.disabled = false;
-    if (sessionInstruction) sessionInstruction.textContent = "Choose once at the start of the day or browser session.";
+    if (sessionInstruction) {
+      sessionInstruction.textContent = session?.role === "admin"
+        ? "Select the hospital for which you are uploading this patient record."
+        : "Choose once at the start of the day or browser session.";
+    }
     if (saveSessionButton) saveSessionButton.classList.remove("hidden");
     return;
   }
@@ -716,7 +719,9 @@ function saveHospitalSession() {
   }
 
   updateHospitalSessionUI();
-  showToast("Hospital session saved. You can now add patients.");
+  showToast(state.authSession?.role === "admin"
+    ? "Admin upload session saved. You can now add patients for this hospital."
+    : "Hospital session saved. You can now add patients.");
   return true;
 }
 
@@ -2250,6 +2255,17 @@ function collectKidneyFindings(side) {
   };
 }
 
+function collectUltrasoundQualityFindings() {
+  return {
+    imageQuality: {
+      adequateForAnalysis: getSelectedChoiceValue("imageQualityAdequate")
+    },
+    annotationDetails: {
+      kidneyBoundingPointsDetected: getSelectedChoiceValue("kidneyBoundingPointsDetected")
+    }
+  };
+}
+
 function formatClinicalMeasurement(value, unit) {
   return value && value !== "-" ? `${value} ${unit}` : "-";
 }
@@ -2267,6 +2283,13 @@ function getKidneyFindingReviewRows(label, findings) {
     [`${label} Stones`, structural.stones || "-"],
     [`${label} Hydronephrosis`, structural.hydronephrosis || "-"],
     [`${label} Other Findings`, structural.others || "-"]
+  ];
+}
+
+function getUltrasoundQualityReviewRows(findings) {
+  return [
+    ["Image Adequate for Analysis", findings?.imageQuality?.adequateForAnalysis || "-"],
+    ["Kidney Bounding Points Detected", findings?.annotationDetails?.kidneyBoundingPointsDetected || "-"]
   ];
 }
 
@@ -2363,7 +2386,8 @@ function buildSubmissionFromForm() {
   const familyKidneyHistory = getCheckedValue(familyKidneyHistoryInputs);
   const ultrasoundFindings = isKfre ? null : {
     right: collectKidneyFindings("right"),
-    left: collectKidneyFindings("left")
+    left: collectKidneyFindings("left"),
+    ...collectUltrasoundQualityFindings()
   };
   const leftKidneyFile = leftKidneyFileInput.files[0];
   const rightKidneyFile = rightKidneyFileInput.files[0];
@@ -2571,7 +2595,8 @@ function renderReviewSubmission(submission) {
   ];
   const ultrasoundFindingRows = [
     ...getKidneyFindingReviewRows("Right Kidney", submission.ultrasoundFindings?.right),
-    ...getKidneyFindingReviewRows("Left Kidney", submission.ultrasoundFindings?.left)
+    ...getKidneyFindingReviewRows("Left Kidney", submission.ultrasoundFindings?.left),
+    ...getUltrasoundQualityReviewRows(submission.ultrasoundFindings)
   ].filter(([, value]) => value !== "-");
   const ultrasoundFindingBlock = submission.studyFlow === "kfre" ? "" : ultrasoundFindingRows.length ? `
     <div class="review-files">
@@ -2937,7 +2962,8 @@ function renderSubmissionDetail(s) {
   const qualityWarnings = Array.isArray(s.dataQualityWarnings) ? s.dataQualityWarnings : [];
   const ultrasoundFindingRows = [
     ...getKidneyFindingReviewRows("Right Kidney", s.ultrasoundFindings?.right),
-    ...getKidneyFindingReviewRows("Left Kidney", s.ultrasoundFindings?.left)
+    ...getKidneyFindingReviewRows("Left Kidney", s.ultrasoundFindings?.left),
+    ...getUltrasoundQualityReviewRows(s.ultrasoundFindings)
   ].filter(([, value]) => value !== "-");
   const ultrasoundFindingSection = ultrasoundFindingRows.length ? `
     <section class="sub-detail-section">
