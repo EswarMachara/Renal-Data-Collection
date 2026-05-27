@@ -54,6 +54,12 @@ const hospitals = [
   { id: "NH-BLR-KA",   name: "Nira Health Care Private Limited, Bangalore, Karnataka" },
   { id: "MIL-NDL-DL",  name: "Mahajan Imaging & Labs, New Delhi" }
 ];
+const adminIntakeSource = { id: "TANUH-ADMIN", name: "Admin" };
+
+function findIntakeSource(sourceId) {
+  return hospitals.find((hospital) => hospital.id === sourceId)
+    || (sourceId === adminIntakeSource.id ? adminIntakeSource : null);
+}
 
 const allowedStudyFlows   = new Set(["egfr", "kfre"]);
 const allowedUploadModes  = new Set(["separate", "package", "clinical_document"]);
@@ -650,6 +656,13 @@ async function initializeDatabase() {
         [hospital.id, hospital.name]
       );
     }
+    await client.query(
+      `INSERT INTO hospitals (hospital_id, hospital_name, active)
+       VALUES ($1, $2, false)
+       ON CONFLICT (hospital_id)
+       DO UPDATE SET hospital_name = EXCLUDED.hospital_name, active = false`,
+      [adminIntakeSource.id, adminIntakeSource.name]
+    );
 
     await client.query("COMMIT");
     dbReady = true;
@@ -923,7 +936,7 @@ async function getDatabaseSummary(scopeHospitalId = null) {
     FROM hospitals h
     LEFT JOIN submissions s ON s.hospital_id = h.hospital_id
     LEFT JOIN submission_files sf ON sf.record_id = s.record_id
-    WHERE h.active = true ${scopeHospitalId ? "AND h.hospital_id = $1" : ""}
+    WHERE (h.active = true OR (h.hospital_id = 'TANUH-ADMIN' AND s.record_id IS NOT NULL)) ${scopeHospitalId ? "AND h.hospital_id = $1" : ""}
     GROUP BY h.hospital_id, h.hospital_name
     ORDER BY patients DESC, h.hospital_name ASC`;
 
@@ -1254,7 +1267,7 @@ function computeDataQualityWarnings(record) {
 
 function normalizeSubmission(item, options = {}) {
   const hospitalId   = validateIdentifier(requiredText(item, "hospitalId", "Hospital ID", 80), "Hospital ID");
-  const hospital     = hospitals.find((entry) => entry.id === hospitalId);
+  const hospital     = findIntakeSource(hospitalId);
   if (!hospital) throw new Error("Hospital ID is not recognized.");
 
   const hospitalName = requiredText(item, "hospitalName", "Hospital name", 180);
@@ -1559,7 +1572,7 @@ async function handleConsentRecord(req, res) {
     return;
   }
 
-  if (!hospitals.some((h) => h.id === hospitalId)) {
+  if (!findIntakeSource(hospitalId)) {
     sendJson(res, 400, { ok: false, error: "Invalid hospital ID." });
     return;
   }

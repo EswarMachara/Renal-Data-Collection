@@ -19,6 +19,13 @@ const RESUMABLE_UPLOAD_RETRIES = 3;
 
 // Populated from /api/hospitals after login (or at startup when auth is disabled)
 const hospitals = [];
+const ADMIN_INTAKE_SOURCE = { id: "TANUH-ADMIN", name: "Admin" };
+
+function getSelectableIntakeSources() {
+  return state.authSession?.role === "admin"
+    ? [...hospitals, ADMIN_INTAKE_SOURCE]
+    : hospitals;
+}
 
 // ─── Auth helpers ─────────────────────────────────────────────────────────────
 
@@ -138,7 +145,7 @@ function applyHospitalAuthContext() {
     if (hospitalNameInput)    hospitalNameInput.disabled = false;
     if (sessionInstruction) {
       sessionInstruction.textContent = session?.role === "admin"
-        ? "Select the hospital for which you are uploading this patient record."
+        ? "Select Admin or a hospital as the intake source for this patient record."
         : "Choose once at the start of the day or browser session.";
     }
     if (saveSessionButton) saveSessionButton.classList.remove("hidden");
@@ -659,10 +666,11 @@ function getCkdStageClass(value) {
 }
 
 function populateHospitals() {
+  const intakeSources = getSelectableIntakeSources();
   [landingHospitalInput, hospitalNameInput].forEach((select) => {
     // Clear all options except the first placeholder
     while (select.options.length > 1) select.remove(1);
-    hospitals.forEach((hospital) => {
+    intakeSources.forEach((hospital) => {
       const option = document.createElement("option");
       option.value = hospital.id;
       option.textContent = hospital.name;
@@ -686,7 +694,7 @@ function updateLandingHospitalId() {
 }
 
 function getSelectedLandingHospital() {
-  return hospitals.find((hospital) => hospital.id === landingHospitalInput.value) || null;
+  return getSelectableIntakeSources().find((hospital) => hospital.id === landingHospitalInput.value) || null;
 }
 
 function setPatientFieldsEnabled(isEnabled) {
@@ -720,7 +728,7 @@ function saveHospitalSession() {
 
   updateHospitalSessionUI();
   showToast(state.authSession?.role === "admin"
-    ? "Admin upload session saved. You can now add patients for this hospital."
+    ? "Admin upload session saved. You can now add patients for this intake source."
     : "Hospital session saved. You can now add patients.");
   return true;
 }
@@ -738,7 +746,7 @@ function loadHospitalSession() {
     storedSession = null;
   }
 
-  if (storedSession?.id && hospitals.some((hospital) => hospital.id === storedSession.id)) {
+  if (storedSession?.id && getSelectableIntakeSources().some((hospital) => hospital.id === storedSession.id)) {
     landingHospitalInput.value = storedSession.id;
     state.hospitalSession = storedSession;
     updateLandingHospitalId();
@@ -861,7 +869,7 @@ function initializeGlobalValidation() {
 }
 
 function updateLinkedPatientSummary() {
-  const selectedHospital = hospitals.find((hospital) => hospital.id === hospitalNameInput.value);
+  const selectedHospital = getSelectableIntakeSources().find((hospital) => hospital.id === hospitalNameInput.value);
   const hospitalName = selectedHospital?.name || "--";
   const patientId = uhidInput.value.trim() || "--";
   const ageSex = [ageInput.value.trim(), sexInput.value].filter(Boolean).join(" / ") || "--";
@@ -888,7 +896,7 @@ function formatDisplayDate(value) {
 }
 
 function updateConsentContext() {
-  const selectedHospital = hospitals.find((hospital) => hospital.id === hospitalNameInput.value);
+  const selectedHospital = getSelectableIntakeSources().find((hospital) => hospital.id === hospitalNameInput.value);
   const hospitalName = selectedHospital?.name || "--";
   const patientId = uhidInput.value.trim() || "--";
 
@@ -2354,7 +2362,7 @@ function getKfreReviewRows(kfreForm) {
 }
 
 function buildSubmissionFromForm() {
-  const selectedHospital = hospitals.find((hospital) => hospital.id === hospitalNameInput.value);
+  const selectedHospital = getSelectableIntakeSources().find((hospital) => hospital.id === hospitalNameInput.value);
   const isKfre = state.studyFlow === "kfre";
   const uploadMode = getUploadMode();
   const studyId = studyIdInput.value.trim();
@@ -3080,7 +3088,7 @@ function populateSubHospitalFilter() {
   if (!isAdmin) return;
   // Clear existing options except the first "All Hospitals"
   while (subHospitalFilter.options.length > 1) subHospitalFilter.remove(1);
-  hospitals.forEach((h) => {
+  getSelectableIntakeSources().forEach((h) => {
     const opt = document.createElement("option");
     opt.value = h.id;
     opt.textContent = h.name;
