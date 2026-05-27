@@ -5,6 +5,15 @@ const http = require("http");
 const path = require("path");
 const { Pool } = require("pg");
 
+process.on("unhandledRejection", (reason) => {
+  console.error("[FATAL] Unhandled promise rejection:", reason);
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("[FATAL] Uncaught exception:", err);
+  process.exit(1);
+});
+
 // ─── Load .env file (inline, no extra deps) ───────────────────────────────────
 (function loadDotenv() {
   try {
@@ -41,6 +50,7 @@ const DB_SSL = process.env.DB_SSL || "disable";
 const AUTH_SECRET = process.env.AUTH_SECRET || crypto.randomBytes(32).toString("hex");
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
 const HOSPITAL_CREDENTIALS_RAW = process.env.HOSPITAL_CREDENTIALS_JSON || "";
+const ALLOW_DEV_BYPASS = process.env.ALLOW_DEV_BYPASS === "true";
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
 const RATE_LIMIT_MAX = 5;
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
@@ -73,6 +83,14 @@ const allowedKfreOutcomeStages = new Set(["1", "2", "3a", "3b", "4", "5"]);
 const allowedKfreProgressionValues = new Set(["No change", "Improved", "Progressed", "Kidney failure", "Not assessed"]);
 const allowedKfreEventTypes = new Set(["Dialysis", "Transplant"]);
 const allowedFileFields   = new Set(["leftKidney", "rightKidney", "egfrReport", "patientPackage", "ultrasoundVideo", "clinicalDocument"]);
+const ALLOWED_FILE_MIMES = {
+  leftKidney:       ["image/jpeg", "image/png", "image/webp"],
+  rightKidney:      ["image/jpeg", "image/png", "image/webp"],
+  ultrasoundVideo:  ["video/mp4", "video/quicktime", "video/x-msvideo", "video/avi"],
+  egfrReport:       ["application/pdf"],
+  clinicalDocument: ["application/pdf"],
+  patientPackage:   ["application/zip", "application/x-zip-compressed"]
+};
 
 // ─── Database pool ────────────────────────────────────────────────────────────
 
@@ -97,10 +115,22 @@ const mimeTypes = {
 // ─── Security headers ─────────────────────────────────────────────────────────
 
 const SECURITY_HEADERS = {
-  "X-Content-Type-Options": "nosniff",
-  "X-Frame-Options": "DENY",
-  "X-XSS-Protection": "1; mode=block",
-  "Referrer-Policy": "strict-origin-when-cross-origin"
+  "X-Content-Type-Options":    "nosniff",
+  "X-Frame-Options":           "DENY",
+  "X-XSS-Protection":          "1; mode=block",
+  "Referrer-Policy":           "strict-origin-when-cross-origin",
+  "Strict-Transport-Security": "max-age=63072000; includeSubDomains",
+  "Content-Security-Policy":
+    "default-src 'self'; " +
+    "script-src 'self' https://ajax.googleapis.com https://unpkg.com; " +
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+    "font-src 'self' https://fonts.gstatic.com; " +
+    "img-src 'self' data: blob:; " +
+    "media-src 'self' blob:; " +
+    "connect-src 'self' blob:; " +
+    "worker-src blob:; " +
+    "object-src 'none'; " +
+    "frame-ancestors 'none';"
 };
 
 // ─── Core utilities ───────────────────────────────────────────────────────────
@@ -323,6 +353,21 @@ function resetRateLimit(ip) {
   loginAttempts.delete(ip);
 }
 
+const actionAttempts = new Map(); // key: `${userId}:${action}` → { count, resetAt }
+
+function checkActionLimit(userId, action, max, windowMs) {
+  const key   = `${userId}:${action}`;
+  const now   = Date.now();
+  const entry = actionAttempts.get(key);
+  if (!entry || now > entry.resetAt) {
+    actionAttempts.set(key, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  if (entry.count >= max) return false;
+  entry.count += 1;
+  return true;
+}
+
 // ─── Session management ───────────────────────────────────────────────────────
 
 const memorySessions = new Map(); // sessionId → { userId, hospitalId, role, expiresAt }
@@ -384,7 +429,10 @@ let authConfigured = false; // set after setupEnvCredentials() runs
 
 async function requireAuth(req, res) {
   if (!authConfigured) {
-    // Dev mode: no credentials configured — all requests pass as anonymous admin
+    if (!ALLOW_DEV_BYPASS) {
+      sendJson(res, 503, { ok: false, error: "Server authentication is not configured. Contact the administrator." });
+      return null;
+    }
     return { userId: "anonymous", hospitalId: null, role: "admin" };
   }
   const authHeader = req.headers["authorization"] || "";
@@ -1127,6 +1175,9 @@ function normalizeFiles(files, { requireContent = true } = {}) {
   return files.map((file) => {
     const fieldName   = cleanText(file.fieldName, 60);
     if (!allowedFileFields.has(fieldName)) throw new Error(`Unsupported upload field: ${fieldName || "unknown"}.`);
+    if (file.type && !ALLOWED_FILE_MIMES[fieldName].includes(file.type)) {
+      throw new Error(`File type "${file.type}" is not allowed for field "${fieldName}". Accepted types: ${ALLOWED_FILE_MIMES[fieldName].join(", ")}.`);
+    }
     const name        = cleanText(file.name, 180) || "upload.bin";
     const size        = Number(file.size || 0);
     let contentSize   = 0;
@@ -1551,6 +1602,10 @@ async function handleMe(req, res) {
 async function handleConsentRecord(req, res) {
   const session = await requireAuth(req, res);
   if (!session) return;
+  if (!checkActionLimit(session.userId, "consent", 60, 60 * 60 * 1000)) {
+    sendJson(res, 429, { ok: false, error: "Consent limit reached. Please wait before recording more consents." });
+    return;
+  }
 
   let body;
   try {
@@ -1770,6 +1825,10 @@ async function finalizeSubmissionBatch({ normalizedSubmissions, session, req }) 
 async function handleSubmission(req, res) {
   const session = await requireAuth(req, res);
   if (!session) return;
+  if (!checkActionLimit(session.userId, "submission", 30, 60 * 60 * 1000)) {
+    sendJson(res, 429, { ok: false, error: "Submission limit reached. Maximum 30 submissions per hour." });
+    return;
+  }
 
   try {
     const payload     = await readSubmissionPayload(req);
@@ -2241,6 +2300,10 @@ async function handleReviewSubmission(req, res, recordId) {
 async function handleExportSubmissions(req, res) {
   const session = await requireAuth(req, res);
   if (!session) return;
+  if (!checkActionLimit(session.userId, "export", 10, 60 * 60 * 1000)) {
+    sendJson(res, 429, { ok: false, error: "Export limit reached. Maximum 10 exports per hour." });
+    return;
+  }
 
   const url            = new URL(req.url, `http://${req.headers.host}`);
   const reviewed       = url.searchParams.get("reviewed") || "";
@@ -2621,12 +2684,22 @@ const server = http.createServer((req, res) => {
 setupEnvCredentials();
 authConfigured = envCredentials.size > 0 || Boolean(DATABASE_URL);
 
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of loginAttempts) {
+    if (now > entry.resetAt) loginAttempts.delete(key);
+  }
+  for (const [key, entry] of actionAttempts) {
+    if (now > entry.resetAt) actionAttempts.delete(key);
+  }
+}, 5 * 60 * 1000);
+
 initializeDatabase()
   .then(() => {
     server.listen(PORT, HOST, () => {
       console.log(`TANUH Renal Screening Portal running at http://${HOST}:${PORT}`);
       console.log(`PostgreSQL metadata storage: ${dbReady ? "enabled" : "disabled"}`);
-      console.log(`Authentication: ${authConfigured ? "enabled" : "DISABLED (dev mode — set ADMIN_PASSWORD or DATABASE_URL)"}`);
+      console.log(`Authentication: ${authConfigured ? "enabled" : (ALLOW_DEV_BYPASS ? "DISABLED (development bypass enabled)" : "NOT CONFIGURED (protected API access blocked)")}`);
       if (authConfigured && envCredentials.size > 0) {
         console.log(`Env-var credentials active for: ${[...envCredentials.keys()].join(", ")}`);
       }
