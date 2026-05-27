@@ -2,4 +2,3 @@ data/
 .env
 *.log
 node_modules/
-IMPLEMENTATION_LOG.md

@@ -1,4 +1,4 @@
-# VM and GCP Deployment Notes
+# VM and GCP Deployment Guide
 
 These notes are based on `Renal team Project Setup.pdf`.
 

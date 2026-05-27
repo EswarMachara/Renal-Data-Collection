@@ -23,7 +23,7 @@ const { Pool } = require("pg");
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 
-const PUBLIC_DIR = __dirname;
+const PUBLIC_DIR = path.join(__dirname, "public");
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
 const PORT = Number(process.env.PORT || 8000);
 const HOST = process.env.HOST || "0.0.0.0";
@@ -432,7 +432,7 @@ function serveStatic(req, res) {
   const filePath     = path.resolve(PUBLIC_DIR, relativePath);
   const cacheControl = relativePath.startsWith("assets/") ? "public, max-age=86400" : "no-store";
 
-  if (!filePath.startsWith(PUBLIC_DIR) || filePath.startsWith(DATA_DIR)) {
+  if (filePath !== PUBLIC_DIR && !filePath.startsWith(`${PUBLIC_DIR}${path.sep}`)) {
     sendJson(res, 403, { ok: false, error: "Forbidden." });
     return;
   }

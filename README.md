@@ -56,13 +56,25 @@ gs://<bucket>/
 
 Uploaded clinical files are synced to GCS. Questionnaire data and original patient-linked metadata remain in protected VM/PostgreSQL storage rather than being copied into the clinical-file bucket.
 
-## Files
+## Project Layout
 
-- `index.html` - App structure and layout
-- `styles.css` - Design system and responsive styles
-- `script.js` - Tab logic, validations, review modal, and direct upload flow
-- `server.js` - Static web server and submission API
-- `DEPLOYMENT.md` - VM and GCP deployment notes
+```text
+.
+├── server.js                  # Node.js server, API, authentication, and persistence
+├── public/                    # Browser-facing static application
+│   ├── index.html
+│   ├── script.js
+│   ├── styles.css
+│   └── assets/
+├── docs/
+│   ├── DEPLOYMENT.md          # VM and GCP deployment guidance
+│   └── IMPLEMENTATION_LOG.md  # Sanitized implementation history
+├── data/                      # Runtime submission storage; git-ignored
+├── .env.example               # Environment variable template
+└── package.json
+```
+
+The server serves only files under `public/`; runtime data and configuration remain outside the web root.
 
 ## Run Locally
 
