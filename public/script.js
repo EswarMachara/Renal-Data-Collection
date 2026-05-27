@@ -1,24 +1,57 @@
-const state = {
-  pendingSubmission: null,
-  recentUploads: [],
-  uploadProgress: 0,
-  hospitalSession: null,
-  backendDashboard: null,
-  adminDashboardView: "overview",
-  authSession: null,   // { token, userId, hospitalId, hospitalName, role, expiresAt }
-  studyFlow: "egfr",
-  consentId: null,     // set after /api/consent succeeds
-  questionnaireCompleted: false,
-  currentUploadSession: null
-};
+import {
+  state,
+  loadAuthSession,
+  saveAuthSession,
+  clearAuthSession as clearStoredAuthSession,
+  saveStudyFlow,
+  loadStudyFlow
+} from "./modules/state.js";
+import {
+  showToast,
+  escapeHTML,
+  formatCkdStage,
+  cleanIdentifier,
+  cleanDecimalValue,
+  validateDateInput,
+  formatDisplayDate,
+  formatBytes,
+  getUploadLabel
+} from "./modules/utils.js";
+import {
+  hospitals,
+  authedFetch,
+  loadHospitalsFromApi as fetchHospitalsFromApi,
+  handle401,
+  setUnauthorizedHandler
+} from "./modules/api.js";
+import {
+  configureAuthCallbacks,
+  showLoginError,
+  hideLoginError,
+  applyHospitalAuthContext,
+  showApp,
+  showLoginScreen,
+  updateHospitalSessionUI,
+  loadHospitalSession,
+  saveHospitalSession
+} from "./modules/auth.js";
+import {
+  updateDashboards,
+  loadBackendDashboard,
+  refreshDashboard
+} from "./modules/dashboard.js";
+import {
+  subState,
+  subUploadMode,
+  configureSubmissionRenderers,
+  loadSubmissions,
+  closeSubmissionDetail,
+  populateSubHospitalFilter,
+  exportSubmissionsCsv
+} from "./modules/submissions.js";
 
-const HOSPITAL_SESSION_KEY = "renalPortalHospitalSession";
-const AUTH_SESSION_KEY     = "renalPortalAuthSession";
-const STUDY_FLOW_KEY       = "renalPortalStudyFlow";
 const RESUMABLE_UPLOAD_RETRIES = 3;
 
-// Populated from /api/hospitals after login (or at startup when auth is disabled)
-const hospitals = [];
 const ADMIN_INTAKE_SOURCE = { id: "TANUH-ADMIN", name: "Admin" };
 
 function getSelectableIntakeSources() {
@@ -41,52 +74,9 @@ const navbarMenuToggle = document.getElementById("navbar-menu-toggle");
 const logoutBtn     = document.getElementById("logout-btn");
 const LOGIN_REQUEST_TIMEOUT_MS = 12000;
 
-function normalizedStudyFlow(value) {
-  return value === "kfre" ? "kfre" : "egfr";
-}
-
-function saveStudyFlow(value) {
-  state.studyFlow = normalizedStudyFlow(value);
-  try { sessionStorage.setItem(STUDY_FLOW_KEY, state.studyFlow); } catch { /* ignore */ }
-}
-
-function loadStudyFlow() {
-  try {
-    state.studyFlow = normalizedStudyFlow(sessionStorage.getItem(STUDY_FLOW_KEY));
-  } catch {
-    state.studyFlow = "egfr";
-  }
-  return state.studyFlow;
-}
-
-function authedFetch(url, options = {}) {
-  const headers = { ...(options.headers || {}) };
-  if (state.authSession?.token) {
-    headers["Authorization"] = `Bearer ${state.authSession.token}`;
-  }
-  return fetch(url, { ...options, headers });
-}
-
-function loadAuthSession() {
-  try {
-    const stored = JSON.parse(sessionStorage.getItem(AUTH_SESSION_KEY) || "null");
-    if (stored?.token) { state.authSession = stored; return true; }
-  } catch { /* ignore */ }
-  return false;
-}
-
-function saveAuthSession(sessionData) {
-  state.authSession = sessionData;
-  try { sessionStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(sessionData)); } catch { /* ignore */ }
-}
-
 function clearAuthSession() {
-  state.authSession = null;
-  state.hospitalSession = null;
-  state.currentUploadSession = null;
+  clearStoredAuthSession();
   resetConsentRecord();
-  try { sessionStorage.removeItem(AUTH_SESSION_KEY); } catch { /* ignore */ }
-  try { sessionStorage.removeItem(HOSPITAL_SESSION_KEY); } catch { /* ignore */ }
 }
 
 function setMobileNavigationOpen(isOpen) {
@@ -114,116 +104,25 @@ function initializeMobileNavigation() {
   });
 }
 
-function showLoginError(message, { retryable = false } = {}) {
-  if (!loginError) return;
-  if (loginErrorMessage) {
-    loginErrorMessage.textContent = message;
-  } else {
-    loginError.textContent = message;
-  }
-  loginErrorRetry?.classList.toggle("hidden", !retryable);
-  loginError.classList.remove("hidden");
+function loadHospitalsFromApi() {
+  return fetchHospitalsFromApi(populateHospitals);
 }
 
-function hideLoginError() {
-  if (!loginError) return;
-  loginError.classList.add("hidden");
-  if (loginErrorMessage) {
-    loginErrorMessage.textContent = "";
-  } else {
-    loginError.textContent = "";
-  }
-  loginErrorRetry?.classList.add("hidden");
-}
-
-function applyHospitalAuthContext() {
-  const session = state.authSession;
-  const sessionInstruction = document.getElementById("hospital-session-instruction");
-  const saveSessionButton = document.getElementById("save-hospital-session");
-  if (!session || session.role === "admin") {
-    if (landingHospitalInput) landingHospitalInput.disabled = false;
-    if (hospitalNameInput)    hospitalNameInput.disabled = false;
-    if (sessionInstruction) {
-      sessionInstruction.textContent = session?.role === "admin"
-        ? "Select Admin or a hospital as the intake source for this patient record."
-        : "Choose once at the start of the day or browser session.";
-    }
-    if (saveSessionButton) saveSessionButton.classList.remove("hidden");
-    return;
-  }
-
-  // Hospital-role user: lock dropdown to their assigned hospital
-  if (session.hospitalId) {
-    const hospital = hospitals.find((entry) => entry.id === session.hospitalId);
-    if (landingHospitalInput) {
-      landingHospitalInput.value    = session.hospitalId;
-      landingHospitalInput.disabled = true;
-    }
-    if (hospitalNameInput) {
-      hospitalNameInput.value    = session.hospitalId;
-      hospitalNameInput.disabled = true;
-    }
-    if (hospitalIdInput)  hospitalIdInput.value  = session.hospitalId;
-    if (landingHospitalIdInput) landingHospitalIdInput.value = session.hospitalId;
-    if (sessionInstruction) sessionInstruction.textContent = "Assigned automatically from your secure hospital account.";
-    if (saveSessionButton) saveSessionButton.classList.add("hidden");
-
-    // The authenticated hospital assignment is authoritative, even after account switches.
-    // Fall back to hospitalName from auth session so patient fields unlock even if the hospitals
-    // API call hasn't completed yet when this function runs.
-    const hospitalName = hospital?.name || state.authSession.hospitalName || session.hospitalId;
-    state.hospitalSession = { id: session.hospitalId, name: hospitalName };
-    try { sessionStorage.setItem(HOSPITAL_SESSION_KEY, JSON.stringify(state.hospitalSession)); } catch { /* ignore */ }
-    updateHospitalSessionUI();
-  }
-}
-
-function showApp() {
-  setMobileNavigationOpen(false);
-  if (loginScreen)  loginScreen.classList.add("hidden");
-  if (appNavbar)    appNavbar.classList.remove("hidden");
-  document.querySelector(".app-container")?.classList.remove("hidden");
-
-  const session = state.authSession;
-  if (navbarUserLabel && session) {
-    navbarUserLabel.textContent = session.role === "admin"
-      ? "Admin"
-      : (session.hospitalId || session.userId || "");
-  }
-  if (navbarAuth) navbarAuth.classList.remove("hidden");
-
-  // Show submissions tab for all users; populate hospital filter for admin
-  const submissionsNavBtn = document.getElementById("submissions-nav");
-  if (submissionsNavBtn) submissionsNavBtn.style.display = "";
-  populateSubHospitalFilter();
-  updateWorkflowAccess();
-}
-
-function showLoginScreen() {
-  setMobileNavigationOpen(false);
-  if (loginScreen)  loginScreen.classList.remove("hidden");
-  if (appNavbar)    appNavbar.classList.add("hidden");
-  document.querySelector(".app-container")?.classList.add("hidden");
-}
-
-async function loadHospitalsFromApi() {
-  try {
-    const res    = await authedFetch("/api/hospitals");
-    const result = await res.json();
-    if (result.ok && Array.isArray(result.hospitals)) {
-      hospitals.length = 0;
-      result.hospitals.forEach((h) => hospitals.push(h));
-      populateHospitals();
-    }
-  } catch { /* non-fatal; hospitals already populated from previous call */ }
-}
-
-// On any 401 from the server, clear session and show login
-function handle401() {
+configureAuthCallbacks({
+  setMobileNavigationOpen,
+  populateSubHospitalFilter,
+  updateWorkflowAccess
+});
+configureSubmissionRenderers({
+  getKidneyFindingReviewRows,
+  getUltrasoundQualityReviewRows,
+  getKfreReviewRows
+});
+setUnauthorizedHandler(() => {
   clearAuthSession();
   showLoginScreen();
   showToast("Your session has expired. Please sign in again.");
-}
+});
 
 // ─── DOM references ───────────────────────────────────────────────────────────
 
@@ -625,12 +524,6 @@ const dummyDashboard = {
   ]
 };
 
-function showToast(message) {
-  toast.textContent = message;
-  toast.classList.add("show");
-  window.setTimeout(() => toast.classList.remove("show"), 2400);
-}
-
 function setConsentRecordStatus(message, status = "pending") {
   if (!consentRecordStatus) return;
   consentRecordStatus.textContent = message;
@@ -642,27 +535,6 @@ function resetConsentRecord() {
   state.consentId = null;
   state.questionnaireCompleted = false;
   setConsentRecordStatus("Consent is not recorded yet.");
-}
-
-function escapeHTML(value) {
-  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    "\"": "&quot;",
-    "'": "&#39;"
-  })[char]);
-}
-
-function formatCkdStage(value, remarks = "") {
-  if (!value) return "--";
-  if (value === "Normal") return "Normal";
-  if (value === "Other") return remarks ? `Other — ${remarks}` : "Other";
-  return `Stage ${value}`;
-}
-
-function getCkdStageClass(value) {
-  return String(value || "other").toLowerCase().replace(/[^a-z0-9_-]/g, "");
 }
 
 function populateHospitals() {
@@ -693,68 +565,6 @@ function updateLandingHospitalId() {
   landingHospitalIdInput.value = landingHospitalInput.value || "";
 }
 
-function getSelectedLandingHospital() {
-  return getSelectableIntakeSources().find((hospital) => hospital.id === landingHospitalInput.value) || null;
-}
-
-function setPatientFieldsEnabled(isEnabled) {
-  [landingUhidInput, landingStudyIdInput, landingEnrollmentDateInput, startPatientConsentBtn].forEach((input) => {
-    input.disabled = !isEnabled;
-  });
-}
-
-function updateHospitalSessionUI() {
-  const session = state.hospitalSession;
-  const hasSession = Boolean(session);
-
-  activeHospitalName.textContent = session?.name || "No hospital selected";
-  activeHospitalId.textContent = session ? `Hospital ID: ${session.id}` : "Save hospital session first";
-  setPatientFieldsEnabled(hasSession);
-}
-
-function saveHospitalSession() {
-  const hospital = getSelectedLandingHospital();
-  if (!hospital) {
-    showToast("Select a hospital before saving the session.");
-    return false;
-  }
-
-  const session = { id: hospital.id, name: hospital.name };
-  state.hospitalSession = session;
-  try {
-    sessionStorage.setItem(HOSPITAL_SESSION_KEY, JSON.stringify(session));
-  } catch {
-  }
-
-  updateHospitalSessionUI();
-  showToast(state.authSession?.role === "admin"
-    ? "Admin upload session saved. You can now add patients for this intake source."
-    : "Hospital session saved. You can now add patients.");
-  return true;
-}
-
-function loadHospitalSession() {
-  if (state.authSession?.role === "hospital" && state.authSession.hospitalId) {
-    applyHospitalAuthContext();
-    return;
-  }
-
-  let storedSession = null;
-  try {
-    storedSession = JSON.parse(sessionStorage.getItem(HOSPITAL_SESSION_KEY) || "null");
-  } catch {
-    storedSession = null;
-  }
-
-  if (storedSession?.id && getSelectableIntakeSources().some((hospital) => hospital.id === storedSession.id)) {
-    landingHospitalInput.value = storedSession.id;
-    state.hospitalSession = storedSession;
-    updateLandingHospitalId();
-  }
-
-  updateHospitalSessionUI();
-}
-
 function syncChoiceValue(input) {
   const target = document.getElementById(input.dataset.syncTarget);
   if (!target) {
@@ -768,24 +578,6 @@ function syncChoiceValue(input) {
 
 function getCheckedValue(inputs) {
   return Array.from(inputs).find((input) => input.checked)?.value || "";
-}
-
-function cleanIdentifier(value) {
-  return String(value || "").replace(/[^a-zA-Z0-9._-]/g, "").slice(0, 80);
-}
-
-function cleanDecimalValue(value, { integer = false } = {}) {
-  const match = String(value || "").match(/\d+(\.\d*)?|\.\d*/);
-  if (!match) {
-    return "";
-  }
-
-  const normalized = match[0].startsWith(".") ? `0${match[0]}` : match[0];
-  const [whole, ...decimalParts] = normalized.split(".");
-  if (integer || !decimalParts.length) {
-    return whole;
-  }
-  return `${whole}.${decimalParts.join("").slice(0, 2)}`;
 }
 
 function setFieldError(input, message) {
@@ -808,24 +600,6 @@ function validateNumericInput(input) {
   if (!Number.isFinite(value) || value < min || value > max || (isInteger && !Number.isInteger(value))) {
     const label = input.closest(".field-block")?.querySelector("label")?.textContent?.replace("*", "").trim() || "This field";
     setFieldError(input, `${label} must be a valid ${isInteger ? "whole " : ""}number between ${min} and ${Number.isFinite(max) ? max : "the allowed limit"}.`);
-    return false;
-  }
-
-  input.setCustomValidity("");
-  return true;
-}
-
-function validateDateInput(input) {
-  if (!input.value) {
-    input.setCustomValidity("");
-    return true;
-  }
-
-  const selectedDate = new Date(`${input.value}T00:00:00`);
-  const today = new Date();
-  today.setHours(23, 59, 59, 999);
-  if (Number.isNaN(selectedDate.getTime()) || selectedDate > today) {
-    setFieldError(input, "Date of enrollment cannot be in the future.");
     return false;
   }
 
@@ -883,18 +657,6 @@ function updateLinkedPatientSummary() {
   linkedDiabetic.textContent = diabeticInput.value || "--";
 }
 
-function formatDisplayDate(value) {
-  if (!value) {
-    return "--";
-  }
-
-  return new Date(`${value}T00:00:00`).toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric"
-  });
-}
-
 function updateConsentContext() {
   const selectedHospital = getSelectableIntakeSources().find((hospital) => hospital.id === hospitalNameInput.value);
   const hospitalName = selectedHospital?.name || "--";
@@ -915,20 +677,6 @@ function syncIntakeToQuestionnaire() {
   enrollmentDateInput.value = landingEnrollmentDateInput.value;
   updateConsentContext();
   updateLinkedPatientSummary();
-}
-
-function formatBytes(bytes) {
-  const value = Number(bytes || 0);
-  if (value < 1024) {
-    return `${value} B`;
-  }
-  if (value < 1024 * 1024) {
-    return `${(value / 1024).toFixed(1)} KB`;
-  }
-  if (value < 1024 * 1024 * 1024) {
-    return `${(value / (1024 * 1024)).toFixed(1)} MB`;
-  }
-  return `${(value / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
 
 function computeDataQualityWarnings(record) {
@@ -952,19 +700,6 @@ function computeDataQualityWarnings(record) {
   if (record.diabetic === "No" && record.diabetesDuration !== "-") warnings.push("Diabetes duration is present while Diabetes Mellitus is No.");
   if (record.hypertension === "No" && record.hypertensionDuration !== "-") warnings.push("Hypertension duration is present while Hypertension is No.");
   return warnings;
-}
-
-function getUploadLabel(fieldName) {
-  const labels = {
-    leftKidney: "Left Kidney",
-    rightKidney: "Right Kidney",
-    egfrReport: "Clinical Report",
-    patientPackage: "ZIP Package",
-    ultrasoundVideo: "Ultrasound Video",
-    clinicalDocument: "KFRE Clinical Document"
-  };
-
-  return labels[fieldName] || "Upload";
 }
 
 function ensurePreview(input) {
@@ -1649,61 +1384,6 @@ function updateDiabeticVisibility() {
 ckdStageInput.addEventListener("change", updateDialysisVisibility);
 diabeticInput.addEventListener("change", updateDiabeticVisibility);
 
-function refreshDashboard() {
-  updateDashboards();
-  redrawRecentUploads();
-}
-
-async function loadBackendDashboard() {
-  if (window.location.protocol === "file:") return;
-  try {
-    const response = await authedFetch("/api/dashboard-summary", { cache: "no-store" });
-    if (response.status === 401) { handle401(); return; }
-    const result = await response.json();
-    if (response.ok && result.ok && result.summary) {
-      state.backendDashboard = result.summary;
-      refreshDashboard();
-    }
-  } catch { /* network error — silently skip */ }
-}
-
-function redrawRecentUploads() {
-  if (state.authSession?.role === "admin" && state.backendDashboard) return;
-  recentBody.innerHTML = "";
-
-  if (!state.recentUploads?.length) {
-    const row = document.createElement("tr");
-    row.innerHTML = '<td colspan="7" class="empty">No uploads completed in this session.</td>';
-    recentBody.appendChild(row);
-    return;
-  }
-
-  state.recentUploads.slice(0, 8).forEach((item) => {
-    const row = document.createElement("tr");
-    row.innerHTML = `
-      <td>${escapeHTML(item.batchId)}</td>
-      <td>${escapeHTML(item.hospitalId)}</td>
-      <td>${escapeHTML(item.uhid)}</td>
-      <td>${escapeHTML(subUploadMode(item.uploadMode))}</td>
-      <td>${item.files.map(escapeHTML).join(", ")}</td>
-      <td>${escapeHTML(item.gcsPath || item.localPath || "-")}</td>
-      <td>${escapeHTML(item.status)}</td>
-    `;
-    recentBody.appendChild(row);
-  });
-}
-
-const CKD_DONUT_SEGMENTS = (counts) => [
-  { label: "Normal",   value: counts["Normal"] || 0, color: "#0f9a87" },
-  { label: "Stage 1",  value: counts["1"]      || 0, color: "#2dd4bf" },
-  { label: "Stage 2",  value: counts["2"]      || 0, color: "#60a5fa" },
-  { label: "Stage 3a", value: counts["3a"]     || 0, color: "#fbbf24" },
-  { label: "Stage 3b", value: counts["3b"]     || 0, color: "#f97316" },
-  { label: "Stage 4",  value: counts["4"]      || 0, color: "#f87171" },
-  { label: "Stage 5",  value: counts["5"]      || 0, color: "#dc2626" },
-  { label: "Other",    value: counts["Other"]  || 0, color: "#8b5cf6" }
-];
-
 const adminDashboardTabs = [...document.querySelectorAll("[data-admin-dashboard-view]")];
 adminDashboardTabs.forEach((button, index) => {
   button.addEventListener("click", () => {
@@ -1719,294 +1399,6 @@ adminDashboardTabs.forEach((button, index) => {
     nextButton.click();
   });
 });
-
-function updateDashboards() {
-  const d    = state.backendDashboard;
-  const role = state.authSession?.role;
-
-  // Show the correct view panel
-  const adminView  = document.getElementById("dash-admin-view");
-  const hospView   = document.getElementById("dash-hospital-view");
-  if (adminView)  adminView.classList.toggle("hidden",  role !== "admin");
-  if (hospView)   hospView.classList.toggle("hidden",   role === "admin");
-
-  if (!d) return;
-
-  const nowStr = `Last updated: ${new Date().toLocaleTimeString()}`;
-
-  if (role === "admin") {
-    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-    const emptyPathway = {
-      summary: { patients: 0, videos: 0, documents: 0, pending: 0 },
-      stages: [],
-      diabetic: [],
-      ageBuckets: [],
-      followUp: [],
-      kidneyFailureEvents: [],
-      recentRecords: []
-    };
-    const egfr = d.pathways?.egfr || { ...emptyPathway, ...d, summary: d.summary || emptyPathway.summary };
-    const kfre = d.pathways?.kfre || emptyPathway;
-    const currentView = state.adminDashboardView === "egfr" || state.adminDashboardView === "kfre"
-      ? state.adminDashboardView
-      : "overview";
-
-    set("summary-hospitals", d.summary?.hospitals ?? 0);
-    set("summary-egfr-records", egfr.summary?.patients ?? 0);
-    set("summary-kfre-records", kfre.summary?.patients ?? 0);
-    set("admin-egfr-tab-count", egfr.summary?.patients ?? 0);
-    set("admin-kfre-tab-count", kfre.summary?.patients ?? 0);
-    const updEl = document.getElementById("dashboard-updated-at");
-    if (updEl) updEl.textContent = nowStr;
-
-    document.querySelectorAll("[data-admin-dashboard-view]").forEach((button) => {
-      const isActive = button.dataset.adminDashboardView === currentView;
-      button.classList.toggle("active", isActive);
-      button.setAttribute("aria-selected", String(isActive));
-      button.setAttribute("tabindex", isActive ? "0" : "-1");
-    });
-    document.querySelectorAll("[data-admin-panel]").forEach((panel) => {
-      const panelView = panel.dataset.adminPanel;
-      panel.classList.toggle("visible", panelView === currentView || (panelView === "study" && currentView !== "overview"));
-    });
-
-    renderHospitalBreakdown(d.hospitalBreakdown || [], d.summary?.patients || 0);
-    if (currentView === "overview") return;
-
-    const pathway = currentView === "kfre" ? kfre : egfr;
-    const isKfre = currentView === "kfre";
-    const studyHeader = document.getElementById("admin-study-header");
-    studyHeader?.classList.toggle("is-kfre", isKfre);
-    set("admin-study-badge", isKfre ? "KFRE STUDY" : "eGFR STUDY");
-    set("admin-study-title", isKfre ? "Kidney Failure Risk Assessment" : "Ultrasound and Clinical Intake");
-    set("admin-study-description", isKfre
-      ? "Clinical document submissions with prospective follow-up and outcome labels."
-      : "Kidney ultrasound imaging and associated clinical submissions.");
-    set("study-summary-records", pathway.summary?.patients ?? 0);
-    const kfreFollowUpCount = (pathway.followUp || []).find((item) => item.label === "Recorded")?.value || 0;
-    set("study-summary-files", isKfre ? kfreFollowUpCount : pathway.summary?.videos ?? 0);
-    set("study-summary-files-label", isKfre ? "FOLLOW-UP RECORDS" : "ULTRASOUND VIDEOS");
-    set("study-summary-pending", pathway.summary?.pending ?? 0);
-    set("admin-stage-title", isKfre ? "KFRE Cohort CKD Status" : "Kidney Status Distribution");
-    set("admin-secondary-title", isKfre ? "Prospective Follow-up" : "Age Distribution");
-    set("admin-secondary-note", isKfre ? "Follow-up information recorded" : "Adults 18+, with 80+ grouped");
-    set("admin-tertiary-title", isKfre ? "Kidney Failure Events" : "CKD Diabetic vs Non-Diabetic");
-    set("admin-recent-title", isKfre ? "Recent KFRE Records" : "Recent eGFR Records");
-    set("admin-recent-note", isKfre
-      ? "Latest clinical document submissions across all hospitals"
-      : "Latest eGFR submissions across all hospitals");
-
-    const stageCounts = {};
-    (pathway.stages || []).forEach((s) => { stageCounts[s.label] = s.value; });
-    const total = pathway.summary?.patients || 0;
-    renderDonut("ckd-stage-donut", "ckd-stage-center", "ckd-stage-legend",
-      CKD_DONUT_SEGMENTS(stageCounts), String(total));
-
-    const ageHistogram = document.getElementById("age-histogram");
-    const followupWidget = document.getElementById("kfre-followup-widget");
-    ageHistogram?.classList.toggle("hidden", isKfre);
-    followupWidget?.classList.toggle("hidden", !isKfre);
-    if (isKfre) {
-      const followUp = Object.fromEntries((pathway.followUp || []).map((item) => [item.label, item.value]));
-      renderDonut("kfre-followup-donut", "kfre-followup-center", "kfre-followup-legend", [
-        { label: "Follow-up Recorded", value: followUp.Recorded || 0, color: "#2563eb" },
-        { label: "Baseline Only", value: followUp["Baseline Only"] || 0, color: "#cbd5e1" }
-      ], String(total));
-      const eventCounts = Object.fromEntries((pathway.kidneyFailureEvents || []).map((item) => [item.label, item.value]));
-      renderDonut("diabetic-donut", "diabetic-center", "diabetic-legend", [
-        { label: "Event Recorded", value: eventCounts.Yes || 0, color: "#dc2626" },
-        { label: "No Event Recorded", value: eventCounts.No || 0, color: "#2563eb" }
-      ], String(total));
-    } else {
-      const ageBuckets = (pathway.ageBuckets || []).map((b) => ({ label: b.bucket, value: b.count }));
-      renderHistogram("age-histogram", ageBuckets);
-      const diabYes = (pathway.diabetic || []).find((x) => x.label === "Yes")?.value || 0;
-      const diabNo  = (pathway.diabetic || []).find((x) => x.label === "No")?.value  || 0;
-      renderDonut("diabetic-donut", "diabetic-center", "diabetic-legend", [
-        { label: "CKD Diabetic",     value: diabYes, color: "#0f9a87" },
-        { label: "CKD Non-Diabetic", value: diabNo,  color: "#94a3b8" }
-      ]);
-    }
-
-    renderRecentRecordsTable("recent-body", pathway.recentRecords || [], ["uhid","hospitalId","uploadMode","receivedAt","reviewedAt"]);
-
-  } else {
-    // ── Hospital summary cards ────────────────────────────────────────────
-    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-    set("hosp-summary-patients", d.summary?.patients  ?? 0);
-    set("hosp-summary-videos",   d.summary?.videos    ?? 0);
-    set("hosp-summary-pending",  d.summary?.pending   ?? 0);
-
-    const subtitleEl = document.getElementById("dash-hospital-subtitle");
-    const hospName = state.authSession?.hospitalName || state.authSession?.hospitalId || "";
-    if (subtitleEl && hospName) subtitleEl.textContent = `Submitted patient records and review progress for ${hospName}`;
-
-    const updEl = document.getElementById("dash-hospital-updated");
-    if (updEl) updEl.textContent = nowStr;
-
-    // ── Charts ───────────────────────────────────────────────────────────
-    const stageCounts = {};
-    (d.stages || []).forEach((s) => { stageCounts[s.label] = s.value; });
-    const total = d.summary?.patients || 0;
-    renderDonut("hosp-ckd-donut", "hosp-ckd-center", "hosp-ckd-legend",
-      CKD_DONUT_SEGMENTS(stageCounts), String(total));
-
-    const ageBuckets = (d.ageBuckets || []).map((b) => ({ label: b.bucket, value: b.count }));
-    renderHistogram("hosp-age-histogram", ageBuckets);
-
-    // ── Recent records table ──────────────────────────────────────────────
-    renderRecentRecordsTable("hosp-recent-body", d.recentRecords || [], ["uhid","uploadMode","receivedAt","reviewedAt"]);
-  }
-}
-
-function renderHospitalBreakdown(breakdown, grandTotal) {
-  const grid = document.getElementById("hosp-breakdown-grid");
-  const note = document.getElementById("hosp-breakdown-note");
-  if (!grid) return;
-
-  const maxPatients = Math.max(...breakdown.map((h) => h.patients), 1);
-  const totalWithData = breakdown.filter((h) => h.patients > 0).length;
-  if (note) note.textContent = `${totalWithData} of ${breakdown.length} hospitals have submitted records`;
-
-  if (!breakdown.length) {
-    grid.innerHTML = '<p class="empty">No data yet.</p>';
-    return;
-  }
-
-  grid.innerHTML = breakdown.map((h) => {
-    const pct      = grandTotal > 0 ? Math.round((h.patients / grandTotal) * 100) : 0;
-    const egfrPatients = h.egfrPatients ?? h.patients;
-    const kfrePatients = h.kfrePatients ?? 0;
-    const egfrWidth = Math.round((egfrPatients / maxPatients) * 100);
-    const kfreWidth = Math.round((kfrePatients / maxPatients) * 100);
-    const reviewed = h.patients > 0 ? Math.round((h.reviewed / h.patients) * 100) : 0;
-    return `
-      <div class="hosp-breakdown-card ${h.patients === 0 ? "hosp-card-empty" : ""}">
-        <div class="hosp-card-header">
-          <div>
-            <span class="hosp-card-id">${escapeHTML(h.hospitalId)}</span>
-            <span class="hosp-card-name">${escapeHTML(h.hospitalName)}</span>
-          </div>
-          <span class="hosp-card-count">${h.patients} record${h.patients !== 1 ? "s" : ""}</span>
-        </div>
-        <div class="hosp-pathway-totals">
-          <div class="hosp-pathway-total"><span>eGFR</span><strong>${egfrPatients}</strong></div>
-          <div class="hosp-pathway-total kfre"><span>KFRE</span><strong>${kfrePatients}</strong></div>
-        </div>
-        <div class="hosp-bar-track">
-          ${egfrPatients ? `<div class="hosp-bar-fill" style="width:${egfrWidth}%"></div>` : ""}
-          ${kfrePatients ? `<div class="hosp-bar-fill kfre" style="width:${kfreWidth}%"></div>` : ""}
-        </div>
-        <div class="hosp-card-meta">
-          <span class="hosp-meta-chip hosp-meta-pct">${pct}% of total</span>
-          <span class="hosp-meta-chip hosp-meta-review">${h.reviewed}/${h.patients} reviewed (${reviewed}%)</span>
-        </div>
-      </div>`;
-  }).join("");
-}
-
-function renderRecentRecordsTable(tbodyId, records, cols) {
-  const tbody = document.getElementById(tbodyId);
-  if (!tbody) return;
-  if (!records.length) {
-    const colCount = cols.length;
-    tbody.innerHTML = `<tr><td colspan="${colCount}" class="empty">No records yet.</td></tr>`;
-    return;
-  }
-  tbody.innerHTML = records.map((r) => {
-    const cells = cols.map((c) => {
-      if (c === "receivedAt") return `<td class="sub-date">${subFormatDate(r.receivedAt)}</td>`;
-      if (c === "reviewedAt") return r.reviewedAt
-        ? `<td><span class="sub-badge sub-badge-reviewed">Reviewed</span></td>`
-        : `<td><span class="sub-badge sub-badge-pending">Awaiting Review</span></td>`;
-      if (c === "uploadMode") return `<td>${escapeHTML(subUploadMode(r.uploadMode))}</td>`;
-      return `<td>${escapeHTML(String(r[c] || "—"))}</td>`;
-    }).join("");
-    return `<tr>${cells}</tr>`;
-  }).join("");
-}
-
-function renderDonut(donutId, centerId, legendId, segments, centerValue) {
-  const donut = document.getElementById(donutId);
-  const center = document.getElementById(centerId);
-  const legend = document.getElementById(legendId);
-  if (!donut || !center || !legend) {
-    return;
-  }
-
-  const total = segments.reduce((sum, seg) => sum + seg.value, 0) || 1;
-  let current = 0;
-  const gradientParts = segments.map((segment) => {
-    const start = (current / total) * 360;
-    current += segment.value;
-    const end = (current / total) * 360;
-    return `${segment.color} ${start}deg ${end}deg`;
-  });
-
-  donut.style.background = `conic-gradient(${gradientParts.join(", ")})`;
-  center.textContent = centerValue ?? `${Math.round((segments[0].value / total) * 100)}%`;
-
-  legend.innerHTML = "";
-  segments.forEach((segment) => {
-    const item = document.createElement("div");
-    item.className = "legend-item";
-    item.innerHTML = `
-      <span class="legend-dot" style="background:${segment.color}"></span>
-      <span>${segment.label} (${segment.value})</span>
-    `;
-    legend.appendChild(item);
-  });
-}
-
-function renderHistogram(containerId, items) {
-  const container = document.getElementById(containerId);
-  if (!container) {
-    return;
-  }
-
-  if (!items.length) {
-    container.innerHTML = "<p class=\"empty\">No data available.</p>";
-    return;
-  }
-
-  const palette = ["#0f9a87", "#3b82f6", "#f59e0b", "#6366f1", "#10b981", "#ef4444", "#14b8a6", "#8b5cf6"];
-  const maxValue = Math.max(...items.map((item) => item.value), 1);
-  container.innerHTML = "";
-
-  items.forEach((item, index) => {
-    const col = document.createElement("div");
-    col.className = "histogram-col";
-    const height = Math.max((item.value / maxValue) * 160, 18);
-    col.innerHTML = `
-      <div class="histogram-value">${item.value}</div>
-      <div class="histogram-bar" style="height:${height}px; background:${palette[index % palette.length]};"></div>
-      <div class="histogram-label">${item.label}</div>
-    `;
-    container.appendChild(col);
-  });
-}
-
-function buildAgeBuckets(items) {
-  const buckets = [
-    { label: "18-29", min: 18, max: 29, value: 0 },
-    { label: "30-39", min: 30, max: 39, value: 0 },
-    { label: "40-49", min: 40, max: 49, value: 0 },
-    { label: "50-59", min: 50, max: 59, value: 0 },
-    { label: "60-69", min: 60, max: 69, value: 0 },
-    { label: "70-79", min: 70, max: 79, value: 0 },
-    { label: "80+", min: 80, max: Infinity, value: 0 }
-  ];
-
-  items.forEach((item) => {
-    const age = Number(item.age);
-    const bucket = buckets.find((b) => age >= b.min && age <= b.max);
-    if (bucket) {
-      bucket.value += 1;
-    }
-  });
-
-  return buckets.map(({ label, value }) => ({ label, value }));
-}
 
 function setUploadProgress(progress, label) {
   const normalizedProgress = Math.max(0, Math.min(100, Math.round(progress)));
@@ -2845,304 +2237,7 @@ const subDetailBody     = document.getElementById("sub-detail-body");
 const subDetailFooter   = document.getElementById("sub-detail-footer");
 const subDetailClose    = document.getElementById("sub-detail-close");
 
-const subState = { page: 1, total: 0, limit: 20 };
-
-function subFormatDate(iso) {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
-}
-
-function subBadge(reviewed) {
-  return reviewed
-    ? `<span class="sub-badge sub-badge-reviewed">Reviewed</span>`
-    : `<span class="sub-badge sub-badge-pending">Awaiting Review</span>`;
-}
-
-function subUploadMode(mode) {
-  if (mode === "clinical_document") return "Clinical Document";
-  return mode === "package" ? "ZIP Package" : "Separate Files";
-}
-
-async function loadSubmissions(page = 1) {
-  if (!subTbody) return;
-  subTbody.innerHTML = '<tr><td colspan="9" class="empty">Loading…</td></tr>';
-
-  const params = new URLSearchParams({ page, limit: subState.limit });
-  const hospital = subHospitalFilter?.value || "";
-  const reviewed = subReviewedFilter?.value || "";
-  const search   = subSearchInput?.value.trim() || "";
-  const dateFrom = subDateFromInput?.value || "";
-  const dateTo   = subDateToInput?.value || "";
-  if (hospital) params.set("hospitalId", hospital);
-  if (reviewed) params.set("reviewed",   reviewed);
-  if (search)   params.set("search",     search);
-  if (dateFrom) params.set("dateFrom",   dateFrom);
-  if (dateTo)   params.set("dateTo",     dateTo);
-
-  try {
-    const res    = await authedFetch(`/api/submissions?${params}`);
-    if (res.status === 401) { handle401(); return; }
-    const result = await res.json();
-    if (!res.ok || !result.ok) {
-      subTbody.innerHTML = `<tr><td colspan="9" class="empty">${escapeHTML(result.error || "Failed to load.")}</td></tr>`;
-      return;
-    }
-
-    subState.page  = result.page;
-    subState.total = result.total;
-
-    renderSubmissionsTable(result.items);
-    updateSubPagination();
-  } catch {
-    subTbody.innerHTML = '<tr><td colspan="9" class="empty">Network error. Please try again.</td></tr>';
-  }
-}
-
-function renderSubmissionsTable(items) {
-  if (!subTbody) return;
-  if (!items.length) {
-    subTbody.innerHTML = '<tr><td colspan="9" class="empty">No submissions match the current filters.</td></tr>';
-    return;
-  }
-
-  const start = (subState.page - 1) * subState.limit;
-  subTbody.innerHTML = "";
-  items.forEach((item, i) => {
-    const tr = document.createElement("tr");
-    tr.className = "sub-row";
-    tr.dataset.recordId = item.recordId;
-    tr.innerHTML = `
-      <td class="sub-num">${start + i + 1}</td>
-      <td class="sub-uhid">${escapeHTML(item.uhid)}</td>
-      <td class="sub-hospital" title="${escapeHTML(item.hospitalName || "")}">${escapeHTML(item.hospitalId)}</td>
-      <td>${escapeHTML(item.age || "—")} / ${escapeHTML(item.sex || "—")}</td>
-      <td><span class="sub-stage-badge stage-${getCkdStageClass(item.ckdStage)}">${escapeHTML(formatCkdStage(item.ckdStage))}</span></td>
-      <td>${escapeHTML(item.studyFlow === "kfre" ? "KFRE · Clinical Document" : subUploadMode(item.uploadMode))}</td>
-      <td>${item.fileCount}</td>
-      <td class="sub-date">${subFormatDate(item.receivedAt)}</td>
-      <td>${subBadge(item.reviewedAt)}</td>
-    `;
-    tr.addEventListener("click", () => openSubmissionDetail(item.recordId));
-    subTbody.appendChild(tr);
-  });
-}
-
-function updateSubPagination() {
-  const totalPages = Math.max(1, Math.ceil(subState.total / subState.limit));
-  if (subPageInfo) subPageInfo.textContent = `Page ${subState.page} of ${totalPages} (${subState.total} record${subState.total !== 1 ? "s" : ""})`;
-  if (subPrevBtn)  subPrevBtn.disabled = subState.page <= 1;
-  if (subNextBtn)  subNextBtn.disabled = subState.page >= totalPages;
-}
-
-async function openSubmissionDetail(recordId) {
-  if (!subDetailOverlay) return;
-  subDetailOverlay.classList.remove("hidden");
-  if (subDetailTitle)    subDetailTitle.textContent    = "Loading…";
-  if (subDetailSubtitle) subDetailSubtitle.textContent = "";
-  if (subDetailBody)     subDetailBody.innerHTML       = '<p class="sub-detail-loading">Fetching record…</p>';
-  if (subDetailFooter)   subDetailFooter.innerHTML     = "";
-
-  try {
-    const res    = await authedFetch(`/api/submissions/${encodeURIComponent(recordId)}`);
-    if (res.status === 401) { handle401(); return; }
-    const result = await res.json();
-    if (!res.ok || !result.ok) {
-      if (subDetailBody) subDetailBody.innerHTML = `<p class="sub-detail-error">${escapeHTML(result.error || "Failed to load.")}</p>`;
-      return;
-    }
-    renderSubmissionDetail(result.submission);
-  } catch {
-    if (subDetailBody) subDetailBody.innerHTML = '<p class="sub-detail-error">Network error.</p>';
-  }
-}
-
-function renderSubmissionDetail(s) {
-  if (subDetailTitle)    subDetailTitle.textContent    = escapeHTML(s.uhid);
-  if (subDetailSubtitle) subDetailSubtitle.textContent = `${s.hospitalName || s.hospitalId}  ·  ${subFormatDate(s.receivedAt)}`;
-
-  const field = (label, value) => value && value !== "-"
-    ? `<div class="sub-detail-field"><span class="sub-detail-key">${label}</span><span class="sub-detail-val">${escapeHTML(String(value))}</span></div>`
-    : "";
-
-  const fileList = (s.files || []).map((f) =>
-    `<li class="sub-file-item"><span class="sub-file-name">${escapeHTML(f.originalName || f.storedName)}</span><span class="sub-file-size">${(f.size / 1024).toFixed(0)} KB</span></li>`
-  ).join("");
-  const qualityWarnings = Array.isArray(s.dataQualityWarnings) ? s.dataQualityWarnings : [];
-  const ultrasoundFindingRows = [
-    ...getKidneyFindingReviewRows("Right Kidney", s.ultrasoundFindings?.right),
-    ...getKidneyFindingReviewRows("Left Kidney", s.ultrasoundFindings?.left),
-    ...getUltrasoundQualityReviewRows(s.ultrasoundFindings)
-  ].filter(([, value]) => value !== "-");
-  const ultrasoundFindingSection = ultrasoundFindingRows.length ? `
-    <section class="sub-detail-section">
-      <h3 class="sub-detail-section-title">Ultrasound Findings</h3>
-      ${ultrasoundFindingRows.map(([label, value]) => field(label, value)).join("")}
-    </section>
-  ` : "";
-  const kfreRows = getKfreReviewRows(s.kfreForm);
-  const kfreSection = s.studyFlow === "kfre" && kfreRows.length ? `
-    <section class="sub-detail-section">
-      <h3 class="sub-detail-section-title">KFRE Clinical and Outcome Data</h3>
-      ${kfreRows.map(([label, value]) => field(label, value)).join("")}
-    </section>
-  ` : "";
-  const qualitySection = qualityWarnings.length ? `
-    <section class="sub-detail-section sub-quality-section">
-      <h3 class="sub-detail-section-title">Data Quality Checks</h3>
-      <ul class="sub-warning-list">
-        ${qualityWarnings.map((warning) => `<li>${escapeHTML(warning)}</li>`).join("")}
-      </ul>
-    </section>
-  ` : "";
-
-  if (subDetailBody) subDetailBody.innerHTML = `
-    <section class="sub-detail-section">
-      <h3 class="sub-detail-section-title">Patient</h3>
-      ${field("Record ID",      s.recordId)}
-      ${field("Participant ID", s.participantId)}
-      ${field("Patient ID",     s.uhid)}
-      ${field("Age",            s.age)}
-      ${field("Sex",            s.sex)}
-      ${field("Height (cm)",    s.heightCm)}
-      ${field("Weight (kg)",    s.weight)}
-      ${field("BMI",            s.bmi)}
-      ${field("Ethnicity",      s.ethnicity)}
-      ${field("Occupation",     s.occupation)}
-    </section>
-    <section class="sub-detail-section">
-      <h3 class="sub-detail-section-title">Clinical</h3>
-      ${field("Kidney Status",        formatCkdStage(s.ckdStage, s.ckdStageRemarks))}
-      ${field("Known CKD",            s.knownCkd)}
-      ${field("CKD Duration",         s.ckdDuration)}
-      ${field("Dialysis",             s.dialysis)}
-      ${field("Dialysis Frequency",   s.dialysisFrequency)}
-      ${field("Diabetic",             s.diabetic)}
-      ${field("Diabetic Stage",       s.diabeticStage)}
-      ${field("Diabetes Duration",    s.diabetesDuration)}
-      ${field("Hypertension",         s.hypertension)}
-      ${field("Hypert. Duration",     s.hypertensionDuration)}
-      ${field("Cardiovascular Dis.",  s.cardiovascularDisease)}
-      ${field("Family Kidney Hist.",  s.familyKidneyHistory)}
-    </section>
-    ${ultrasoundFindingSection}
-    ${kfreSection}
-    <section class="sub-detail-section">
-      <h3 class="sub-detail-section-title">Submission</h3>
-      ${field("Hospital",       s.hospitalName || s.hospitalId)}
-      ${field("Study Pathway",  s.studyFlow === "kfre" ? "KFRE Study" : "eGFR Study")}
-      ${field("Upload Mode",    subUploadMode(s.uploadMode))}
-      ${field("Enrollment Date",s.enrollmentDate)}
-      ${field("Consent ID",     s.consentId)}
-      ${field("Batch ID",       s.batchId)}
-      ${field("Received At",    subFormatDate(s.receivedAt))}
-    </section>
-    ${qualitySection}
-    ${fileList ? `<section class="sub-detail-section"><h3 class="sub-detail-section-title">Files</h3><ul class="sub-file-list">${fileList}</ul></section>` : ""}
-    ${s.reviewedAt ? `<section class="sub-detail-section"><h3 class="sub-detail-section-title">Review</h3>${field("Reviewed At", subFormatDate(s.reviewedAt))}${field("Reviewed By", s.reviewedBy)}</section>` : ""}
-  `;
-
-  if (subDetailFooter && state.authSession?.role === "admin") {
-    const isReviewed = Boolean(s.reviewedAt);
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = isReviewed ? "btn-ghost sub-review-btn" : "btn-primary sub-review-btn";
-    btn.textContent = isReviewed ? "Clear Review" : "Mark as Reviewed";
-    btn.addEventListener("click", async () => {
-      btn.disabled = true;
-      btn.textContent = "Saving…";
-      try {
-        const res = await authedFetch(`/api/submissions/${encodeURIComponent(s.recordId)}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ reviewed: !isReviewed })
-        });
-        const result = await res.json();
-        if (res.ok && result.ok) {
-          // Refresh detail and table row
-          openSubmissionDetail(s.recordId);
-          loadSubmissions(subState.page);
-        } else {
-          btn.disabled = false;
-          btn.textContent = isReviewed ? "Clear Review" : "Mark as Reviewed";
-        }
-      } catch {
-        btn.disabled = false;
-        btn.textContent = isReviewed ? "Clear Review" : "Mark as Reviewed";
-      }
-    });
-    subDetailFooter.innerHTML = "";
-    subDetailFooter.appendChild(btn);
-  }
-}
-
-function closeSubmissionDetail() {
-  subDetailOverlay?.classList.add("hidden");
-}
-
-// Populate hospital filter for admin
-function populateSubHospitalFilter() {
-  if (!subHospitalFilter) return;
-  const isAdmin = state.authSession?.role === "admin";
-  const wrap = document.getElementById("sub-hospital-filter-wrap");
-  if (wrap) wrap.style.display = isAdmin ? "" : "none";
-  if (!isAdmin) return;
-  // Clear existing options except the first "All Hospitals"
-  while (subHospitalFilter.options.length > 1) subHospitalFilter.remove(1);
-  getSelectableIntakeSources().forEach((h) => {
-    const opt = document.createElement("option");
-    opt.value = h.id;
-    opt.textContent = h.name;
-    subHospitalFilter.appendChild(opt);
-  });
-}
-
 const subExportBtn = document.getElementById("sub-export-csv");
-
-const EXPORT_ICON_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
-
-async function exportSubmissionsCsv() {
-  if (!subExportBtn) return;
-  subExportBtn.disabled = true;
-  subExportBtn.textContent = "Exporting…";
-
-  try {
-    const params   = new URLSearchParams();
-    const hospital = subHospitalFilter?.value || "";
-    const reviewed = subReviewedFilter?.value || "";
-    const search   = subSearchInput?.value.trim() || "";
-    const dateFrom = subDateFromInput?.value || "";
-    const dateTo   = subDateToInput?.value || "";
-    if (hospital) params.set("hospitalId", hospital);
-    if (reviewed) params.set("reviewed",   reviewed);
-    if (search)   params.set("search",     search);
-    if (dateFrom) params.set("dateFrom",   dateFrom);
-    if (dateTo)   params.set("dateTo",     dateTo);
-
-    const res = await authedFetch(`/api/submissions/export?${params}`);
-    if (res.status === 401) { handle401(); return; }
-    if (!res.ok) {
-      showToast("Export failed. Please try again.");
-      return;
-    }
-
-    const blob    = await res.blob();
-    const objUrl  = URL.createObjectURL(blob);
-    const dateStr = new Date().toISOString().slice(0, 10);
-    const a       = document.createElement("a");
-    a.href        = objUrl;
-    a.download    = `tanuh-submissions-${dateStr}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(objUrl);
-    showToast("CSV downloaded successfully.");
-  } catch {
-    showToast("Export failed. Please try again.");
-  } finally {
-    subExportBtn.disabled = false;
-    subExportBtn.innerHTML = `${EXPORT_ICON_SVG} Export CSV`;
-  }
-}
 
 subExportBtn?.addEventListener("click", exportSubmissionsCsv);
 
