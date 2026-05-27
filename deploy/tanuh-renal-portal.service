@@ -1,0 +1,21 @@
+[Unit]
+Description=TANUH Renal Data Portal
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=venkata_ganesh_tanuh_ai
+WorkingDirectory=/home/venkata_ganesh_tanuh_ai/tanuh-renal-portal
+EnvironmentFile=/home/venkata_ganesh_tanuh_ai/tanuh-renal-portal/.env
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tanuh-portal
+KillMode=mixed
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

@@ -3,6 +3,7 @@ const { execFile } = require("child_process");
 const fs = require("fs");
 const http = require("http");
 const path = require("path");
+const zlib = require("zlib");
 const { Pool } = require("pg");
 
 process.on("unhandledRejection", (reason) => {
@@ -111,6 +112,34 @@ const mimeTypes = {
   ".svg":  "image/svg+xml",
   ".glb":  "model/gltf-binary"
 };
+
+const COMPRESSIBLE_EXTS = new Set([".html", ".css", ".js", ".json", ".svg"]);
+
+// Returns appropriate Cache-Control for a given file extension.
+// Immutable assets (images, fonts, 3D models) are cached for 1 year.
+// HTML is revalidated on every request.
+// CSS and JS are cached for 1 hour (no content hash in filenames).
+function getCacheControl(ext) {
+  switch (ext) {
+    case ".png":
+    case ".svg":
+    case ".webp":
+    case ".ico":
+    case ".woff":
+    case ".woff2":
+    case ".glb":
+      return "public, max-age=31536000, immutable";
+    case ".html":
+      return "no-cache";
+    case ".css":
+    case ".js":
+      return "public, max-age=3600";
+    case ".json":
+      return "no-store";
+    default:
+      return "no-store";
+  }
+}
 
 // ─── Security headers ─────────────────────────────────────────────────────────
 
@@ -478,7 +507,6 @@ function serveStatic(req, res) {
   const decodedPath  = decodeURIComponent(requestUrl.pathname);
   const relativePath = decodedPath === "/" ? "index.html" : decodedPath.replace(/^\/+/, "");
   const filePath     = path.resolve(PUBLIC_DIR, relativePath);
-  const cacheControl = relativePath.startsWith("assets/") ? "public, max-age=86400" : "no-store";
 
   if (filePath !== PUBLIC_DIR && !filePath.startsWith(`${PUBLIC_DIR}${path.sep}`)) {
     sendJson(res, 403, { ok: false, error: "Forbidden." });
@@ -490,14 +518,47 @@ function serveStatic(req, res) {
       sendJson(res, 404, { ok: false, error: "Not found." });
       return;
     }
-    res.writeHead(200, {
-      "Content-Type":  mimeTypes[path.extname(filePath)] || "application/octet-stream",
-      "Content-Length": fileBuffer.length,
-      "Cache-Control":  cacheControl,
-      ...SECURITY_HEADERS
-    });
-    if (req.method === "HEAD") { res.end(); return; }
-    res.end(fileBuffer);
+    const ext            = path.extname(filePath).toLowerCase();
+    const acceptsGzip    = (req.headers["accept-encoding"] || "").includes("gzip");
+    const shouldCompress = acceptsGzip && COMPRESSIBLE_EXTS.has(ext);
+
+    if (shouldCompress) {
+      zlib.gzip(fileBuffer, (gzipErr, compressed) => {
+        if (gzipErr) {
+          // Fall back to uncompressed on error
+          res.writeHead(200, {
+            "Content-Type":   mimeTypes[ext] || "application/octet-stream",
+            "Content-Length": fileBuffer.length,
+            "Cache-Control":  getCacheControl(ext),
+            "Vary":           "Accept-Encoding",
+            ...SECURITY_HEADERS
+          });
+          if (req.method === "HEAD") { res.end(); return; }
+          res.end(fileBuffer);
+          return;
+        }
+        res.writeHead(200, {
+          "Content-Type":     mimeTypes[ext] || "application/octet-stream",
+          "Content-Encoding": "gzip",
+          "Content-Length":   compressed.length,
+          "Cache-Control":    getCacheControl(ext),
+          "Vary":             "Accept-Encoding",
+          ...SECURITY_HEADERS
+        });
+        if (req.method === "HEAD") { res.end(); return; }
+        res.end(compressed);
+      });
+    } else {
+      res.writeHead(200, {
+        "Content-Type":   mimeTypes[ext] || "application/octet-stream",
+        "Content-Length": fileBuffer.length,
+        "Cache-Control":  getCacheControl(ext),
+        "Vary":           "Accept-Encoding",
+        ...SECURITY_HEADERS
+      });
+      if (req.method === "HEAD") { res.end(); return; }
+      res.end(fileBuffer);
+    }
   });
 }
 

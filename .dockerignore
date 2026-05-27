@@ -1,0 +1,9 @@
+.env
+.env.*
+data/
+node_modules/
+.git/
+deploy/
+*.log
+assets/human_kidney.zip
+public/assets/human_kidney.zip
