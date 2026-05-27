@@ -1,0 +1,595 @@
+import { state } from "./state.js";
+import { authedFetch, handle401 } from "./api.js";
+import { showToast, escapeHTML } from "./utils.js";
+
+// ── API helpers ───────────────────────────────────────────────────────────────
+async function apiGet(path) {
+  try {
+    const res = await authedFetch(path);
+    if (res.status === 401) { handle401(); return { ok: false }; }
+    return res.json();
+  } catch { return { ok: false }; }
+}
+
+async function apiReq(path, body, method = "POST") {
+  try {
+    const res = await authedFetch(path, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (res.status === 401) { handle401(); return { ok: false }; }
+    return res.json();
+  } catch { return { ok: false }; }
+}
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+function fmtDate(iso) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+function fmtUptime(seconds) {
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  return [d && `${d}d`, h && `${h}h`, `${m}m`].filter(Boolean).join(" ");
+}
+
+// Apply bar widths via JS after innerHTML so no inline style= is in HTML
+function applyBarWidths(container) {
+  container.querySelectorAll("[data-pct]").forEach((el) => {
+    el.style.width = `${el.dataset.pct}%`;
+  });
+}
+
+// ── Module state ──────────────────────────────────────────────────────────────
+let activeSection = "overview";
+let adminHospitals = [];
+let modalConfirmFn = null;
+let initialized = false;
+let logoutCallback = () => {};
+
+export function setAdminLogoutCallback(fn) {
+  logoutCallback = fn;
+}
+
+// ── Section navigation ────────────────────────────────────────────────────────
+const SECTION_TITLES = {
+  overview: "Overview",
+  hospitals: "Hospitals",
+  submissions: "Submissions",
+  audit: "Audit Log",
+  analytics: "Analytics",
+  system: "System Health",
+};
+
+function navigate(section) {
+  document.querySelectorAll(".admin-section").forEach((el) => el.classList.add("hidden"));
+  document.getElementById(`admin-section-${section}`)?.classList.remove("hidden");
+  document.querySelectorAll(".admin-nav-btn").forEach((btn) => {
+    const active = btn.dataset.section === section;
+    btn.classList.toggle("active", active);
+    btn.setAttribute("aria-current", active ? "page" : "false");
+  });
+  const titleEl = document.getElementById("admin-page-title");
+  if (titleEl) titleEl.textContent = SECTION_TITLES[section] ?? section;
+  activeSection = section;
+  loadSection(section);
+}
+
+function loadSection(section) {
+  switch (section) {
+    case "overview":    loadOverview();    break;
+    case "hospitals":   loadHospitals();   break;
+    case "submissions": loadAdminSubs();   break;
+    case "audit":       loadAudit();       break;
+    case "analytics":   loadAnalytics();   break;
+    case "system":      loadSystem();      break;
+  }
+}
+
+// ── Public API ────────────────────────────────────────────────────────────────
+export function showAdminPortal() {
+  document.getElementById("admin-portal")?.classList.remove("hidden");
+  const label = document.getElementById("admin-user-label");
+  if (label) label.textContent = state.authSession?.userId ?? "Administrator";
+  navigate("overview");
+}
+
+export function hideAdminPortal() {
+  document.getElementById("admin-portal")?.classList.add("hidden");
+  closeModal();
+}
+
+export function initAdminPortal() {
+  if (initialized) return;
+  initialized = true;
+
+  // Nav buttons
+  document.querySelectorAll(".admin-nav-btn").forEach((btn) => {
+    btn.addEventListener("click", () => navigate(btn.dataset.section));
+  });
+
+  // Logout
+  document.getElementById("admin-logout-btn")?.addEventListener("click", () => logoutCallback());
+
+  // Topbar refresh
+  document.getElementById("admin-refresh-btn")?.addEventListener("click", () => loadSection(activeSection));
+
+  // Hospitals
+  document.getElementById("add-hospital-btn")?.addEventListener("click", showAddHospitalModal);
+  document.getElementById("hospital-search")?.addEventListener("input", (e) => renderHospitalsTable(e.target.value));
+  document.getElementById("hospitals-table-wrap")?.addEventListener("click", handleHospitalClick);
+
+  // Submissions
+  document.getElementById("admin-sub-search")?.addEventListener("input", () => loadAdminSubs(1));
+  document.getElementById("admin-sub-hospital-filter")?.addEventListener("change", () => loadAdminSubs(1));
+  document.getElementById("admin-export-btn")?.addEventListener("click", doExportCsv);
+
+  // Audit
+  document.getElementById("audit-filter-btn")?.addEventListener("click", () => loadAudit(1));
+
+  // Analytics
+  document.getElementById("reload-analytics-btn")?.addEventListener("click", loadAnalytics);
+  document.getElementById("trend-days")?.addEventListener("change", loadAnalytics);
+
+  // System
+  document.getElementById("reload-system-btn")?.addEventListener("click", loadSystem);
+  document.getElementById("sessions-table-wrap")?.addEventListener("click", handleSessionClick);
+
+  // Modal
+  document.getElementById("admin-modal-cancel")?.addEventListener("click", closeModal);
+  document.getElementById("admin-modal-confirm")?.addEventListener("click", () => modalConfirmFn?.());
+  document.getElementById("admin-modal-overlay")?.addEventListener("click", (e) => {
+    if (e.target === e.currentTarget) closeModal();
+  });
+}
+
+// ── Overview ──────────────────────────────────────────────────────────────────
+async function loadOverview() {
+  const [summary, auditResult] = await Promise.all([
+    apiGet("/api/admin/analytics/summary"),
+    apiGet("/api/admin/audit?limit=8"),
+  ]);
+
+  const grid = document.getElementById("admin-stat-grid");
+  if (grid && summary.ok) {
+    grid.innerHTML = [
+      { label: "Total Hospitals",    value: summary.total_hospitals,       accent: false },
+      { label: "Active Hospitals",   value: summary.active_hospitals,      accent: true  },
+      { label: "Total Submissions",  value: summary.total_submissions,     accent: false },
+      { label: "Today",              value: summary.submissions_today,     accent: true  },
+      { label: "This Week",          value: summary.submissions_this_week, accent: false },
+      { label: "This Month",         value: summary.submissions_this_month,accent: false },
+      { label: "Active Sessions",    value: summary.active_sessions,       accent: false },
+    ].map((c) => `<div class="admin-stat-card${c.accent ? " accent" : ""}">
+      <div class="admin-stat-label">${escapeHTML(c.label)}</div>
+      <div class="admin-stat-value">${c.value ?? "—"}</div>
+    </div>`).join("");
+  }
+
+  const auditWrap = document.getElementById("admin-recent-audit");
+  if (auditWrap) {
+    auditWrap.innerHTML = (auditResult.ok && auditResult.logs?.length)
+      ? buildAuditTable(auditResult.logs, false)
+      : `<p class="admin-empty">No recent activity.</p>`;
+  }
+
+  const sysRes = await apiGet("/api/admin/system");
+  const sysWrap = document.getElementById("admin-system-quick");
+  if (sysWrap && sysRes.ok) {
+    sysWrap.innerHTML = [
+      ["Database",    sysRes.db_ready       ? "Connected"      : "Disconnected", sysRes.db_ready],
+      ["GCS Storage", sysRes.gcs_configured ? "Configured"     : "Not configured", sysRes.gcs_configured],
+      ["Node.js",     sysRes.node_version,   true],
+      ["Uptime",      fmtUptime(sysRes.uptime_seconds), true],
+      ["Memory",      `${sysRes.memory_rss_mb} MB`, true],
+    ].map(([label, val, ok]) => `<div class="admin-system-row">
+      <span>${escapeHTML(String(label))}</span>
+      <span class="${ok ? "status-ok" : "status-warn"}">${escapeHTML(String(val ?? "—"))}</span>
+    </div>`).join("");
+  }
+}
+
+// ── Hospitals ─────────────────────────────────────────────────────────────────
+async function loadHospitals() {
+  const res = await apiGet("/api/admin/hospitals");
+  if (!res.ok) { showToast("Failed to load hospitals"); return; }
+  adminHospitals = res.hospitals ?? [];
+  renderHospitalsTable(document.getElementById("hospital-search")?.value || "");
+  populateHospitalDropdowns();
+}
+
+function renderHospitalsTable(filter = "") {
+  const wrap = document.getElementById("hospitals-table-wrap");
+  if (!wrap) return;
+  const list = filter
+    ? adminHospitals.filter((h) => h.name.toLowerCase().includes(filter.toLowerCase()))
+    : adminHospitals;
+
+  if (!list.length) {
+    wrap.innerHTML = `<p class="admin-empty">No hospitals found.</p>`;
+    return;
+  }
+
+  wrap.innerHTML = `<table class="admin-table">
+    <thead><tr>
+      <th>Hospital Name</th><th>Status</th><th>Submissions</th><th>Last Login</th><th>Created</th><th>Actions</th>
+    </tr></thead>
+    <tbody>
+      ${list.map((h) => `<tr>
+        <td><strong>${escapeHTML(h.name)}</strong></td>
+        <td><span class="admin-badge ${h.active ? "admin-badge-active" : "admin-badge-inactive"}">${h.active ? "Active" : "Inactive"}</span></td>
+        <td>${h.submission_count ?? 0}</td>
+        <td class="admin-nowrap">${fmtDate(h.last_login_at)}</td>
+        <td class="admin-nowrap">${fmtDate(h.created_at)}</td>
+        <td class="actions">
+          <button class="admin-btn admin-btn-outline admin-btn-sm"
+            data-action="edit" data-id="${escapeHTML(h.id)}" data-name="${escapeHTML(h.name)}" type="button">Edit</button>
+          <button class="admin-btn admin-btn-outline admin-btn-sm"
+            data-action="reset-pw" data-id="${escapeHTML(h.id)}" data-name="${escapeHTML(h.name)}" type="button">Reset PW</button>
+          <button class="admin-btn ${h.active ? "admin-btn-danger" : "admin-btn-outline"} admin-btn-sm"
+            data-action="toggle-active" data-id="${escapeHTML(h.id)}" data-name="${escapeHTML(h.name)}" data-active="${h.active}" type="button">
+            ${h.active ? "Deactivate" : "Activate"}
+          </button>
+        </td>
+      </tr>`).join("")}
+    </tbody>
+  </table>`;
+}
+
+function handleHospitalClick(e) {
+  const btn = e.target.closest("[data-action]");
+  if (!btn) return;
+  const { action, id, name, active } = btn.dataset;
+  if (action === "edit")          editHospital(id, name);
+  else if (action === "reset-pw") resetPassword(id, name);
+  else if (action === "toggle-active") toggleActive(id, name, active === "true");
+}
+
+function populateHospitalDropdowns() {
+  ["admin-sub-hospital-filter", "audit-hospital-filter"].forEach((selId) => {
+    const sel = document.getElementById(selId);
+    if (!sel || sel.options.length > 1) return;
+    adminHospitals.forEach((h) => {
+      const o = document.createElement("option");
+      o.value = h.id;
+      o.textContent = h.name;
+      sel.appendChild(o);
+    });
+  });
+}
+
+function showAddHospitalModal() {
+  openModal("Add Hospital",
+    `<div class="admin-field">
+       <label>Hospital Name</label>
+       <input id="m-hosp-name" maxlength="100" placeholder="e.g. Apollo Hospital Chennai" autocomplete="off">
+     </div>
+     <div class="admin-field">
+       <label>Password (min 12 characters)</label>
+       <input id="m-hosp-pw" type="password" autocomplete="new-password">
+     </div>`,
+    async () => {
+      const name = document.getElementById("m-hosp-name")?.value.trim();
+      const pw   = document.getElementById("m-hosp-pw")?.value;
+      if (!name)            return showToast("Name is required");
+      if (!pw || pw.length < 12) return showToast("Password must be at least 12 characters");
+      const r = await apiReq("/api/admin/hospitals", { name, password: pw });
+      if (r.ok) { closeModal(); showToast("Hospital added"); loadHospitals(); }
+      else showToast(r.error || "Failed to add hospital");
+    }
+  );
+}
+
+function editHospital(id, name) {
+  openModal("Edit Hospital",
+    `<div class="admin-field">
+       <label>Hospital Name</label>
+       <input id="m-edit-name" value="${escapeHTML(name)}" maxlength="100" autocomplete="off">
+     </div>`,
+    async () => {
+      const newName = document.getElementById("m-edit-name")?.value.trim();
+      if (!newName) return showToast("Name is required");
+      const r = await apiReq(`/api/admin/hospitals/${encodeURIComponent(id)}`, { name: newName }, "PATCH");
+      if (r.ok) { closeModal(); showToast("Hospital updated"); loadHospitals(); }
+      else showToast(r.error || "Update failed");
+    }
+  );
+}
+
+function resetPassword(id, name) {
+  openModal(`Reset Password — ${escapeHTML(name)}`,
+    `<div class="admin-field">
+       <label>New Password (min 12 characters)</label>
+       <input id="m-pw1" type="password" autocomplete="new-password">
+     </div>
+     <div class="admin-field">
+       <label>Confirm Password</label>
+       <input id="m-pw2" type="password" autocomplete="new-password">
+     </div>`,
+    async () => {
+      const pw  = document.getElementById("m-pw1")?.value;
+      const pw2 = document.getElementById("m-pw2")?.value;
+      if (!pw || pw.length < 12) return showToast("Password must be at least 12 characters");
+      if (pw !== pw2)             return showToast("Passwords do not match");
+      const r = await apiReq(`/api/admin/hospitals/${encodeURIComponent(id)}/reset-password`, { newPassword: pw });
+      if (r.ok) { closeModal(); showToast("Password reset — active sessions for this hospital have been logged out", 4000); }
+      else showToast(r.error || "Reset failed");
+    }
+  );
+}
+
+function toggleActive(id, name, currentlyActive) {
+  const verb = currentlyActive ? "Deactivate" : "Activate";
+  openModal(`${verb} Hospital`,
+    `<p>${currentlyActive ? "Deactivating" : "Activating"} <strong>${escapeHTML(name)}</strong>.
+     ${currentlyActive ? "They will no longer be able to log in." : "They will regain login access."}</p>`,
+    async () => {
+      const r = await apiReq(`/api/admin/hospitals/${encodeURIComponent(id)}`, { active: !currentlyActive }, "PATCH");
+      if (r.ok) { closeModal(); showToast(`Hospital ${verb.toLowerCase()}d`); loadHospitals(); }
+      else showToast(r.error || "Update failed");
+    }
+  );
+}
+
+// ── Submissions ───────────────────────────────────────────────────────────────
+let subPage = 1;
+const SUB_PAGE_SIZE = 20;
+
+async function loadAdminSubs(page = subPage) {
+  subPage = page;
+  const search   = document.getElementById("admin-sub-search")?.value   || "";
+  const hospital = document.getElementById("admin-sub-hospital-filter")?.value || "";
+  const params   = new URLSearchParams({ page, limit: SUB_PAGE_SIZE });
+  if (search)   params.set("search", search);
+  if (hospital) params.set("hospitalId", hospital);
+
+  const res  = await apiGet(`/api/submissions?${params}`);
+  const wrap = document.getElementById("admin-sub-table-wrap");
+  if (!wrap) return;
+
+  if (!res.ok || !res.submissions?.length) {
+    wrap.innerHTML = `<p class="admin-empty">No submissions found.</p>`;
+    document.getElementById("admin-sub-pagination").innerHTML = "";
+    return;
+  }
+
+  wrap.innerHTML = `<table class="admin-table">
+    <thead><tr>
+      <th>Participant ID</th><th>Hospital</th><th>Kidney Status</th><th>Submitted</th>
+    </tr></thead>
+    <tbody>
+      ${res.submissions.map((s) => `<tr>
+        <td>${escapeHTML(s.participant_id || s.record_id || "—")}</td>
+        <td>${escapeHTML(s.hospital_name || s.hospital_id || "—")}</td>
+        <td>${escapeHTML(s.ckd_stage || "—")}</td>
+        <td class="admin-nowrap">${fmtDate(s.created_at)}</td>
+      </tr>`).join("")}
+    </tbody>
+  </table>`;
+
+  renderPagination("admin-sub-pagination", page, res.total ?? res.submissions.length, SUB_PAGE_SIZE, loadAdminSubs);
+}
+
+async function doExportCsv() {
+  const res = await authedFetch("/api/submissions/export");
+  if (!res.ok) { showToast("Export failed"); return; }
+  const text = await res.text();
+  const blob = new Blob([text], { type: "text/csv" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = `tanuh-submissions-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ── Audit Log ─────────────────────────────────────────────────────────────────
+let auditPage = 1;
+const AUDIT_PAGE_SIZE = 50;
+
+async function loadAudit(page = auditPage) {
+  auditPage = page;
+  const hospitalId = document.getElementById("audit-hospital-filter")?.value || "";
+  const eventType  = document.getElementById("audit-event-filter")?.value   || "";
+  const from       = document.getElementById("audit-from")?.value           || "";
+  const to         = document.getElementById("audit-to")?.value             || "";
+  const params     = new URLSearchParams({ page, limit: AUDIT_PAGE_SIZE });
+  if (hospitalId) params.set("hospitalId", hospitalId);
+  if (eventType)  params.set("eventType",  eventType);
+  if (from)       params.set("from", from);
+  if (to)         params.set("to",   to);
+
+  const res  = await apiGet(`/api/admin/audit?${params}`);
+  const wrap = document.getElementById("audit-table-wrap");
+  if (!wrap) return;
+
+  if (!res.ok || !res.logs?.length) {
+    wrap.innerHTML = `<p class="admin-empty">No log entries found.</p>`;
+    document.getElementById("audit-pagination").innerHTML = "";
+    return;
+  }
+  wrap.innerHTML = buildAuditTable(res.logs, true);
+  renderPagination("audit-pagination", page, res.total, AUDIT_PAGE_SIZE, loadAudit);
+}
+
+function buildAuditTable(logs, showHospital = false) {
+  return `<table class="admin-table">
+    <thead><tr>
+      <th>Time</th><th>Event</th>${showHospital ? "<th>Hospital</th>" : ""}<th>IP</th>
+    </tr></thead>
+    <tbody>
+      ${logs.map((l) => `<tr>
+        <td class="admin-nowrap">${fmtDate(l.created_at || l.timestamp)}</td>
+        <td><code>${escapeHTML(l.event_type)}</code></td>
+        ${showHospital ? `<td>${escapeHTML(l.hospital_name || l.hospital_id || "—")}</td>` : ""}
+        <td>${escapeHTML(l.ip_address || l.ip || "—")}</td>
+      </tr>`).join("")}
+    </tbody>
+  </table>`;
+}
+
+// ── Analytics ─────────────────────────────────────────────────────────────────
+async function loadAnalytics() {
+  const days = document.getElementById("trend-days")?.value || 30;
+  const [trends, dist] = await Promise.all([
+    apiGet(`/api/admin/analytics/trends?days=${days}`),
+    apiGet("/api/admin/analytics/distribution"),
+  ]);
+
+  const trendWrap = document.getElementById("analytics-trend-wrap");
+  if (trendWrap) {
+    if (trends.ok && trends.trends?.length) {
+      const items   = trends.trends.slice(-14);
+      const maxVal  = Math.max(...items.map((t) => t.count), 1);
+      trendWrap.innerHTML = `<div class="analytics-bar-chart">
+        ${items.map((t) => `<div class="analytics-bar-row">
+          <span class="analytics-bar-label">${escapeHTML(t.date?.slice(5) || "")}</span>
+          <div class="analytics-bar-track">
+            <div class="analytics-bar-fill" data-pct="${Math.round((t.count / maxVal) * 100)}"></div>
+          </div>
+          <span class="analytics-bar-count">${t.count}</span>
+        </div>`).join("")}
+      </div>`;
+      applyBarWidths(trendWrap);
+    } else {
+      trendWrap.innerHTML = `<p class="admin-empty">No trend data available.</p>`;
+    }
+  }
+
+  if (dist.ok) {
+    const ckdWrap = document.getElementById("analytics-ckd-wrap");
+    if (ckdWrap && dist.ckd_stages?.length) {
+      const maxVal = Math.max(...dist.ckd_stages.map((s) => s.count), 1);
+      ckdWrap.innerHTML = `<div class="analytics-bar-chart">
+        ${dist.ckd_stages.map((s) => `<div class="analytics-bar-row">
+          <span class="analytics-bar-label">${escapeHTML(String(s.stage ?? "Unknown"))}</span>
+          <div class="analytics-bar-track">
+            <div class="analytics-bar-fill analytics-bar-teal" data-pct="${Math.round((s.count / maxVal) * 100)}"></div>
+          </div>
+          <span class="analytics-bar-count">${s.count}</span>
+        </div>`).join("")}
+      </div>`;
+      applyBarWidths(ckdWrap);
+    } else if (ckdWrap) {
+      ckdWrap.innerHTML = `<p class="admin-empty">No distribution data.</p>`;
+    }
+
+    const hospWrap = document.getElementById("analytics-hosp-wrap");
+    if (hospWrap && dist.by_hospital?.length) {
+      const maxVal = Math.max(...dist.by_hospital.map((h) => h.count), 1);
+      hospWrap.innerHTML = `<div class="analytics-bar-chart">
+        ${dist.by_hospital.map((h) => `<div class="analytics-bar-row">
+          <span class="analytics-bar-label">${escapeHTML(h.hospital_name || h.hospital_id)}</span>
+          <div class="analytics-bar-track">
+            <div class="analytics-bar-fill analytics-bar-dark" data-pct="${Math.round((h.count / maxVal) * 100)}"></div>
+          </div>
+          <span class="analytics-bar-count">${h.count}</span>
+        </div>`).join("")}
+      </div>`;
+      applyBarWidths(hospWrap);
+    } else if (hospWrap) {
+      hospWrap.innerHTML = `<p class="admin-empty">No hospital data.</p>`;
+    }
+  }
+}
+
+// ── System Health ─────────────────────────────────────────────────────────────
+async function loadSystem() {
+  const [sysRes, sessRes] = await Promise.all([
+    apiGet("/api/admin/system"),
+    apiGet("/api/admin/sessions"),
+  ]);
+
+  const statsWrap = document.getElementById("admin-system-stats");
+  if (statsWrap && sysRes.ok) {
+    const cards = [
+      { label: "Uptime",          value: fmtUptime(sysRes.uptime_seconds) },
+      { label: "Node.js",         value: sysRes.node_version  },
+      { label: "Memory (RSS)",    value: `${sysRes.memory_rss_mb} MB` },
+      { label: "Database",        value: sysRes.db_ready       ? "✓ Connected"      : "✗ Disconnected"  },
+      { label: "GCS Storage",     value: sysRes.gcs_configured ? "✓ Configured"     : "✗ Not configured" },
+      { label: "Active Sessions", value: sysRes.active_sessions },
+    ];
+    statsWrap.innerHTML = cards.map((c) => `<div class="admin-stat-card">
+      <div class="admin-stat-label">${escapeHTML(c.label)}</div>
+      <div class="admin-stat-value admin-stat-value-lg">${escapeHTML(String(c.value ?? "—"))}</div>
+    </div>`).join("");
+  }
+
+  const wrap = document.getElementById("sessions-table-wrap");
+  if (!wrap) return;
+
+  if (!sessRes.ok || !sessRes.sessions?.length) {
+    wrap.innerHTML = `<p class="admin-empty">No active sessions.</p>`;
+    return;
+  }
+
+  wrap.innerHTML = `<table class="admin-table">
+    <thead><tr><th>User ID</th><th>Hospital</th><th>Role</th><th>Expires</th><th>Action</th></tr></thead>
+    <tbody>
+      ${sessRes.sessions.map((s) => `<tr>
+        <td>${escapeHTML(s.userId)}</td>
+        <td>${escapeHTML(s.hospitalId || "—")}</td>
+        <td>${escapeHTML(s.role)}</td>
+        <td class="admin-nowrap">${fmtDate(s.expiresAt)}</td>
+        <td><button class="admin-btn admin-btn-danger admin-btn-sm"
+          data-action="force-logout" data-userid="${escapeHTML(s.userId)}" type="button">Force Logout</button></td>
+      </tr>`).join("")}
+    </tbody>
+  </table>`;
+}
+
+function handleSessionClick(e) {
+  const btn = e.target.closest("[data-action='force-logout']");
+  if (!btn) return;
+  forceLogout(btn.dataset.userid);
+}
+
+async function forceLogout(userId) {
+  const res  = await authedFetch(`/api/admin/sessions/${encodeURIComponent(userId)}`, { method: "DELETE" });
+  const data = await res.json();
+  if (data.ok) { showToast(`Logged out ${data.removed ?? ""}  session(s) for ${userId}`, 3500); loadSystem(); }
+  else showToast(data.error || "Force logout failed");
+}
+
+// ── Pagination ────────────────────────────────────────────────────────────────
+function renderPagination(containerId, page, total, pageSize, loadFn) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const totalPages = Math.ceil((total || 0) / pageSize);
+  if (totalPages <= 1) { el.innerHTML = ""; return; }
+
+  el.innerHTML = `
+    <button class="admin-btn admin-btn-outline admin-btn-sm" id="${containerId}-prev"
+      ${page <= 1 ? "disabled" : ""} type="button">← Prev</button>
+    <span>Page ${page} of ${totalPages} (${total} records)</span>
+    <button class="admin-btn admin-btn-outline admin-btn-sm" id="${containerId}-next"
+      ${page >= totalPages ? "disabled" : ""} type="button">Next →</button>
+  `;
+
+  el.querySelector(`#${containerId}-prev`)?.addEventListener("click", () => loadFn(page - 1));
+  el.querySelector(`#${containerId}-next`)?.addEventListener("click", () => loadFn(page + 1));
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
+function openModal(title, bodyHTML, onConfirm) {
+  const overlay = document.getElementById("admin-modal-overlay");
+  const titleEl = document.getElementById("admin-modal-title");
+  const bodyEl  = document.getElementById("admin-modal-body");
+  if (!overlay) return;
+  if (titleEl) titleEl.textContent = title;
+  if (bodyEl)  bodyEl.innerHTML = bodyHTML;
+  overlay.classList.remove("hidden");
+  modalConfirmFn = onConfirm;
+  setTimeout(() => bodyEl?.querySelector("input")?.focus(), 50);
+}
+
+export function closeModal() {
+  document.getElementById("admin-modal-overlay")?.classList.add("hidden");
+  modalConfirmFn = null;
+}

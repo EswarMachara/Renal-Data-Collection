@@ -6,7 +6,10 @@ const ADMIN_INTAKE_SOURCE = { id: "TANUH-ADMIN", name: "Admin" };
 let authCallbacks = {
   setMobileNavigationOpen: () => {},
   populateSubHospitalFilter: () => {},
-  updateWorkflowAccess: () => {}
+  updateWorkflowAccess: () => {},
+  initAdminPortal: () => {},
+  showAdminPortal: () => {},
+  hideAdminPortal: () => {},
 };
 
 export function configureAuthCallbacks(callbacks) {
@@ -118,14 +121,23 @@ export function showApp() {
   const navbarUserLabel = document.getElementById("navbar-user-label");
   authCallbacks.setMobileNavigationOpen(false);
   if (loginScreen) loginScreen.classList.add("hidden");
+
+  const session = state.authSession;
+
+  // Admin users go to the dedicated admin portal
+  if (session?.role === "admin") {
+    if (appNavbar) appNavbar.classList.add("hidden");
+    document.querySelector(".app-container")?.classList.add("hidden");
+    authCallbacks.initAdminPortal();
+    authCallbacks.showAdminPortal();
+    return;
+  }
+
   if (appNavbar) appNavbar.classList.remove("hidden");
   document.querySelector(".app-container")?.classList.remove("hidden");
 
-  const session = state.authSession;
   if (navbarUserLabel && session) {
-    navbarUserLabel.textContent = session.role === "admin"
-      ? "Admin"
-      : (session.hospitalId || session.userId || "");
+    navbarUserLabel.textContent = session.hospitalId || session.userId || "";
   }
   if (navbarAuth) navbarAuth.classList.remove("hidden");
 
@@ -142,6 +154,7 @@ export function showLoginScreen() {
   if (loginScreen) loginScreen.classList.remove("hidden");
   if (appNavbar) appNavbar.classList.add("hidden");
   document.querySelector(".app-container")?.classList.add("hidden");
+  authCallbacks.hideAdminPortal();
 }
 
 export function saveHospitalSession() {

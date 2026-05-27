@@ -1542,6 +1542,160 @@
     </section>
   </div>
 
+  <!-- ══════════════════════════════════════════════ ADMIN PORTAL -->
+  <div id="admin-portal" class="hidden" role="main" aria-label="Admin Portal">
+
+    <nav class="admin-sidebar" aria-label="Admin navigation">
+      <div class="admin-sidebar-header">
+        <img src="./assets/tanuh.png" alt="TANUH" class="admin-logo-img">
+        <div>
+          <span class="admin-portal-label">Admin Portal</span>
+          <span class="admin-user-label" id="admin-user-label">Administrator</span>
+        </div>
+      </div>
+      <ul class="admin-nav-list" role="list">
+        <li><button class="admin-nav-btn active" data-section="overview" aria-current="page" type="button">Overview</button></li>
+        <li><button class="admin-nav-btn" data-section="hospitals" type="button">Hospitals</button></li>
+        <li><button class="admin-nav-btn" data-section="submissions" type="button">Submissions</button></li>
+        <li><button class="admin-nav-btn" data-section="audit" type="button">Audit Log</button></li>
+        <li><button class="admin-nav-btn" data-section="analytics" type="button">Analytics</button></li>
+        <li><button class="admin-nav-btn" data-section="system" type="button">System Health</button></li>
+      </ul>
+      <button class="admin-logout-btn" id="admin-logout-btn" type="button">Sign Out</button>
+    </nav>
+
+    <div class="admin-main">
+      <header class="admin-topbar">
+        <h1 class="admin-page-title" id="admin-page-title">Overview</h1>
+        <button class="admin-refresh-btn" id="admin-refresh-btn" type="button" aria-label="Refresh current section">↻ Refresh</button>
+      </header>
+
+      <!-- Overview -->
+      <section id="admin-section-overview" class="admin-section" aria-label="Overview">
+        <div class="admin-stat-grid" id="admin-stat-grid">
+          <p class="admin-empty">Loading…</p>
+        </div>
+        <div class="admin-two-col">
+          <div class="admin-card">
+            <h2 class="admin-card-title">Recent Activity</h2>
+            <div id="admin-recent-audit" class="admin-table-wrap"><p class="admin-empty">Loading…</p></div>
+          </div>
+          <div class="admin-card">
+            <h2 class="admin-card-title">System Status</h2>
+            <div id="admin-system-quick" class="admin-system-quick"><p class="admin-empty">Loading…</p></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Hospitals -->
+      <section id="admin-section-hospitals" class="admin-section hidden" aria-label="Hospitals">
+        <div class="admin-section-toolbar">
+          <input type="search" id="hospital-search" class="admin-search" placeholder="Search hospitals…" aria-label="Search hospitals">
+          <button class="admin-btn admin-btn-primary" id="add-hospital-btn" type="button">+ Add Hospital</button>
+        </div>
+        <div class="admin-card">
+          <div id="hospitals-table-wrap" class="admin-table-wrap"><p class="admin-empty">Loading…</p></div>
+        </div>
+      </section>
+
+      <!-- Submissions -->
+      <section id="admin-section-submissions" class="admin-section hidden" aria-label="Submissions">
+        <div class="admin-section-toolbar">
+          <input type="search" id="admin-sub-search" class="admin-search" placeholder="Search by Participant ID…" aria-label="Search submissions">
+          <select id="admin-sub-hospital-filter" class="admin-select" aria-label="Filter by hospital">
+            <option value="">All Hospitals</option>
+          </select>
+          <button class="admin-btn admin-btn-outline" id="admin-export-btn" type="button">Export CSV</button>
+        </div>
+        <div class="admin-card">
+          <div id="admin-sub-table-wrap" class="admin-table-wrap"><p class="admin-empty">Loading…</p></div>
+          <div class="admin-pagination" id="admin-sub-pagination"></div>
+        </div>
+      </section>
+
+      <!-- Audit Log -->
+      <section id="admin-section-audit" class="admin-section hidden" aria-label="Audit Log">
+        <div class="admin-section-toolbar">
+          <select id="audit-hospital-filter" class="admin-select" aria-label="Filter by hospital">
+            <option value="">All Hospitals</option>
+          </select>
+          <select id="audit-event-filter" class="admin-select" aria-label="Filter by event type">
+            <option value="">All Events</option>
+            <option value="login">login</option>
+            <option value="login_failed">login_failed</option>
+            <option value="submission_created">submission_created</option>
+            <option value="consent_recorded">consent_recorded</option>
+            <option value="export">export</option>
+          </select>
+          <input type="date" id="audit-from" class="admin-date" aria-label="From date">
+          <input type="date" id="audit-to" class="admin-date" aria-label="To date">
+          <button class="admin-btn admin-btn-outline" id="audit-filter-btn" type="button">Filter</button>
+        </div>
+        <div class="admin-card">
+          <div id="audit-table-wrap" class="admin-table-wrap"><p class="admin-empty">Loading…</p></div>
+          <div class="admin-pagination" id="audit-pagination"></div>
+        </div>
+      </section>
+
+      <!-- Analytics -->
+      <section id="admin-section-analytics" class="admin-section hidden" aria-label="Analytics">
+        <div class="admin-section-toolbar">
+          <label for="trend-days" class="admin-label">Period:</label>
+          <select id="trend-days" class="admin-select" aria-label="Trend period">
+            <option value="7">Last 7 days</option>
+            <option value="30" selected>Last 30 days</option>
+            <option value="90">Last 90 days</option>
+            <option value="365">Last 365 days</option>
+          </select>
+          <button class="admin-btn admin-btn-outline" id="reload-analytics-btn" type="button">Reload</button>
+        </div>
+        <div class="admin-analytics-grid">
+          <div class="admin-card">
+            <h2 class="admin-card-title">Submission Trend</h2>
+            <div id="analytics-trend-wrap"><p class="admin-empty">Loading…</p></div>
+          </div>
+          <div class="admin-card">
+            <h2 class="admin-card-title">CKD Stage Distribution</h2>
+            <div id="analytics-ckd-wrap"><p class="admin-empty">Loading…</p></div>
+          </div>
+          <div class="admin-card admin-card-wide">
+            <h2 class="admin-card-title">Submissions by Hospital</h2>
+            <div id="analytics-hosp-wrap"><p class="admin-empty">Loading…</p></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- System Health -->
+      <section id="admin-section-system" class="admin-section hidden" aria-label="System Health">
+        <div class="admin-section-toolbar">
+          <button class="admin-btn admin-btn-outline" id="reload-system-btn" type="button">↻ Refresh</button>
+        </div>
+        <div class="admin-stat-grid" id="admin-system-stats">
+          <p class="admin-empty">Loading…</p>
+        </div>
+        <div class="admin-card">
+          <div class="admin-card-header-row">
+            <h2 class="admin-card-title">Active Sessions</h2>
+          </div>
+          <div id="sessions-table-wrap" class="admin-table-wrap"><p class="admin-empty">Loading…</p></div>
+        </div>
+      </section>
+
+    </div><!-- /admin-main -->
+  </div><!-- /admin-portal -->
+
+  <!-- Admin modal -->
+  <div id="admin-modal-overlay" class="admin-modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="admin-modal-title">
+    <div class="admin-modal">
+      <h2 class="admin-modal-title" id="admin-modal-title"></h2>
+      <div class="admin-modal-body" id="admin-modal-body"></div>
+      <div class="admin-modal-footer">
+        <button class="admin-btn admin-btn-outline" id="admin-modal-cancel" type="button">Cancel</button>
+        <button class="admin-btn admin-btn-primary" id="admin-modal-confirm" type="button">Confirm</button>
+      </div>
+    </div>
+  </div>
+
   <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <script type="module" src="./script.js"></script>

@@ -49,6 +49,12 @@ import {
   populateSubHospitalFilter,
   exportSubmissionsCsv
 } from "./modules/submissions.js";
+import {
+  showAdminPortal,
+  hideAdminPortal,
+  initAdminPortal,
+  setAdminLogoutCallback,
+} from "./modules/admin.js";
 
 const RESUMABLE_UPLOAD_RETRIES = 3;
 
@@ -111,7 +117,16 @@ function loadHospitalsFromApi() {
 configureAuthCallbacks({
   setMobileNavigationOpen,
   populateSubHospitalFilter,
-  updateWorkflowAccess
+  updateWorkflowAccess,
+  initAdminPortal,
+  showAdminPortal,
+  hideAdminPortal,
+});
+
+setAdminLogoutCallback(async () => {
+  try { await authedFetch("/api/auth/logout", { method: "POST" }); } catch { /* ignore */ }
+  clearAuthSession();
+  showLoginScreen();
 });
 configureSubmissionRenderers({
   getKidneyFindingReviewRows,
