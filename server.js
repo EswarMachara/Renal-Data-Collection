@@ -93,6 +93,44 @@ const ALLOWED_FILE_MIMES = {
   patientPackage:   ["application/zip", "application/x-zip-compressed"]
 };
 
+const MAGIC_BYTES = {
+  "application/pdf":              { offset: 0, sig: [0x25, 0x50, 0x44, 0x46] },                         // %PDF
+  "image/jpeg":                   { offset: 0, sig: [0xFF, 0xD8, 0xFF] },
+  "image/png":                    { offset: 0, sig: [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A] },
+  "image/webp":                   { offset: 8, sig: [0x57, 0x45, 0x42, 0x50] },                         // WEBP
+  "video/mp4":                    { offset: 4, sig: [0x66, 0x74, 0x79, 0x70] },                         // ftyp
+  "video/quicktime":              { offset: 4, sig: [0x66, 0x74, 0x79, 0x70] },                         // ftyp
+  "video/x-msvideo":              { offset: 0, sig: [0x52, 0x49, 0x46, 0x46] },                         // RIFF
+  "video/avi":                    { offset: 0, sig: [0x52, 0x49, 0x46, 0x46] },                         // RIFF
+  "application/zip":              { offset: 0, sig: [0x50, 0x4B, 0x03, 0x04] },                         // PK
+  "application/x-zip-compressed": { offset: 0, sig: [0x50, 0x4B, 0x03, 0x04] }                          // PK
+};
+
+function checkMagicBytes(buffer, mimeType) {
+  const rule = MAGIC_BYTES[mimeType];
+  if (!rule) return true;
+  if (!Buffer.isBuffer(buffer) || buffer.length < rule.offset + rule.sig.length) return false;
+  return rule.sig.every((byte, index) => buffer[rule.offset + index] === byte);
+}
+
+function readFileHeader(file) {
+  if (Buffer.isBuffer(file.content)) return file.content;
+  if (file.contentBase64) return Buffer.from(file.contentBase64.slice(0, 32), "base64");
+  if (!file.sourcePath) return null;
+
+  let descriptor;
+  try {
+    descriptor = fs.openSync(file.sourcePath, "r");
+    const header = Buffer.alloc(16);
+    const bytesRead = fs.readSync(descriptor, header, 0, header.length, 0);
+    return header.subarray(0, bytesRead);
+  } catch {
+    return null;
+  } finally {
+    if (descriptor !== undefined) fs.closeSync(descriptor);
+  }
+}
+
 // ─── Database pool ────────────────────────────────────────────────────────────
 
 const dbPool = DATABASE_URL
@@ -149,10 +187,11 @@ const SECURITY_HEADERS = {
   "X-XSS-Protection":          "1; mode=block",
   "Referrer-Policy":           "strict-origin-when-cross-origin",
   "Strict-Transport-Security": "max-age=63072000; includeSubDomains",
+  "Permissions-Policy":        "camera=(), microphone=(), geolocation=(), payment=(), usb=(), display-capture=()",
   "Content-Security-Policy":
     "default-src 'self'; " +
     "script-src 'self' https://ajax.googleapis.com https://unpkg.com; " +
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+    "style-src 'self' https://fonts.googleapis.com; " +
     "font-src 'self' https://fonts.gstatic.com; " +
     "img-src 'self' data: blob:; " +
     "media-src 'self' blob:; " +
@@ -1238,6 +1277,10 @@ function normalizeFiles(files, { requireContent = true } = {}) {
     if (!allowedFileFields.has(fieldName)) throw new Error(`Unsupported upload field: ${fieldName || "unknown"}.`);
     if (file.type && !ALLOWED_FILE_MIMES[fieldName].includes(file.type)) {
       throw new Error(`File type "${file.type}" is not allowed for field "${fieldName}". Accepted types: ${ALLOWED_FILE_MIMES[fieldName].join(", ")}.`);
+    }
+    const contentHeader = readFileHeader(file);
+    if (file.type && contentHeader && !checkMagicBytes(contentHeader, file.type)) {
+      throw new Error(`${fieldName}: file content does not match declared type`);
     }
     const name        = cleanText(file.name, 180) || "upload.bin";
     const size        = Number(file.size || 0);

@@ -1239,6 +1239,24 @@ body {
   background: #94a3b8;
 }
 
+.chart-color-teal { background-color: #0f9a87; fill: #0f9a87; stroke: #0f9a87; }
+.chart-color-mint { background-color: #2dd4bf; fill: #2dd4bf; stroke: #2dd4bf; }
+.chart-color-blue-light { background-color: #60a5fa; fill: #60a5fa; stroke: #60a5fa; }
+.chart-color-yellow { background-color: #fbbf24; fill: #fbbf24; stroke: #fbbf24; }
+.chart-color-orange { background-color: #f97316; fill: #f97316; stroke: #f97316; }
+.chart-color-red-light { background-color: #f87171; fill: #f87171; stroke: #f87171; }
+.chart-color-red { background-color: #dc2626; fill: #dc2626; stroke: #dc2626; }
+.chart-color-violet { background-color: #8b5cf6; fill: #8b5cf6; stroke: #8b5cf6; }
+.chart-color-blue { background-color: #2563eb; fill: #2563eb; stroke: #2563eb; }
+.chart-color-slate-light { background-color: #cbd5e1; fill: #cbd5e1; stroke: #cbd5e1; }
+.chart-color-slate { background-color: #94a3b8; fill: #94a3b8; stroke: #94a3b8; }
+.chart-color-azure { background-color: #3b82f6; fill: #3b82f6; stroke: #3b82f6; }
+.chart-color-amber { background-color: #f59e0b; fill: #f59e0b; stroke: #f59e0b; }
+.chart-color-indigo { background-color: #6366f1; fill: #6366f1; stroke: #6366f1; }
+.chart-color-green { background-color: #10b981; fill: #10b981; stroke: #10b981; }
+.chart-color-coral { background-color: #ef4444; fill: #ef4444; stroke: #ef4444; }
+.chart-color-turquoise { background-color: #14b8a6; fill: #14b8a6; stroke: #14b8a6; }
+
 .donut-wrap {
   position: relative;
   width: 190px;
@@ -1253,6 +1271,27 @@ body {
   background: conic-gradient(#14868c 0deg, #e2e8f0 0deg);
   position: relative;
   box-shadow: 0 14px 24px rgba(15, 23, 42, 0.12);
+}
+
+.donut.has-svg-chart {
+  background: transparent;
+}
+
+.donut-chart {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.donut-track,
+.donut-segment {
+  fill: none;
+  stroke-width: 8;
+}
+
+.donut-track {
+  stroke: #e2e8f0;
 }
 
 .donut::before {
@@ -1561,9 +1600,10 @@ body {
 .histogram-bar {
   width: 100%;
   border-radius: 12px 12px 6px 6px;
-  background: #0f9a87;
+  background: transparent;
   box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
   position: relative;
+  display: block;
 }
 
 .histogram-bar::after {
@@ -1658,15 +1698,17 @@ body {
   overflow: hidden;
 }
 .hosp-bar-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #0e6a6f, #2dd4bf);
-  border-radius: 99px;
-  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-  min-width: 4px;
+  fill: #0f9a87;
 }
 
 .hosp-bar-fill.kfre {
-  background: linear-gradient(90deg, #2563eb, #60a5fa);
+  fill: #2563eb;
+}
+
+.hosp-bar-chart {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .hosp-card-meta {
@@ -2524,8 +2566,27 @@ body {
 }
 
 .upload-progress-fill {
+  display: block;
   height: 100%;
-  width: 0%;
+  width: 100%;
+  border-radius: inherit;
+  border: 0;
+  appearance: none;
+  background: transparent;
+}
+
+.upload-progress-fill::-webkit-progress-bar {
+  border-radius: inherit;
+  background: transparent;
+}
+
+.upload-progress-fill::-webkit-progress-value {
+  border-radius: inherit;
+  background: linear-gradient(90deg, #0f9a87, #45d3bd);
+  transition: width 0.18s ease;
+}
+
+.upload-progress-fill::-moz-progress-bar {
   border-radius: inherit;
   background: linear-gradient(90deg, #0f9a87, #45d3bd);
   transition: width 0.18s ease;

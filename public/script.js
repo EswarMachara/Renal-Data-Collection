@@ -1404,7 +1404,7 @@ function setUploadProgress(progress, label) {
   const normalizedProgress = Math.max(0, Math.min(100, Math.round(progress)));
   state.uploadProgress = normalizedProgress;
   uploadProgressPanel.classList.remove("hidden");
-  uploadProgressFill.style.width = `${normalizedProgress}%`;
+  uploadProgressFill.value = normalizedProgress;
   uploadProgressPercent.textContent = `${normalizedProgress}%`;
   uploadProgressLabel.textContent = label;
 
@@ -1421,7 +1421,7 @@ function setUploadProgress(progress, label) {
 
 function resetUploadProgress() {
   state.uploadProgress = 0;
-  uploadProgressFill.style.width = "0%";
+  uploadProgressFill.value = 0;
   uploadProgressPercent.textContent = "0%";
   uploadProgressLabel.textContent = "Preparing upload";
   uploadProgressPanel.classList.add("hidden");
@@ -2373,8 +2373,8 @@ document.getElementById("ls-pw-toggle")?.addEventListener("click", () => {
   if (!pwInput) return;
   const isHidden = pwInput.type === "password";
   pwInput.type = isHidden ? "text" : "password";
-  if (eyeOpen)  eyeOpen.style.display  = isHidden ? "none"  : "";
-  if (eyeShut)  eyeShut.style.display  = isHidden ? ""      : "none";
+  eyeOpen?.classList.toggle("hidden", isHidden);
+  eyeShut?.classList.toggle("hidden", !isHidden);
 });
 
 // ─── Startup ──────────────────────────────────────────────────────────────────

@@ -277,7 +277,7 @@ export function populateSubHospitalFilter() {
   if (!subHospitalFilter) return;
   const isAdmin = state.authSession?.role === "admin";
   const wrap = document.getElementById("sub-hospital-filter-wrap");
-  if (wrap) wrap.style.display = isAdmin ? "" : "none";
+  wrap?.classList.toggle("hidden", !isAdmin);
   if (!isAdmin) return;
   while (subHospitalFilter.options.length > 1) subHospitalFilter.remove(1);
   getSelectableIntakeSources().forEach((hospital) => {

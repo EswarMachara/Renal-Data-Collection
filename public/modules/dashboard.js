@@ -23,6 +23,29 @@ const CKD_DONUT_SEGMENTS = (counts) => [
   { label: "Other", value: counts["Other"] || 0, color: "#8b5cf6" }
 ];
 
+function chartColorClass(color) {
+  const classes = {
+    "#0f9a87": "chart-color-teal",
+    "#2dd4bf": "chart-color-mint",
+    "#60a5fa": "chart-color-blue-light",
+    "#fbbf24": "chart-color-yellow",
+    "#f97316": "chart-color-orange",
+    "#f87171": "chart-color-red-light",
+    "#dc2626": "chart-color-red",
+    "#8b5cf6": "chart-color-violet",
+    "#2563eb": "chart-color-blue",
+    "#cbd5e1": "chart-color-slate-light",
+    "#94a3b8": "chart-color-slate",
+    "#3b82f6": "chart-color-azure",
+    "#f59e0b": "chart-color-amber",
+    "#6366f1": "chart-color-indigo",
+    "#10b981": "chart-color-green",
+    "#ef4444": "chart-color-coral",
+    "#14b8a6": "chart-color-turquoise"
+  };
+  return classes[color] || "chart-color-slate";
+}
+
 export function refreshDashboard() {
   updateDashboards();
   redrawRecentUploads();
@@ -218,8 +241,8 @@ export function renderHospitalBreakdown(breakdown, grandTotal) {
     const pct = grandTotal > 0 ? Math.round((hospital.patients / grandTotal) * 100) : 0;
     const egfrPatients = hospital.egfrPatients ?? hospital.patients;
     const kfrePatients = hospital.kfrePatients ?? 0;
-    const egfrWidth = Math.round((egfrPatients / maxPatients) * 100);
-    const kfreWidth = Math.round((kfrePatients / maxPatients) * 100);
+    const egfrWidth = egfrPatients ? Math.max(Math.round((egfrPatients / maxPatients) * 100), 2) : 0;
+    const kfreWidth = kfrePatients ? Math.max(Math.round((kfrePatients / maxPatients) * 100), 2) : 0;
     const reviewed = hospital.patients > 0 ? Math.round((hospital.reviewed / hospital.patients) * 100) : 0;
     return `
       <div class="hosp-breakdown-card ${hospital.patients === 0 ? "hosp-card-empty" : ""}">
@@ -235,8 +258,10 @@ export function renderHospitalBreakdown(breakdown, grandTotal) {
           <div class="hosp-pathway-total kfre"><span>KFRE</span><strong>${kfrePatients}</strong></div>
         </div>
         <div class="hosp-bar-track">
-          ${egfrPatients ? `<div class="hosp-bar-fill" style="width:${egfrWidth}%"></div>` : ""}
-          ${kfrePatients ? `<div class="hosp-bar-fill kfre" style="width:${kfreWidth}%"></div>` : ""}
+          <svg class="hosp-bar-chart" viewBox="0 0 100 7" preserveAspectRatio="none" aria-hidden="true">
+            ${egfrPatients ? `<rect class="hosp-bar-fill" x="0" y="0" width="${egfrWidth}" height="7" rx="3.5"></rect>` : ""}
+            ${kfrePatients ? `<rect class="hosp-bar-fill kfre" x="${egfrWidth}" y="0" width="${kfreWidth}" height="7" rx="3.5"></rect>` : ""}
+          </svg>
         </div>
         <div class="hosp-card-meta">
           <span class="hosp-meta-chip hosp-meta-pct">${pct}% of total</span>
@@ -274,21 +299,26 @@ function renderDonut(donutId, centerId, legendId, segments, centerValue) {
 
   const total = segments.reduce((sum, segment) => sum + segment.value, 0) || 1;
   let current = 0;
-  const gradientParts = segments.map((segment) => {
-    const start = (current / total) * 360;
+  const circles = segments.map((segment) => {
+    const portion = (segment.value / total) * 100;
+    const offset = -((current / total) * 100);
     current += segment.value;
-    const end = (current / total) * 360;
-    return `${segment.color} ${start}deg ${end}deg`;
-  });
-
-  donut.style.background = `conic-gradient(${gradientParts.join(", ")})`;
+    return `<circle class="donut-segment ${chartColorClass(segment.color)}" cx="50" cy="50" r="46" pathLength="100" stroke-dasharray="${portion} 100" stroke-dashoffset="${offset}"></circle>`;
+  }).join("");
+  donut.classList.add("has-svg-chart");
+  donut.innerHTML = `
+    <svg class="donut-chart" viewBox="0 0 100 100" aria-hidden="true">
+      <circle class="donut-track" cx="50" cy="50" r="46"></circle>
+      ${circles}
+    </svg>
+  `;
   center.textContent = centerValue ?? `${Math.round((segments[0].value / total) * 100)}%`;
   legend.innerHTML = "";
   segments.forEach((segment) => {
     const item = document.createElement("div");
     item.className = "legend-item";
     item.innerHTML = `
-      <span class="legend-dot" style="background:${segment.color}"></span>
+      <span class="legend-dot ${chartColorClass(segment.color)}"></span>
       <span>${segment.label} (${segment.value})</span>
     `;
     legend.appendChild(item);
@@ -309,10 +339,12 @@ function renderHistogram(containerId, items) {
   items.forEach((item, index) => {
     const column = document.createElement("div");
     column.className = "histogram-col";
-    const height = Math.max((item.value / maxValue) * 160, 18);
+    const height = Math.round(Math.max((item.value / maxValue) * 160, 18));
     column.innerHTML = `
       <div class="histogram-value">${item.value}</div>
-      <div class="histogram-bar" style="height:${height}px; background:${palette[index % palette.length]};"></div>
+      <svg class="histogram-bar" viewBox="0 0 42 ${height}" height="${height}" preserveAspectRatio="none" aria-hidden="true">
+        <rect class="${chartColorClass(palette[index % palette.length])}" x="0" y="0" width="42" height="${height}" rx="6"></rect>
+      </svg>
       <div class="histogram-label">${item.label}</div>
     `;
     container.appendChild(column);

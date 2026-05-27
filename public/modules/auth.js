@@ -130,7 +130,7 @@ export function showApp() {
   if (navbarAuth) navbarAuth.classList.remove("hidden");
 
   const submissionsNavBtn = document.getElementById("submissions-nav");
-  if (submissionsNavBtn) submissionsNavBtn.style.display = "";
+  submissionsNavBtn?.classList.remove("hidden");
   authCallbacks.populateSubHospitalFilter();
   authCallbacks.updateWorkflowAccess();
 }
