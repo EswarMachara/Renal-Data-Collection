@@ -438,22 +438,25 @@ function checkActionLimit(userId, action, max, windowMs) {
 
 // ─── Session management ───────────────────────────────────────────────────────
 
-const memorySessions = new Map(); // sessionId → { userId, hospitalId, role, expiresAt }
+const memorySessions = new Map(); // sessionId → { userId, hospitalId, role, createdAt, expiresAt }
 
 function createMemorySession(userId, hospitalId, role) {
   const sessionId = crypto.randomBytes(32).toString("hex");
+  const createdAt = new Date().toISOString();
   const expiresAt = Date.now() + SESSION_TTL_MS;
-  memorySessions.set(sessionId, { userId, hospitalId, role, expiresAt });
+  memorySessions.set(sessionId, { userId, hospitalId, role, createdAt, expiresAt });
   return { sessionId, expiresAt: new Date(expiresAt).toISOString() };
 }
 
 async function createDbSession(userId, hospitalId, role) {
   const sessionId = crypto.randomBytes(32).toString("hex");
+  const createdAt = new Date().toISOString();
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
   await dbPool.query(
     "INSERT INTO sessions (session_id, user_id, hospital_id, role, expires_at) VALUES ($1, $2, $3, $4, $5)",
     [sessionId, userId, hospitalId || null, role, expiresAt.toISOString()]
   );
+  memorySessions.set(sessionId, { userId, hospitalId, role, createdAt, expiresAt: expiresAt.getTime() });
   return { sessionId, expiresAt: expiresAt.toISOString() };
 }
 
@@ -630,6 +633,9 @@ async function initializeDatabase() {
         created_at   timestamptz NOT NULL DEFAULT now()
       )
     `);
+    await client.query("ALTER TABLE hospitals ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT true");
+    await client.query("ALTER TABLE hospitals ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ");
+    await client.query("CREATE UNIQUE INDEX IF NOT EXISTS idx_hospitals_name_unique ON hospitals (LOWER(hospital_name))");
 
     // Auth: users
     await client.query(`
@@ -800,7 +806,7 @@ async function initializeDatabase() {
         `INSERT INTO hospitals (hospital_id, hospital_name)
          VALUES ($1, $2)
          ON CONFLICT (hospital_id)
-         DO UPDATE SET hospital_name = EXCLUDED.hospital_name, active = true`,
+         DO UPDATE SET hospital_name = EXCLUDED.hospital_name`,
         [hospital.id, hospital.name]
       );
     }
@@ -813,6 +819,14 @@ async function initializeDatabase() {
     );
 
     await client.query("COMMIT");
+    const activeHospitals = await client.query(
+      "SELECT hospital_id, hospital_name FROM hospitals WHERE active = true AND hospital_id <> $1 ORDER BY hospital_name ASC",
+      [adminIntakeSource.id]
+    );
+    hospitals.length = 0;
+    activeHospitals.rows.forEach((hospital) => {
+      hospitals.push({ id: hospital.hospital_id, name: hospital.hospital_name });
+    });
     dbReady = true;
   } catch (err) {
     await client.query("ROLLBACK");
@@ -1628,6 +1642,23 @@ async function handleLogin(req, res) {
 
   // DB users take precedence when DB is ready
   if (dbPool && dbReady) {
+    try {
+      const hospitalStatus = await dbPool.query(
+        `SELECT h.active
+         FROM hospitals h
+         LEFT JOIN users u ON u.hospital_id = h.hospital_id
+         WHERE u.username = $1 OR h.hospital_id = $1
+         LIMIT 1`,
+        [username]
+      );
+      if (hospitalStatus.rows[0]?.active === false) {
+        sendJson(res, 401, { ok: false, error: "Account is disabled. Contact the administrator." });
+        return;
+      }
+    } catch {
+      sendJson(res, 500, { ok: false, error: "Unable to validate account status." });
+      return;
+    }
     user = await verifyDbPassword(username, password);
   }
 
@@ -1654,6 +1685,12 @@ async function handleLogin(req, res) {
   } catch (err) {
     sendJson(res, 500, { ok: false, error: "Failed to create session." });
     return;
+  }
+
+  if (dbPool && dbReady && user.hospitalId) {
+    try {
+      await dbPool.query("UPDATE hospitals SET last_login_at = NOW() WHERE hospital_id = $1", [user.hospitalId]);
+    } catch { /* non-fatal; login remains valid */ }
   }
 
   await logAudit({ event: "login", userId: user.userId, hospitalId: user.hospitalId, ip, req });
@@ -1699,6 +1736,516 @@ async function handleMe(req, res) {
       hospitalName: hospital?.name || null,
       role:         session.role
     }
+  });
+}
+
+function requireAdminDatabase(res) {
+  if (!dbPool || !dbReady) {
+    sendJson(res, 503, { ok: false, error: "Database is not available." });
+    return false;
+  }
+  return true;
+}
+
+function validateAdminHospitalName(value) {
+  if (typeof value !== "string") throw new Error("Hospital name is required.");
+  const name = cleanText(value, 101);
+  if (!name) throw new Error("Hospital name is required.");
+  if (name.length > 100) throw new Error("Hospital name must not exceed 100 characters.");
+  return name;
+}
+
+function validateAdminPassword(value, fieldName = "Password") {
+  if (typeof value !== "string" || value.length < 12) {
+    throw new Error(`${fieldName} must be at least 12 characters.`);
+  }
+  return value;
+}
+
+function updateRuntimeHospital(hospitalId, hospitalName, active) {
+  const existingIndex = hospitals.findIndex((hospital) => hospital.id === hospitalId);
+  if (!active) {
+    if (existingIndex >= 0) hospitals.splice(existingIndex, 1);
+    return;
+  }
+  const entry = { id: hospitalId, name: hospitalName };
+  if (existingIndex >= 0) {
+    hospitals[existingIndex] = entry;
+  } else {
+    hospitals.push(entry);
+  }
+  hospitals.sort((first, second) => first.name.localeCompare(second.name));
+}
+
+function revokeHospitalMemorySessions(hospitalId) {
+  let removed = 0;
+  for (const [sessionId, activeSession] of memorySessions) {
+    if (activeSession.hospitalId === hospitalId) {
+      memorySessions.delete(sessionId);
+      removed += 1;
+    }
+  }
+  return removed;
+}
+
+// GET /api/admin/hospitals
+async function handleAdminGetHospitals(req, res) {
+  const session = await requireAuth(req, res);
+  if (!session) return;
+  if (session.role !== "admin") {
+    sendJson(res, 403, { ok: false, error: "Forbidden" });
+    return;
+  }
+  if (!requireAdminDatabase(res)) return;
+
+  try {
+    const result = await dbPool.query(
+      `SELECT h.hospital_id AS id, h.hospital_name AS name, h.active, h.last_login_at, h.created_at,
+              COUNT(s.record_id)::int AS submission_count
+       FROM hospitals h
+       LEFT JOIN submissions s ON s.hospital_id = h.hospital_id
+       WHERE h.hospital_id <> $1
+       GROUP BY h.hospital_id
+       ORDER BY h.hospital_name ASC`,
+      [adminIntakeSource.id]
+    );
+    sendJson(res, 200, { ok: true, hospitals: result.rows });
+  } catch (err) {
+    sendJson(res, 500, { ok: false, error: err.message });
+  }
+}
+
+// POST /api/admin/hospitals
+async function handleAdminCreateHospital(req, res) {
+  const session = await requireAuth(req, res);
+  if (!session) return;
+  if (session.role !== "admin") {
+    sendJson(res, 403, { ok: false, error: "Forbidden" });
+    return;
+  }
+  if (!requireAdminDatabase(res)) return;
+
+  let body, name, password;
+  try {
+    body = parseJsonPayload(await readRequestBody(req));
+    name = validateAdminHospitalName(body.name);
+    password = validateAdminPassword(body.password);
+  } catch (err) {
+    sendJson(res, 400, { ok: false, error: err.message || "Invalid request body." });
+    return;
+  }
+
+  const hospitalId = `HOSP-${crypto.randomBytes(5).toString("hex").toUpperCase()}`;
+  const passwordDetails = await hashPassword(password);
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `INSERT INTO hospitals (hospital_id, hospital_name, active)
+       VALUES ($1, $2, true)`,
+      [hospitalId, name]
+    );
+    await client.query(
+      `INSERT INTO users (user_id, username, password_hash, password_salt, hospital_id, role, active)
+       VALUES ($1, $1, $2, $3, $1, 'hospital', true)`,
+      [hospitalId, passwordDetails.hash, passwordDetails.salt]
+    );
+    await client.query("COMMIT");
+    updateRuntimeHospital(hospitalId, name, true);
+    await logAudit({
+      event: "hospital_created",
+      userId: session.userId,
+      hospitalId,
+      ip: req.socket?.remoteAddress,
+      req,
+      details: { hospitalName: name }
+    });
+    sendJson(res, 200, { ok: true, hospital: { id: hospitalId, name } });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    if (err.code === "23505") {
+      sendJson(res, 409, { ok: false, error: "Hospital name already exists" });
+    } else {
+      sendJson(res, 500, { ok: false, error: err.message });
+    }
+  } finally {
+    client.release();
+  }
+}
+
+// PATCH /api/admin/hospitals/:id
+async function handleAdminUpdateHospital(req, res, hospitalId) {
+  const session = await requireAuth(req, res);
+  if (!session) return;
+  if (session.role !== "admin") {
+    sendJson(res, 403, { ok: false, error: "Forbidden" });
+    return;
+  }
+  if (!requireAdminDatabase(res)) return;
+
+  let body;
+  try {
+    body = parseJsonPayload(await readRequestBody(req));
+  } catch {
+    sendJson(res, 400, { ok: false, error: "Invalid request body." });
+    return;
+  }
+
+  const fields = [];
+  const values = [];
+  try {
+    if (Object.prototype.hasOwnProperty.call(body, "name")) {
+      values.push(validateAdminHospitalName(body.name));
+      fields.push(`hospital_name = $${values.length}`);
+    }
+    if (Object.prototype.hasOwnProperty.call(body, "active")) {
+      if (typeof body.active !== "boolean") throw new Error("Active must be true or false.");
+      values.push(body.active);
+      fields.push(`active = $${values.length}`);
+    }
+  } catch (err) {
+    sendJson(res, 400, { ok: false, error: err.message });
+    return;
+  }
+
+  try {
+    let result;
+    if (fields.length) {
+      values.push(hospitalId);
+      result = await dbPool.query(
+        `UPDATE hospitals SET ${fields.join(", ")}
+         WHERE hospital_id = $${values.length} AND hospital_id <> $${values.length + 1}
+         RETURNING hospital_id, hospital_name, active`,
+        [...values, adminIntakeSource.id]
+      );
+    } else {
+      result = await dbPool.query(
+        "SELECT hospital_id, hospital_name, active FROM hospitals WHERE hospital_id = $1 AND hospital_id <> $2",
+        [hospitalId, adminIntakeSource.id]
+      );
+    }
+    if (!result.rows[0]) {
+      sendJson(res, 404, { ok: false, error: "Hospital not found." });
+      return;
+    }
+    const hospital = result.rows[0];
+    updateRuntimeHospital(hospital.hospital_id, hospital.hospital_name, hospital.active);
+    await logAudit({
+      event: "hospital_updated",
+      userId: session.userId,
+      hospitalId,
+      ip: req.socket?.remoteAddress,
+      req,
+      details: body
+    });
+    sendJson(res, 200, { ok: true });
+  } catch (err) {
+    if (err.code === "23505") {
+      sendJson(res, 409, { ok: false, error: "Hospital name already exists" });
+    } else {
+      sendJson(res, 500, { ok: false, error: err.message });
+    }
+  }
+}
+
+// POST /api/admin/hospitals/:id/reset-password
+async function handleAdminResetHospitalPassword(req, res, hospitalId) {
+  const session = await requireAuth(req, res);
+  if (!session) return;
+  if (session.role !== "admin") {
+    sendJson(res, 403, { ok: false, error: "Forbidden" });
+    return;
+  }
+  if (!requireAdminDatabase(res)) return;
+
+  let body, newPassword;
+  try {
+    body = parseJsonPayload(await readRequestBody(req));
+    newPassword = validateAdminPassword(body.newPassword, "New password");
+  } catch (err) {
+    sendJson(res, 400, { ok: false, error: err.message || "Invalid request body." });
+    return;
+  }
+
+  const hospitalResult = await dbPool.query(
+    "SELECT hospital_id FROM hospitals WHERE hospital_id = $1 AND hospital_id <> $2",
+    [hospitalId, adminIntakeSource.id]
+  );
+  if (!hospitalResult.rows[0]) {
+    sendJson(res, 404, { ok: false, error: "Hospital not found." });
+    return;
+  }
+
+  const passwordDetails = await hashPassword(newPassword);
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    const existingUser = await client.query(
+      "UPDATE users SET password_hash = $1, password_salt = $2, active = true WHERE hospital_id = $3 AND role = 'hospital' RETURNING user_id",
+      [passwordDetails.hash, passwordDetails.salt, hospitalId]
+    );
+    if (!existingUser.rows.length) {
+      await client.query(
+        `INSERT INTO users (user_id, username, password_hash, password_salt, hospital_id, role, active)
+         VALUES ($1, $1, $2, $3, $1, 'hospital', true)`,
+        [hospitalId, passwordDetails.hash, passwordDetails.salt]
+      );
+    }
+    await client.query("DELETE FROM sessions WHERE hospital_id = $1", [hospitalId]);
+    await client.query("COMMIT");
+    revokeHospitalMemorySessions(hospitalId);
+    await logAudit({
+      event: "hospital_password_reset",
+      userId: session.userId,
+      hospitalId,
+      ip: req.socket?.remoteAddress,
+      req
+    });
+    sendJson(res, 200, { ok: true });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    sendJson(res, 500, { ok: false, error: err.message });
+  } finally {
+    client.release();
+  }
+}
+
+// GET /api/admin/sessions
+async function handleAdminGetSessions(req, res) {
+  const session = await requireAuth(req, res);
+  if (!session) return;
+  if (session.role !== "admin") {
+    sendJson(res, 403, { ok: false, error: "Forbidden" });
+    return;
+  }
+
+  const now = Date.now();
+  const sessions = [];
+  for (const [sessionId, activeSession] of memorySessions) {
+    if (now > activeSession.expiresAt) {
+      memorySessions.delete(sessionId);
+      continue;
+    }
+    sessions.push({
+      userId: activeSession.userId,
+      hospitalId: activeSession.hospitalId,
+      role: activeSession.role,
+      createdAt: activeSession.createdAt || null,
+      expiresAt: new Date(activeSession.expiresAt).toISOString()
+    });
+  }
+  sendJson(res, 200, { ok: true, sessions });
+}
+
+// DELETE /api/admin/sessions/:userId
+async function handleAdminDeleteSessions(req, res, userId) {
+  const session = await requireAuth(req, res);
+  if (!session) return;
+  if (session.role !== "admin") {
+    sendJson(res, 403, { ok: false, error: "Forbidden" });
+    return;
+  }
+
+  let removed = 0;
+  for (const [sessionId, activeSession] of memorySessions) {
+    if (activeSession.userId === userId) {
+      memorySessions.delete(sessionId);
+      removed += 1;
+    }
+  }
+  if (dbPool && dbReady) {
+    const result = await dbPool.query("DELETE FROM sessions WHERE user_id = $1", [userId]);
+    removed = Math.max(removed, result.rowCount);
+  }
+  sendJson(res, 200, { ok: true, removed });
+}
+
+// GET /api/admin/audit
+async function handleAdminAudit(req, res) {
+  const session = await requireAuth(req, res);
+  if (!session) return;
+  if (session.role !== "admin") {
+    sendJson(res, 403, { ok: false, error: "Forbidden" });
+    return;
+  }
+  if (!requireAdminDatabase(res)) return;
+
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const hospitalId = cleanText(url.searchParams.get("hospitalId"), 80) || null;
+  const eventType = cleanText(url.searchParams.get("eventType"), 100) || null;
+  const page = Math.max(1, Number.parseInt(url.searchParams.get("page") || "1", 10) || 1);
+  const limit = Math.min(200, Math.max(1, Number.parseInt(url.searchParams.get("limit") || "50", 10) || 50));
+  let from = null;
+  let to = null;
+  try {
+    for (const [label, rawValue] of [["from", url.searchParams.get("from")], ["to", url.searchParams.get("to")]]) {
+      if (!rawValue) continue;
+      const date = new Date(rawValue);
+      if (Number.isNaN(date.getTime())) throw new Error(`${label} must be a valid ISO date string.`);
+      if (label === "from") from = date.toISOString(); else to = date.toISOString();
+    }
+    if (from && to && new Date(from) > new Date(to)) throw new Error("from cannot be after to.");
+  } catch (err) {
+    sendJson(res, 400, { ok: false, error: err.message });
+    return;
+  }
+
+  const params = [hospitalId, eventType, from, to];
+  const whereClause = `
+    WHERE ($1::text IS NULL OR al.hospital_id = $1)
+      AND ($2::text IS NULL OR al.event_type = $2)
+      AND ($3::timestamptz IS NULL OR al.created_at >= $3)
+      AND ($4::timestamptz IS NULL OR al.created_at <= $4)`;
+  try {
+    const [logs, count] = await Promise.all([
+      dbPool.query(
+        `SELECT al.*, h.hospital_name
+         FROM audit_logs al
+         LEFT JOIN hospitals h ON h.hospital_id = al.hospital_id
+         ${whereClause}
+         ORDER BY al.created_at DESC
+         LIMIT $5 OFFSET $6`,
+        [...params, limit, (page - 1) * limit]
+      ),
+      dbPool.query(`SELECT COUNT(*)::int AS total FROM audit_logs al ${whereClause}`, params)
+    ]);
+    sendJson(res, 200, { ok: true, logs: logs.rows, total: count.rows[0]?.total || 0, page, limit });
+  } catch (err) {
+    sendJson(res, 500, { ok: false, error: err.message });
+  }
+}
+
+// GET /api/admin/analytics/summary
+async function handleAdminAnalyticsSummary(req, res) {
+  const session = await requireAuth(req, res);
+  if (!session) return;
+  if (session.role !== "admin") {
+    sendJson(res, 403, { ok: false, error: "Forbidden" });
+    return;
+  }
+  if (!requireAdminDatabase(res)) return;
+
+  try {
+    const [hospitalMetrics, submissionMetrics] = await Promise.all([
+      dbPool.query(
+        "SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE active)::int AS active FROM hospitals WHERE hospital_id <> $1",
+        [adminIntakeSource.id]
+      ),
+      dbPool.query(
+        `SELECT
+           COUNT(*)::int AS total,
+           COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE)::int AS today,
+           COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')::int AS this_week,
+           COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days')::int AS this_month
+         FROM submissions`
+      )
+    ]);
+    sendJson(res, 200, {
+      ok: true,
+      total_hospitals: hospitalMetrics.rows[0]?.total || 0,
+      active_hospitals: hospitalMetrics.rows[0]?.active || 0,
+      total_submissions: submissionMetrics.rows[0]?.total || 0,
+      submissions_today: submissionMetrics.rows[0]?.today || 0,
+      submissions_this_week: submissionMetrics.rows[0]?.this_week || 0,
+      submissions_this_month: submissionMetrics.rows[0]?.this_month || 0,
+      active_sessions: memorySessions.size
+    });
+  } catch (err) {
+    sendJson(res, 500, { ok: false, error: err.message });
+  }
+}
+
+// GET /api/admin/analytics/trends
+async function handleAdminAnalyticsTrends(req, res) {
+  const session = await requireAuth(req, res);
+  if (!session) return;
+  if (session.role !== "admin") {
+    sendJson(res, 403, { ok: false, error: "Forbidden" });
+    return;
+  }
+  if (!requireAdminDatabase(res)) return;
+
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const days = Math.min(365, Math.max(1, Number.parseInt(url.searchParams.get("days") || "30", 10) || 30));
+  try {
+    const result = await dbPool.query(
+      `SELECT DATE(created_at) AS date, COUNT(*)::int AS count
+       FROM submissions
+       WHERE created_at >= NOW() - ($1 * INTERVAL '1 day')
+       GROUP BY DATE(created_at)
+       ORDER BY date ASC`,
+      [days]
+    );
+    sendJson(res, 200, { ok: true, trends: result.rows });
+  } catch (err) {
+    sendJson(res, 500, { ok: false, error: err.message });
+  }
+}
+
+// GET /api/admin/analytics/distribution
+async function handleAdminAnalyticsDistribution(req, res) {
+  const session = await requireAuth(req, res);
+  if (!session) return;
+  if (session.role !== "admin") {
+    sendJson(res, 403, { ok: false, error: "Forbidden" });
+    return;
+  }
+  if (!requireAdminDatabase(res)) return;
+
+  try {
+    const [egfrStages, ckdStages, byHospital] = await Promise.all([
+      dbPool.query(
+        `SELECT ckd_stage AS stage, COUNT(*)::int AS count
+         FROM submissions
+         WHERE study_flow = 'egfr'
+         GROUP BY ckd_stage
+         ORDER BY ckd_stage`
+      ),
+      dbPool.query(
+        `SELECT ckd_stage AS stage, COUNT(*)::int AS count
+         FROM submissions
+         GROUP BY ckd_stage
+         ORDER BY ckd_stage`
+      ),
+      dbPool.query(
+        `SELECT h.hospital_id, h.hospital_name, COUNT(s.record_id)::int AS count
+         FROM hospitals h
+         LEFT JOIN submissions s ON s.hospital_id = h.hospital_id
+         WHERE h.hospital_id <> $1
+         GROUP BY h.hospital_id, h.hospital_name
+         ORDER BY count DESC`,
+        [adminIntakeSource.id]
+      )
+    ]);
+    sendJson(res, 200, {
+      ok: true,
+      egfr_stages: egfrStages.rows,
+      ckd_stages: ckdStages.rows,
+      by_hospital: byHospital.rows
+    });
+  } catch (err) {
+    sendJson(res, 500, { ok: false, error: err.message });
+  }
+}
+
+// GET /api/admin/system
+async function handleAdminSystem(req, res) {
+  const session = await requireAuth(req, res);
+  if (!session) return;
+  if (session.role !== "admin") {
+    sendJson(res, 403, { ok: false, error: "Forbidden" });
+    return;
+  }
+
+  sendJson(res, 200, {
+    ok: true,
+    uptime_seconds: Math.floor(process.uptime()),
+    node_version: process.version,
+    memory_rss_mb: Math.round(process.memoryUsage().rss / 1024 / 1024),
+    db_ready: dbReady,
+    gcs_configured: Boolean(GCS_BUCKET),
+    active_sessions: memorySessions.size,
+    auth_configured: authConfigured
   });
 }
 
@@ -2722,6 +3269,64 @@ const server = http.createServer((req, res) => {
 
   if (req.method === "GET" && pathname === "/api/auth/me") {
     handleMe(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/api/admin/hospitals") {
+    handleAdminGetHospitals(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/api/admin/hospitals") {
+    handleAdminCreateHospital(req, res);
+    return;
+  }
+
+  const adminHospitalResetMatch = pathname.match(/^\/api\/admin\/hospitals\/([^/]+)\/reset-password$/);
+  if (adminHospitalResetMatch && req.method === "POST") {
+    handleAdminResetHospitalPassword(req, res, decodeURIComponent(adminHospitalResetMatch[1]));
+    return;
+  }
+
+  const adminHospitalMatch = pathname.match(/^\/api\/admin\/hospitals\/([^/]+)$/);
+  if (adminHospitalMatch && req.method === "PATCH") {
+    handleAdminUpdateHospital(req, res, decodeURIComponent(adminHospitalMatch[1]));
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/api/admin/sessions") {
+    handleAdminGetSessions(req, res);
+    return;
+  }
+
+  const adminSessionMatch = pathname.match(/^\/api\/admin\/sessions\/([^/]+)$/);
+  if (adminSessionMatch && req.method === "DELETE") {
+    handleAdminDeleteSessions(req, res, decodeURIComponent(adminSessionMatch[1]));
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/api/admin/audit") {
+    handleAdminAudit(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/api/admin/analytics/summary") {
+    handleAdminAnalyticsSummary(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/api/admin/analytics/trends") {
+    handleAdminAnalyticsTrends(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/api/admin/analytics/distribution") {
+    handleAdminAnalyticsDistribution(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/api/admin/system") {
+    handleAdminSystem(req, res);
     return;
   }
 
