@@ -340,8 +340,8 @@
                 <input id="landing-uhid" type="text" placeholder="Enter anonymized patient ID" required disabled />
               </div>
               <div class="field-block">
-                <label for="landing-study-id">Study ID</label>
-                <input id="landing-study-id" type="text" placeholder="Optional study identifier" disabled />
+                <label for="landing-study-id">Study ID <span class="required-marker">*</span></label>
+                <input id="landing-study-id" type="text" placeholder="Auto-generated from pathway, hospital, and patient ID" readonly required disabled />
               </div>
               <div class="field-block">
                 <label for="landing-enrollment-date">Date of Enrollment</label>
@@ -575,8 +575,8 @@
             </div>
             <div class="section-grid">
               <div class="field-block">
-                <label for="study-id">Study ID</label>
-                <input id="study-id" name="studyId" type="text" placeholder="Enter study ID" />
+                <label for="study-id">Study ID <span class="required-marker">*</span></label>
+                <input id="study-id" name="studyId" type="text" placeholder="Auto-generated research ID" readonly required />
               </div>
               <div class="field-block">
                 <label for="hospital-name">Hospital <span class="required-marker">*</span></label>
@@ -1456,6 +1456,7 @@
             <thead>
               <tr>
                 <th>#</th>
+                <th>Study ID</th>
                 <th>Patient ID</th>
                 <th>Hospital</th>
                 <th>Age / Sex</th>
@@ -1467,7 +1468,7 @@
               </tr>
             </thead>
             <tbody id="sub-tbody">
-              <tr><td colspan="9" class="empty">Loading submissions…</td></tr>
+              <tr><td colspan="10" class="empty">Loading submissions…</td></tr>
             </tbody>
           </table>
         </div>

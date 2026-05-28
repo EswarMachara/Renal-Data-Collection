@@ -229,6 +229,27 @@ function buildResearchIdentifier(studyFlow, type) {
   return `${pathway}-${type}-${crypto.randomBytes(8).toString("hex").toUpperCase()}`;
 }
 
+function studyIdComponent(value, fallback, maxLength = 36) {
+  const cleaned = sanitizeFileName(value, fallback)
+    .replace(/[._]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .toUpperCase()
+    .slice(0, maxLength);
+  return cleaned || fallback;
+}
+
+function buildStudyIdentifier(studyFlow, hospitalId, uhid) {
+  const pathway = String(studyFlow || "egfr").toLowerCase() === "kfre" ? "KFRE" : "EGFR";
+  const hospitalCode = studyIdComponent(hospitalId, "HOSP", 24);
+  const patientCode = studyIdComponent(uhid, "PATIENT", 40);
+  return `${pathway}-${hospitalCode}-${patientCode}`;
+}
+
+function getStudyFlowFolder(studyFlow) {
+  return String(studyFlow || "egfr").toLowerCase() === "kfre" ? "KFRE" : "eGFR";
+}
+
 function splitBuffer(buffer, delimiter) {
   const parts = [];
   let start = 0;
@@ -772,6 +793,7 @@ async function initializeDatabase() {
     await client.query("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS consent_id text REFERENCES consents(consent_id)");
     await client.query("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS study_flow text NOT NULL DEFAULT 'egfr'");
     await client.query("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS kfre_data jsonb");
+    await client.query("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS study_id text");
     await client.query("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS reviewed_by text");
     await client.query(`
       DO $$
@@ -805,6 +827,7 @@ async function initializeDatabase() {
 
     await client.query("CREATE INDEX IF NOT EXISTS idx_submissions_hospital_received ON submissions(hospital_id, received_at DESC)");
     await client.query("CREATE INDEX IF NOT EXISTS idx_submissions_uhid ON submissions(uhid)");
+    await client.query("CREATE INDEX IF NOT EXISTS idx_submissions_study_id ON submissions(study_id)");
     await client.query("CREATE INDEX IF NOT EXISTS idx_submission_files_record ON submission_files(record_id)");
 
     // Seed hospital reference data
@@ -1027,7 +1050,7 @@ async function getDatabasePathwaySummary(studyFlow, scopeHospitalId = null) {
        ${joinedCond}`,
       filter
     ),
-    dbPool.query(`SELECT record_id, participant_id, batch_id, hospital_id, hospital_name, uhid, study_flow, upload_mode, received_at, reviewed_at FROM submissions ${cond} ORDER BY received_at DESC LIMIT 10`, filter),
+    dbPool.query(`SELECT record_id, study_id, participant_id, batch_id, hospital_id, hospital_name, uhid, study_flow, upload_mode, received_at, reviewed_at FROM submissions ${cond} ORDER BY received_at DESC LIMIT 10`, filter),
     dbPool.query(`SELECT age FROM submissions ${cond}`, filter),
     studyFlow === "kfre"
       ? dbPool.query(
@@ -1078,6 +1101,7 @@ async function getDatabasePathwaySummary(studyFlow, scopeHospitalId = null) {
     ],
     recentRecords: recent.rows.map((row) => ({
       recordId: row.record_id,
+      studyId: row.study_id,
       participantId: row.participant_id,
       batchId: row.batch_id,
       hospitalId: row.hospital_id,
@@ -1126,7 +1150,7 @@ async function getDatabaseSummary(scopeHospitalId = null) {
     dbPool.query(`SELECT ckd_stage AS label, COUNT(*)::int AS value FROM submissions ${cond} GROUP BY ckd_stage ORDER BY CASE ckd_stage WHEN 'Normal' THEN 0 WHEN '1' THEN 1 WHEN '2' THEN 2 WHEN '3a' THEN 3 WHEN '3b' THEN 4 WHEN '4' THEN 5 WHEN '5' THEN 6 WHEN 'Other' THEN 7 ELSE 8 END`, filter),
     dbPool.query(`SELECT diabetic AS label, COUNT(*)::int AS value FROM submissions ${diabeticCond} GROUP BY diabetic`, filter),
     dbPool.query(videoQuery, filter),
-    dbPool.query(`SELECT record_id, participant_id, batch_id, hospital_id, hospital_name, uhid, study_flow, upload_mode, received_at, reviewed_at FROM submissions ${cond} ORDER BY received_at DESC LIMIT 10`, filter),
+    dbPool.query(`SELECT record_id, study_id, participant_id, batch_id, hospital_id, hospital_name, uhid, study_flow, upload_mode, received_at, reviewed_at FROM submissions ${cond} ORDER BY received_at DESC LIMIT 10`, filter),
     dbPool.query(hospitalBreakdownQuery, filter),
     dbPool.query(`SELECT age FROM submissions ${cond}`, filter)
   ]);
@@ -1145,6 +1169,7 @@ async function getDatabaseSummary(scopeHospitalId = null) {
     .sort((first, second) => ageBucketOrder.indexOf(first.bucket) - ageBucketOrder.indexOf(second.bucket));
   const recentRecords = recent.rows.map((row) => ({
     recordId: row.record_id,
+    studyId: row.study_id,
     participantId: row.participant_id,
     batchId: row.batch_id,
     hospitalId: row.hospital_id,
@@ -1292,6 +1317,7 @@ function applySubmissionFilters(records, { reviewed = "", search = "", dateFrom 
     const normalizedSearch = search.toLowerCase().trim();
     filtered = filtered.filter((record) =>
       (record.uhid       || "").toLowerCase().includes(normalizedSearch) ||
+      (record.studyId    || "").toLowerCase().includes(normalizedSearch) ||
       (record.participantId || "").toLowerCase().includes(normalizedSearch) ||
       (record.recordId   || "").toLowerCase().includes(normalizedSearch) ||
       (record.hospitalId || "").toLowerCase().includes(normalizedSearch)
@@ -1480,7 +1506,7 @@ function normalizeSubmission(item, options = {}) {
     hospitalName:         hospital.name,
     consentId,
     studyFlow,
-    studyId:              optionalText(item.studyId, 80),
+    studyId:              buildStudyIdentifier(studyFlow, hospitalId, uhid),
     enrollmentDate:       optionalDate(item, "enrollmentDate", "Date of enrollment"),
     siteCenter:           optionalText(item.siteCenter, 140),
     consentObtained:      optionalYesNo(item, "consentObtained", "Consent obtained"),
@@ -1559,11 +1585,11 @@ function normalizeSubmission(item, options = {}) {
 
 function getFileCategory(fieldName) {
   const categories = {
-    leftKidney:      ["images",    "left-kidney", "left-kidney"],
-    rightKidney:     ["images",    "right-kidney", "right-kidney"],
-    mixed:           ["packages",  "", "mixed"],
-    mixedKidney:     ["packages",  "", "mixed"],
-    patientPackage:  ["packages",  "", "source-package"],
+    leftKidney:      ["images",    "Left Kidney", "left-kidney"],
+    rightKidney:     ["images",    "Right Kidney", "right-kidney"],
+    mixed:           ["ZIP files", "", "mixed"],
+    mixedKidney:     ["ZIP files", "", "mixed"],
+    patientPackage:  ["ZIP files", "", "source-package"],
     ultrasoundVideo: ["videos",    "", "ultrasound-video"],
     egfrReport:      ["documents", "", "egfr-report"],
     clinicalDocument:["documents", "", "kfre-clinical-document"]
@@ -1571,10 +1597,10 @@ function getFileCategory(fieldName) {
   return categories[fieldName] || ["documents", "", fieldName || "document"];
 }
 
-function buildStoredFileName(recordId, label, originalName, timestamp, suffix) {
+function buildStoredFileName(studyId, label, originalName, timestamp, suffix) {
   const extension       = path.extname(originalName).toLowerCase().replace(/[^a-z0-9.]/g, "").slice(0, 12);
   const timestampPart   = timestamp.replace(/[-:TZ.]/g, "").slice(0, 14);
-  return `${sanitizeFileName(recordId, "record")}_${sanitizeFileName(label, "file")}_${timestampPart}_${suffix}${extension}`;
+  return `${sanitizeFileName(studyId, "study")}_${sanitizeFileName(label, "file")}_${timestampPart}_${suffix}${extension}`;
 }
 
 function getFileContent(file) {
@@ -2381,14 +2407,15 @@ async function finalizeSubmissionBatch({ normalizedSubmissions, session, req }) 
   for (const item of normalizedSubmissions) {
     const participantId = await resolveParticipantId(item);
     const recordId  = buildResearchIdentifier(item.studyFlow, "R");
+    const studyId = buildStudyIdentifier(item.studyFlow, item.hospitalId, item.uhid);
     const recordDir = path.join(batchDir, recordId);
     fs.mkdirSync(recordDir, { recursive: true });
-    const cloudRecordPrefix = path.join("raw", item.studyFlow, item.hospitalId, participantId, recordId);
+    const cloudRecordPrefix = path.posix.join(getStudyFlowFolder(item.studyFlow), sanitizeFileName(item.hospitalId, "hospital"), "records", sanitizeFileName(studyId, "study"));
 
     const storedFiles = item.files.map((file) => {
       const fieldName                     = sanitizeFileName(file.fieldName || "upload");
       const [topLevelFolder, subFolder, label] = getFileCategory(fieldName);
-      const storedName    = buildStoredFileName(recordId, label, file.name || "upload.bin", now.toISOString(), recordId.slice(-6));
+      const storedName    = buildStoredFileName(studyId, label, file.name || "upload.bin", now.toISOString(), recordId.slice(-6));
       const relativeFolder = subFolder
         ? path.join(cloudRecordPrefix, topLevelFolder, subFolder)
         : path.join(cloudRecordPrefix, topLevelFolder);
@@ -2423,7 +2450,7 @@ async function finalizeSubmissionBatch({ normalizedSubmissions, session, req }) 
       hospitalName:         item.hospitalName,
       consentId:            item.consentId || null,
       studyFlow:            item.studyFlow,
-      studyId:              item.studyId,
+      studyId,
       enrollmentDate:       item.enrollmentDate,
       siteCenter:           item.siteCenter,
       consentObtained:      item.consentObtained,
@@ -2875,6 +2902,7 @@ async function handleGetSubmissions(req, res) {
     const items = all.slice((page - 1) * limit, page * limit).map((r) => ({
       recordId:     r.recordId,
       participantId:r.participantId || null,
+      studyId:      r.studyId || null,
       batchId:      r.batchId,
       hospitalId:   r.hospitalId,
       hospitalName: r.hospitalName,
@@ -2995,7 +3023,7 @@ async function handleExportSubmissions(req, res) {
     all = applySubmissionFilters(all, { reviewed, search, dateFrom, dateTo });
 
     const cols = [
-      "recordId", "participantId", "batchId", "studyFlow", "hospitalId", "hospitalName", "uhid",
+      "recordId", "studyId", "participantId", "batchId", "studyFlow", "hospitalId", "hospitalName", "uhid",
       "age", "sex", "heightCm", "weight", "bmi", "ethnicity", "occupation",
       "ckdStage", "ckdStageRemarks", "knownCkd", "ckdDuration", "dialysis", "dialysisFrequency",
       "diabetic", "diabeticStage", "diabetesDuration",
@@ -3005,7 +3033,7 @@ async function handleExportSubmissions(req, res) {
     ];
 
     const headers = [
-      "Record ID", "Participant ID", "Batch ID", "Study Pathway", "Hospital ID", "Hospital Name", "Patient ID (UHID)",
+      "Record ID", "Study ID", "Participant ID", "Batch ID", "Study Pathway", "Hospital ID", "Hospital Name", "Patient ID (UHID)",
       "Age", "Sex", "Height (cm)", "Weight (kg)", "BMI", "Ethnicity", "Occupation",
       "Kidney Status / CKD Stage", "CKD Stage Remarks", "Known CKD", "CKD Duration", "Dialysis", "Dialysis Frequency",
       "Diabetic", "Diabetic Stage", "Diabetes Duration",

@@ -234,6 +234,7 @@ function applyStudyFlowUI() {
     : "Ultrasound findings and clinical record uploads";
   clinicalPageMeta.textContent = isKfre ? "KFRE Study · Clinical document only" : "eGFR Study · Ultrasound and clinical files";
   questionnaireContinueBtn.textContent = isKfre ? "Continue to KFRE Flow" : "Continue to eGFR Flow";
+  updateGeneratedStudyId();
   updateStudySpecificUploadVisibility();
   updateWorkflowAccess();
 }
@@ -555,6 +556,29 @@ function updateHospitalId() {
 
 function updateLandingHospitalId() {
   landingHospitalIdInput.value = landingHospitalInput.value || "";
+  updateGeneratedStudyId();
+}
+
+function getStudyIdPrefix() {
+  return state.studyFlow === "kfre" ? "KFRE" : "EGFR";
+}
+
+function studyIdComponent(value, maxLength = 36) {
+  return cleanIdentifier(value).replace(/[._]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").toUpperCase().slice(0, maxLength);
+}
+
+function generateStudyId(hospitalId, uhid) {
+  const hospitalCode = studyIdComponent(hospitalId, 24);
+  const patientCode = studyIdComponent(uhid, 40);
+  return hospitalCode && patientCode ? `${getStudyIdPrefix()}-${hospitalCode}-${patientCode}` : "";
+}
+
+function updateGeneratedStudyId() {
+  const generatedStudyId = generateStudyId(landingHospitalIdInput.value || landingHospitalInput.value, landingUhidInput.value);
+  landingStudyIdInput.value = generatedStudyId;
+  if (!studyIdInput.value || studyIdInput.readOnly) {
+    studyIdInput.value = generatedStudyId;
+  }
 }
 
 function syncChoiceValue(input) {
@@ -626,6 +650,7 @@ function initializeGlobalValidation() {
       if (input.value !== cleaned) {
         input.value = cleaned;
       }
+      if (input === landingUhidInput) updateGeneratedStudyId();
     });
   });
 
@@ -662,6 +687,7 @@ function updateConsentContext() {
 }
 
 function syncIntakeToQuestionnaire() {
+  updateGeneratedStudyId();
   hospitalNameInput.value = landingHospitalInput.value;
   studyIdInput.value = landingStudyIdInput.value.trim();
   hospitalIdInput.value = landingHospitalIdInput.value;
@@ -1025,6 +1051,7 @@ landingHospitalInput.addEventListener("change", () => {
   state.hospitalSession = null;
   patientStartForm.reset();
   landingEnrollmentDateInput.value = new Date().toISOString().slice(0, 10);
+  updateGeneratedStudyId();
   questionnaireForm.reset();
   hospitalNameInput.value = "";
   hospitalIdInput.value = "";
@@ -1045,6 +1072,7 @@ hospitalSessionForm.addEventListener("submit", (event) => {
   event.preventDefault();
   updateLandingHospitalId();
   if (saveHospitalSession()) {
+    updateGeneratedStudyId();
     landingUhidInput.focus();
   }
 });
@@ -1060,6 +1088,13 @@ patientStartForm.addEventListener("submit", (event) => {
 
   if (!landingUhidInput.value.trim()) {
     showToast("Enter Patient Unique ID before consent.");
+    landingUhidInput.focus();
+    return;
+  }
+
+  updateGeneratedStudyId();
+  if (!landingStudyIdInput.value.trim()) {
+    showToast("Study ID could not be generated. Verify hospital and Patient Unique ID.");
     landingUhidInput.focus();
     return;
   }
@@ -1790,10 +1825,10 @@ function buildSubmissionFromForm() {
   const selectedHospital = getSelectableIntakeSources().find((hospital) => hospital.id === hospitalNameInput.value);
   const isKfre = state.studyFlow === "kfre";
   const uploadMode = getUploadMode();
-  const studyId = studyIdInput.value.trim();
   const hospitalId = hospitalIdInput.value.trim();
   const hospitalName = selectedHospital?.name || "";
   const uhid = uhidInput.value.trim();
+  const studyId = generateStudyId(hospitalId, uhid);
   const enrollmentDate = enrollmentDateInput.value;
   const siteCenter = siteCenterInput.value.trim();
   const consentObtained = getCheckedValue(consentObtainedInputs);
@@ -1831,6 +1866,13 @@ function buildSubmissionFromForm() {
 
   if (!hospitalName || !hospitalId || !uhid) {
     showToast("Hospital, Hospital ID, and UHID are required.");
+    return null;
+  }
+
+  studyIdInput.value = studyId;
+  if (!studyId) {
+    showToast("Study ID could not be generated. Verify hospital and Patient Unique ID.");
+    activateTab("landing");
     return null;
   }
 
@@ -1956,7 +1998,7 @@ function buildSubmissionFromForm() {
     hospitalSessionName: state.hospitalSession?.name || hospitalName,
     consentId: state.consentId || null,
     studyFlow: state.studyFlow,
-    studyId: studyId || "-",
+    studyId,
     enrollmentDate: enrollmentDate || "-",
     siteCenter: siteCenter || "-",
     consentObtained: consentObtained || "-",
@@ -2147,6 +2189,7 @@ function resetPatientIntakeForNextRecord() {
   landingEnrollmentDateInput.value = new Date().toISOString().slice(0, 10);
   hospitalNameInput.value = landingHospitalInput.value;
   hospitalIdInput.value = landingHospitalIdInput.value;
+  updateGeneratedStudyId();
   consentCheckbox.checked = false;
   kfreConsentCheckbox.checked = false;
   consentContinueBtn.disabled = true;
@@ -2368,6 +2411,7 @@ loginForm?.addEventListener("submit", async (event) => {
     applyHospitalAuthContext();
     landingEnrollmentDateInput.value = new Date().toISOString().slice(0, 10);
     loadHospitalSession();
+    updateGeneratedStudyId();
     updateConsentContext();
     updateLinkedPatientSummary();
     refreshDashboard();
@@ -2466,6 +2510,7 @@ document.getElementById("ls-pw-toggle")?.addEventListener("click", () => {
   landingEnrollmentDateInput.value = new Date().toISOString().slice(0, 10);
   updateLandingHospitalId();
   loadHospitalSession();
+  updateGeneratedStudyId();
   updateConsentContext();
   updateLinkedPatientSummary();
   initializeGlobalValidation();

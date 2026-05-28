@@ -83,7 +83,7 @@ export function renderSubmissionsTable(items) {
   const subTbody = document.getElementById("sub-tbody");
   if (!subTbody) return;
   if (!items.length) {
-    subTbody.innerHTML = '<tr><td colspan="9" class="empty">No submissions match the current filters.</td></tr>';
+    subTbody.innerHTML = '<tr><td colspan="10" class="empty">No submissions match the current filters.</td></tr>';
     return;
   }
 
@@ -95,6 +95,7 @@ export function renderSubmissionsTable(items) {
     row.dataset.recordId = item.recordId;
     row.innerHTML = `
       <td class="sub-num">${start + index + 1}</td>
+      <td class="sub-uhid">${escapeHTML(item.studyId || "—")}</td>
       <td class="sub-uhid">${escapeHTML(item.uhid)}</td>
       <td class="sub-hospital" title="${escapeHTML(item.hospitalName || "")}">${escapeHTML(item.hospitalId)}</td>
       <td>${escapeHTML(item.age || "—")} / ${escapeHTML(item.sex || "—")}</td>
@@ -193,6 +194,7 @@ export function renderSubmissionDetail(submission) {
     <section class="sub-detail-section">
       <h3 class="sub-detail-section-title">Patient</h3>
       ${field("Record ID", submission.recordId)}
+      ${field("Study ID", submission.studyId)}
       ${field("Participant ID", submission.participantId)}
       ${field("Patient ID", submission.uhid)}
       ${field("Age", submission.age)}
