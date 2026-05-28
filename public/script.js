@@ -172,6 +172,7 @@ const landingUhidInput = document.getElementById("landing-uhid");
 const landingStudyIdInput = document.getElementById("landing-study-id");
 const landingEnrollmentDateInput = document.getElementById("landing-enrollment-date");
 const startPatientConsentBtn = document.getElementById("start-patient-consent");
+const demoAutofillBtn = document.getElementById("demo-autofill");
 const activeHospitalName = document.getElementById("active-hospital-name");
 const activeHospitalId = document.getElementById("active-hospital-id");
 const consentCheckbox = document.getElementById("consent-checkbox");
@@ -353,6 +354,7 @@ function updateWorkflowAccess() {
 
   setPreviewFormLocked(questionnaireForm, !access.questionnaire);
   setPreviewFormLocked(egfrForm, !access.egfr);
+  updateDemoAutofillVisibility();
   return access;
 }
 
@@ -559,6 +561,28 @@ function updateLandingHospitalId() {
   updateGeneratedStudyId();
 }
 
+function getActiveTabKey() {
+  const activePanel = Object.entries(panels).find(([, panel]) => panel?.classList.contains("visible"));
+  return activePanel?.[0] || "landing";
+}
+
+function isDemoIntakeActive() {
+  return (
+    state.hospitalSession?.id === "HOSP-DEMO" ||
+    hospitalIdInput.value === "HOSP-DEMO" ||
+    landingHospitalInput.value === "HOSP-DEMO" ||
+    state.authSession?.hospitalId === "HOSP-DEMO"
+  );
+}
+
+function updateDemoAutofillVisibility() {
+  if (!demoAutofillBtn) return;
+  const activeTab = getActiveTabKey();
+  const supportedTab = ["landing", "consent", "questionnaire", "egfr"].includes(activeTab);
+  const appVisible = !document.querySelector(".app-container")?.classList.contains("hidden");
+  demoAutofillBtn.classList.toggle("hidden", !appVisible || !supportedTab || !isDemoIntakeActive());
+}
+
 function getStudyIdPrefix() {
   return state.studyFlow === "kfre" ? "KFRE" : "EGFR";
 }
@@ -590,6 +614,145 @@ function syncChoiceValue(input) {
   target.value = input.value;
   target.dispatchEvent(new Event("change", { bubbles: true }));
   target.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function setDemoValue(input, value) {
+  if (!input) return;
+  input.value = value;
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function setDemoRadio(name, value) {
+  const input = document.querySelector(`input[name="${name}"][value="${CSS.escape(value)}"]`);
+  if (!input) return;
+  input.checked = true;
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function getDemoPatientId() {
+  return `DEMO-${new Date().toISOString().replace(/\D/g, "").slice(4, 12)}`;
+}
+
+function fillDemoLanding() {
+  if (landingHospitalInput.value !== "HOSP-DEMO") {
+    setDemoValue(landingHospitalInput, "HOSP-DEMO");
+    updateLandingHospitalId();
+    saveHospitalSession();
+  }
+  setDemoValue(landingUhidInput, landingUhidInput.value || getDemoPatientId());
+  setDemoValue(landingEnrollmentDateInput, new Date().toISOString().slice(0, 10));
+  updateGeneratedStudyId();
+  updateHospitalSessionUI();
+  updateWorkflowAccess();
+  showToast("Demo patient setup filled for HOSP-DEMO.");
+}
+
+function fillDemoConsent() {
+  if (!getWorkflowAccess().consent) {
+    showToast("Complete demo patient setup before consent.");
+    activateTab("landing");
+    return;
+  }
+  const checkbox = state.studyFlow === "kfre" ? kfreConsentCheckbox : consentCheckbox;
+  checkbox.checked = true;
+  checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+  showToast("Demo consent confirmation selected. Click Accept & Continue.");
+}
+
+function fillDemoQuestionnaire() {
+  if (questionnaireForm.classList.contains("preview-locked")) {
+    showToast("Record e-consent before using demo questionnaire fill.");
+    return;
+  }
+
+  setDemoValue(siteCenterInput, "HOSP-DEMO Research Desk");
+  setDemoRadio("consentObtained", "Yes");
+  setDemoValue(ageInput, "52");
+  setDemoRadio("questionnaireSex", "Female");
+  setDemoValue(heightInput, "162");
+  setDemoValue(weightInput, "68");
+  updateQuestionnaireBmi();
+  setDemoValue(ethnicityInput, "Indian");
+  setDemoValue(occupationInput, "Teacher");
+  setDemoRadio("knownCkd", "Yes");
+  setDemoValue(ckdDurationInput, "2 years");
+  setDemoValue(ckdStageInput, "2");
+  updateDialysisVisibility();
+  setDemoRadio("diabetesMellitus", "Yes");
+  updateDiabeticVisibility();
+  setDemoValue(diabeticStageInput, "Type 2 diabetes");
+  setDemoValue(diabetesDurationInput, "6");
+  setDemoRadio("hypertension", "Yes");
+  setDemoValue(hypertensionDurationInput, "4");
+  setDemoRadio("cardiovascularDisease", "No");
+  setDemoRadio("familyKidneyHistory", "No");
+  updateLinkedPatientSummary();
+  updateQuestionnaireContinueState();
+  showToast("Questionnaire demo values filled. Review once, then continue.");
+}
+
+function fillDemoEgfrFlow() {
+  if (egfrForm.classList.contains("preview-locked")) {
+    showToast("Complete the questionnaire before using clinical demo fill.");
+    return;
+  }
+
+  if (state.studyFlow === "kfre") {
+    setDemoValue(kfreSystolicBpInput, "128");
+    setDemoValue(kfreDiastolicBpInput, "82");
+    setDemoValue(kfreHeartRateInput, "76");
+    setDemoValue(kfreWaistHipRatioInput, "0.91");
+    setDemoValue(kfreFollowupStatusInput, "None");
+    updateKfreConditionalFields({ clearHidden: true });
+    setDemoValue(kfreOutcomeCkdStageInput, "2");
+    setDemoValue(kfreRapidProgressionInput, "No");
+    setDemoValue(kfreKidneyFailureEventInput, "No");
+    updateKfreConditionalFields({ clearHidden: true });
+    showToast("KFRE demo clinical values filled. Upload the clinical document manually.");
+    return;
+  }
+
+  setDemoValue(document.getElementById("right-kidney-length"), "10.5");
+  setDemoValue(document.getElementById("right-kidney-width"), "4.8");
+  setDemoValue(document.getElementById("right-cortical-thickness"), "8.2");
+  setDemoRadio("rightEchogenicity", "Normal");
+  setDemoRadio("rightKidneySize", "Normal");
+  setDemoRadio("rightParenchymalTexture", "Normal");
+  setDemoRadio("rightCysts", "No");
+  setDemoRadio("rightStones", "No");
+  setDemoRadio("rightHydronephrosis", "No");
+  setDemoValue(document.getElementById("right-other-findings"), "No focal abnormality noted");
+
+  setDemoValue(document.getElementById("left-kidney-length"), "10.2");
+  setDemoValue(document.getElementById("left-kidney-width"), "4.6");
+  setDemoValue(document.getElementById("left-cortical-thickness"), "8.0");
+  setDemoRadio("leftEchogenicity", "Normal");
+  setDemoRadio("leftKidneySize", "Normal");
+  setDemoRadio("leftParenchymalTexture", "Normal");
+  setDemoRadio("leftCysts", "No");
+  setDemoRadio("leftStones", "No");
+  setDemoRadio("leftHydronephrosis", "No");
+  setDemoValue(document.getElementById("left-other-findings"), "No focal abnormality noted");
+
+  setDemoRadio("imageQualityAdequate", "Yes");
+  setDemoRadio("kidneyBoundingPointsDetected", "Yes");
+  showToast("Ultrasound findings filled. Upload images, PDF, or ZIP manually before submitting.");
+}
+
+function fillCurrentDemoPage() {
+  if (!isDemoIntakeActive()) {
+    showToast("Demo auto-fill is available only for HOSP-DEMO.");
+    return;
+  }
+  const activeTab = getActiveTabKey();
+  if (activeTab === "landing") fillDemoLanding();
+  else if (activeTab === "consent") fillDemoConsent();
+  else if (activeTab === "questionnaire") fillDemoQuestionnaire();
+  else if (activeTab === "egfr") fillDemoEgfrFlow();
+  else showToast("Demo auto-fill is available on intake pages only.");
+  updateDemoAutofillVisibility();
 }
 
 function getCheckedValue(inputs) {
@@ -827,6 +990,7 @@ function activateTab(tabKey) {
   if (tabKey === "submissions") loadSubmissions(1);
 
   updateStepper(tabKey);
+  updateDemoAutofillVisibility();
 }
 
 document.querySelectorAll("[data-tab-jump]").forEach((button) => {
@@ -1411,6 +1575,7 @@ function updateUploadModeVisibility() {
 uploadModeInputs.forEach((input) => {
   input.addEventListener("change", updateUploadModeVisibility);
 });
+demoAutofillBtn?.addEventListener("click", fillCurrentDemoPage);
 kfreFollowupStatusInput.addEventListener("change", () => updateKfreConditionalFields({ clearHidden: true }));
 kfreKidneyFailureEventInput.addEventListener("change", () => updateKfreConditionalFields({ clearHidden: true }));
 kfreKidneyFailureDateInput.addEventListener("change", () => validateDateInput(kfreKidneyFailureDateInput));
