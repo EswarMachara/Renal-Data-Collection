@@ -1112,6 +1112,17 @@ body {
   background: #cbd5e1;
 }
 
+#questionnaire-continue.is-ready {
+  background: linear-gradient(135deg, #0f9a87 0%, var(--teal-dark) 100%);
+  color: #fff;
+  box-shadow: 0 12px 24px rgba(20, 134, 140, 0.18);
+}
+
+#questionnaire-continue.is-ready:hover {
+  background: linear-gradient(135deg, var(--teal-dark) 0%, #073438 100%);
+  box-shadow: 0 14px 28px rgba(20, 134, 140, 0.24);
+}
+
 .dashboard-tabs {
   display: flex;
   gap: 0.5rem;

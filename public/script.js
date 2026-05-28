@@ -1147,11 +1147,46 @@ function updateQuestionnaireBmi() {
   const weightKg = Number(questionnaireWeightInput.value);
   if (!heightCm || !weightKg || heightCm < 50 || heightCm > 250 || weightKg < 10 || weightKg > 400) {
     questionnaireBmiInput.value = "";
+    updateQuestionnaireContinueState();
     return;
   }
 
   const heightMeters = heightCm / 100;
   questionnaireBmiInput.value = (weightKg / (heightMeters * heightMeters)).toFixed(1);
+  updateQuestionnaireContinueState();
+}
+
+function isQuestionnaireReadyForClinicalFlow() {
+  const requiresDialysis = ["3a", "3b", "4", "5"].includes(ckdStageInput.value);
+  const calculatedBmi = Number(bmiInput.value);
+  return Boolean(
+    hospitalIdInput.value &&
+    uhidInput.value.trim() &&
+    enrollmentDateInput.value &&
+    ageInput.value.trim() &&
+    Number(ageInput.value) >= 18 &&
+    Number(ageInput.value) <= 120 &&
+    sexInput.value &&
+    heightInput.value.trim() &&
+    Number(heightInput.value) >= 50 &&
+    Number(heightInput.value) <= 250 &&
+    weightInput.value.trim() &&
+    Number(weightInput.value) >= 10 &&
+    Number(weightInput.value) <= 400 &&
+    Number.isFinite(calculatedBmi) &&
+    calculatedBmi >= 5 &&
+    calculatedBmi <= 100 &&
+    ckdStageInput.value &&
+    (ckdStageInput.value !== "Other" || ckdStageRemarksInput.value.trim()) &&
+    (!requiresDialysis || dialysisInput.value) &&
+    (!requiresDialysis || dialysisInput.value !== "Yes" || dialysisFrequencyInput.value.trim()) &&
+    diabeticInput.value &&
+    (diabeticInput.value !== "Yes" || diabeticStageInput.value)
+  );
+}
+
+function updateQuestionnaireContinueState() {
+  questionnaireContinueBtn.classList.toggle("is-ready", isQuestionnaireReadyForClinicalFlow());
 }
 
 function validateQuestionnaireForClinicalUpload() {
@@ -1241,13 +1276,17 @@ function validateQuestionnaireForClinicalUpload() {
 
 questionnaireHeightInput.addEventListener("input", updateQuestionnaireBmi);
 questionnaireWeightInput.addEventListener("input", updateQuestionnaireBmi);
+questionnaireForm.addEventListener("input", updateQuestionnaireContinueState);
+questionnaireForm.addEventListener("change", updateQuestionnaireContinueState);
 questionnaireContinueBtn.addEventListener("click", () => {
   if (!questionnaireForm.checkValidity()) {
     questionnaireForm.reportValidity();
+    updateQuestionnaireContinueState();
     return;
   }
 
   if (!validateQuestionnaireForClinicalUpload()) {
+    updateQuestionnaireContinueState();
     return;
   }
 
@@ -1385,6 +1424,7 @@ function updateDialysisVisibility() {
   }
 
   updateLinkedPatientSummary();
+  updateQuestionnaireContinueState();
 }
 
 function updateDiabeticVisibility() {
@@ -1394,6 +1434,7 @@ function updateDiabeticVisibility() {
     diabeticStageInput.value = "";
   }
   updateLinkedPatientSummary();
+  updateQuestionnaireContinueState();
 }
 
 ckdStageInput.addEventListener("change", updateDialysisVisibility);
