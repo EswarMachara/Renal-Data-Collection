@@ -7,11 +7,8 @@
   <link rel="icon" href="assets/tanuh.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="preconnect" href="https://ajax.googleapis.com" crossorigin />
-  <link rel="preload" href="/assets/human_kidney.glb" as="fetch" type="model/gltf-binary" crossorigin="anonymous" />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="./styles.css" />
-  <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js"></script>
 </head>
 <body>
 
@@ -251,23 +248,8 @@
           <div class="renal-visual" aria-hidden="true">
             <div class="kidney-model-placeholder">
               <span class="kidney-placeholder-organ"></span>
-              <span class="kidney-loading-label">Preparing 3D anatomy view</span>
+              <span class="kidney-loading-label">Renal screening workflow</span>
             </div>
-            <model-viewer
-              id="kidney-model"
-              src="/assets/human_kidney.glb"
-              alt="3D human kidney model"
-              loading="eager"
-              auto-rotate
-              camera-controls
-              shadow-intensity="0.6"
-              shadow-softness="1"
-              environment-image="neutral"
-              exposure="1.1"
-              auto-rotate-delay="800"
-              rotation-per-second="16deg"
-              interaction-prompt="none"
-            ></model-viewer>
           </div>
           <div class="scroll-cue" aria-hidden="true">
             <span>Scroll</span>

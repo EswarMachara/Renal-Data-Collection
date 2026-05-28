@@ -358,6 +358,27 @@ body {
   overflow: hidden;
 }
 
+.renal-visual::before,
+.renal-visual::after {
+  position: absolute;
+  content: "";
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.renal-visual::before {
+  width: min(340px, 62vw);
+  aspect-ratio: 1;
+  background: radial-gradient(circle, rgba(20, 134, 140, 0.18), transparent 68%);
+}
+
+.renal-visual::after {
+  width: min(220px, 45vw);
+  aspect-ratio: 1;
+  border: 1px solid rgba(15, 154, 135, 0.22);
+  box-shadow: 0 0 0 26px rgba(15, 154, 135, 0.05);
+}
+
 .kidney-model-placeholder {
   position: absolute;
   inset: 0;
@@ -399,33 +420,6 @@ body {
   font-size: 0.8rem;
   font-weight: 600;
   letter-spacing: 0.04em;
-}
-
-#kidney-model {
-  width: 100%;
-  height: 420px;
-  background: transparent;
-  --poster-color: transparent;
-  border-radius: 20px;
-  opacity: 0;
-  transition: opacity 0.34s ease;
-}
-
-#kidney-model::part(default-progress-bar) {
-  display: none;
-}
-
-.renal-visual.is-model-ready #kidney-model {
-  opacity: 1;
-}
-
-.renal-visual.is-model-ready .kidney-model-placeholder {
-  opacity: 0;
-  visibility: hidden;
-}
-
-.renal-visual.is-model-unavailable .kidney-loading-label {
-  color: #0a6b6f;
 }
 
 .scroll-cue {
@@ -3006,12 +3000,6 @@ th {
     overflow: hidden;
   }
 
-  #kidney-model {
-    width: min(100%, 360px);
-    height: clamp(300px, 80vw, 360px);
-    margin: 0 auto;
-  }
-
   .flow-strip,
   .consent-context-card,
   .consent-context-grid,
@@ -3163,11 +3151,6 @@ th {
 
   .renal-visual {
     min-height: 294px;
-  }
-
-  #kidney-model {
-    max-width: 312px;
-    height: 304px;
   }
 
   .scroll-cue {
