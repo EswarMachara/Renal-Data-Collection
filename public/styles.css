@@ -752,6 +752,16 @@ body {
   opacity: 0.82;
 }
 
+.flow-hidden.hidden {
+  display: none !important;
+  opacity: 1;
+}
+
+.preview-locked #package-upload-section.flow-hidden.hidden {
+  display: none !important;
+  opacity: 1;
+}
+
 .consent-context-card {
   margin-bottom: 1.2rem;
   display: grid;
@@ -1511,6 +1521,18 @@ body {
   grid-column: 1 / -1;
 }
 
+#package-upload-section {
+  order: 1;
+}
+
+#egfr-ultrasound-section {
+  order: 2;
+}
+
+#egfr-video-section {
+  order: 3;
+}
+
 .section-description {
   margin: 0 0 1.1rem;
   color: var(--text-secondary);
@@ -1595,6 +1617,63 @@ body {
   flex-shrink: 0;
   width: 16px;
   height: 16px;
+}
+
+.package-upload-tile {
+  cursor: default;
+  align-items: stretch;
+}
+
+.package-upload-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  justify-content: center;
+  margin: 0.6rem 0;
+}
+
+.package-upload-action {
+  border: 1px solid #14868c;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #0a6b6f;
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 700;
+  padding: 0.65rem 1rem;
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.package-upload-action:hover {
+  background: #e9fbf8;
+  box-shadow: 0 8px 18px rgba(20, 134, 140, 0.12);
+}
+
+.package-upload-action input {
+  display: none;
+}
+
+.package-upload-status {
+  color: #0a4a4e;
+  display: block;
+  font-size: 0.95rem;
+}
+
+.package-file-list {
+  display: grid;
+  gap: 0.35rem;
+  list-style: none;
+  margin: 0.45rem 0 0;
+  max-height: 180px;
+  overflow: auto;
+  padding: 0;
+}
+
+.package-file-list li {
+  align-items: center;
+  display: flex;
+  gap: 0.45rem;
+  min-width: 0;
 }
 
 /* .summary-grid defined later with auto-fill for 3–5 cards */
@@ -2173,6 +2252,12 @@ body {
   padding: 0.85rem 1rem;
   font: inherit;
   background: #f3f5f7;
+  color: var(--text-primary);
+}
+
+.field-block select option {
+  background: #f3f5f7;
+  color: var(--text-primary);
 }
 
 .field-block input[readonly] {

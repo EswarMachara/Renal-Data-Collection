@@ -27,10 +27,10 @@
         </div>
         <div class="ls-headline">
           <h2>AI-Based Renal<br />Screening Registry</h2>
-          <p>Secure, consented kidney data collection for partner hospitals across India.</p>
+          <p>Secure, patient-linked kidney data collection for partner hospitals across India.</p>
         </div>
         <ul class="ls-features">
-          <li><span class="ls-check">✓</span>Patient-linked consent</li>
+          <li><span class="ls-check">✓</span>Patient-linked intake</li>
           <li><span class="ls-check">✓</span>Structured clinical intake</li>
           <li><span class="ls-check">✓</span>DICOM &amp; ultrasound uploads</li>
           <li><span class="ls-check">✓</span>Real-time GCS cloud sync</li>
@@ -142,8 +142,10 @@
       </button>
       <nav class="navbar-tabs" id="navbar-tabs" aria-label="Main navigation">
         <button class="nav-link active" data-tab="landing" type="button">Home</button>
+        <!-- E-consent tab temporarily disabled.
         <button class="nav-link workflow-nav is-locked" id="consent-nav" data-tab="consent" type="button"><span>E-Consent Form</span><small class="nav-gate-badge">Locked</small></button>
-        <button class="nav-link workflow-nav is-locked" id="questionnaire-nav" data-tab="questionnaire" type="button"><span>Questionnaire</span><small class="nav-gate-badge">Locked</small></button>
+        -->
+        <button class="nav-link workflow-nav is-locked" id="questionnaire-nav" data-tab="questionnaire" type="button"><span>Intake Form</span><small class="nav-gate-badge">Locked</small></button>
         <button class="nav-link workflow-nav is-locked" id="egfr-nav" data-tab="egfr" type="button"><span id="clinical-flow-nav-label">eGFR Flow</span><small class="nav-gate-badge">Locked</small></button>
         <button class="nav-link" data-tab="dashboard" type="button">Dashboard</button>
         <button class="nav-link" id="submissions-nav" data-tab="submissions" type="button">Submissions</button>
@@ -155,7 +157,7 @@
     </div>
   </header>
 
-  <!-- ── Intake stepper — visible only during the 4-step patient flow ── -->
+  <!-- ── Intake stepper — visible only during the 3-step patient flow ── -->
   <div id="intake-stepper" class="intake-stepper hidden" role="navigation" aria-label="Patient intake progress">
     <div class="stp-inner">
       <ol class="stp-track" aria-label="Steps">
@@ -179,8 +181,8 @@
             <svg class="stp-check" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </div>
           <div class="stp-label-wrap">
-            <span class="stp-label">E-Consent</span>
-            <span class="stp-sub">Patient-linked consent</span>
+            <span class="stp-label">Intake Form</span>
+            <span class="stp-sub">Core patient details</span>
           </div>
         </li>
 
@@ -192,20 +194,20 @@
             <svg class="stp-check" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </div>
           <div class="stp-label-wrap">
-            <span class="stp-label">Questionnaire</span>
-            <span class="stp-sub">Demographics &amp; clinical history</span>
+            <span class="stp-label" id="clinical-step-label">Upload &amp; Submit</span>
+            <span class="stp-sub">Files &amp; final submission</span>
           </div>
         </li>
 
-        <li class="stp-connector" aria-hidden="true"><span class="stp-line"></span></li>
+        <li class="stp-connector hidden" aria-hidden="true"><span class="stp-line"></span></li>
 
-        <li class="stp-step stp-pending" id="stp-4" data-stp="4">
+        <li class="stp-step stp-pending hidden" id="stp-4" data-stp="4">
           <div class="stp-node" aria-hidden="true">
             <span class="stp-num">4</span>
             <svg class="stp-check" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </div>
           <div class="stp-label-wrap">
-            <span class="stp-label" id="clinical-step-label">Upload &amp; Submit</span>
+            <span class="stp-label">Upload &amp; Submit</span>
             <span class="stp-sub">Files &amp; final submission</span>
           </div>
         </li>
@@ -240,9 +242,9 @@
             <div class="landing-copy">
               <span class="eyebrow" id="landing-study-eyebrow">AI-Based eGFR Research Registry</span>
               <h1 id="landing-study-title">Secure Renal Data Capture for Partner Hospitals</h1>
-              <p id="landing-study-description">Collect consented kidney ultrasound data, clinical reports, and questionnaire details in one guided workflow.</p>
+              <p id="landing-study-description">Collect patient-linked kidney ultrasound data, clinical reports, and intake details in one guided workflow.</p>
               <div class="hero-highlights" aria-label="Portal capability">
-                <span>Patient-linked consent</span>
+                <span>Patient-linked intake</span>
               </div>
               <div class="landing-actions">
                 <button class="btn-premium" id="landing-scroll-setup" type="button">Begin Session</button>
@@ -278,17 +280,17 @@
             </div>
             <div class="flow-step reveal-item">
               <span>3</span>
-              <strong>E-Consent</strong>
-              <small>Patient-linked</small>
+              <strong>Intake Form</strong>
+              <small>Age, sex, clinical status</small>
             </div>
             <div class="flow-step reveal-item">
               <span>4</span>
               <strong id="workflow-records-title">Records Upload</strong>
-              <small id="workflow-records-subtitle">Files + reports</small>
+              <small id="workflow-records-subtitle">Package + findings</small>
             </div>
           </div>
           <div class="handoff-actions">
-            <p>A guided flow keeps each record linked to consent and the right hospital.</p>
+            <p>A guided flow keeps each patient package linked to the right hospital and study ID.</p>
             <button class="btn-premium" id="workflow-continue" type="button">Continue to Intake Workspace</button>
           </div>
         </section>
@@ -298,7 +300,7 @@
             <div>
               <span class="eyebrow">Intake Workspace</span>
               <h2>Start a hospital session, then add patients.</h2>
-              <p>The hospital context remains active for this browser session. Each patient gets a fresh consent and clinical upload flow.</p>
+                  <p>The hospital context remains active for this browser session. Each patient gets a focused intake and clinical upload flow.</p>
             </div>
             <span class="secure-badge">Controlled Research Intake</span>
           </div>
@@ -349,15 +351,15 @@
                 <input id="landing-study-id" type="text" placeholder="Auto-generated from pathway, hospital, and patient ID" readonly required disabled />
               </div>
               <div class="field-block">
-                <label for="landing-enrollment-date">Date of Enrollment</label>
+                <label for="landing-enrollment-date">Date</label>
                 <div class="date-input-shell" aria-label="Date of Enrollment">
                   <span class="date-icon" aria-hidden="true">Date</span>
                   <input id="landing-enrollment-date" type="date" max="9999-12-31" disabled />
                 </div>
               </div>
               <div class="actions setup-actions">
-                <p>Next: patient-linked consent.</p>
-                <button class="btn-premium" id="start-patient-consent" type="submit" disabled>Start Consent Review</button>
+                <p>Next: complete the intake form.</p>
+                <button class="btn-premium" id="start-patient-consent" type="submit" disabled>Start Intake Form</button>
               </div>
             </form>
           </div>
@@ -365,6 +367,7 @@
       </div>
     </section>
 
+    <template id="disabled-consent-tab">
     <section class="tab-panel" id="tab-consent" aria-labelledby="E-Consent Form">
       <div class="page-hero form-hero">
         <h1 id="consent-page-title">E-Consent Form</h1>
@@ -548,20 +551,21 @@
         </div>
       </article>
     </section>
+    </template>
 
-    <section class="tab-panel" id="tab-questionnaire" aria-labelledby="Questionnaire">
+    <section class="tab-panel" id="tab-questionnaire" aria-labelledby="Intake Form">
       <div class="page-hero form-hero">
-        <h1>Questionnaire</h1>
-        <p>Patient identification, demographics, and clinical history</p>
-        <span class="hero-meta" id="questionnaire-page-meta">eGFR Research Intake Questionnaire</span>
+        <h1>Intake Form</h1>
+        <p>Core patient details and clinical history</p>
+        <span class="hero-meta" id="questionnaire-page-meta">eGFR Research Intake Form</span>
       </div>
       <div class="stage-access-banner hidden" id="questionnaire-access-banner" role="status" aria-live="polite">
         <span class="stage-access-badge">Preview only</span>
         <div>
-          <strong>Recorded e-consent is required before questionnaire entry.</strong>
-          <p>You can review the requested fields now; editing unlocks after consent.</p>
+          <strong>Patient setup is required before intake entry.</strong>
+          <p>You can review the requested fields now; editing unlocks after patient setup.</p>
         </div>
-        <button class="btn-ghost" data-tab-jump="consent" type="button">Go to E-Consent</button>
+        <button class="btn-ghost" data-tab-jump="landing" type="button">Go to Patient Setup</button>
       </div>
       <div class="consent-study-info">
           <div class="csi-row"><span class="csi-label">Study Title :</span><span class="csi-val" id="questionnaire-study-title">AI-Based Multimodal Estimation of eGFR Using Kidney Ultrasound and Clinical Parameters</span></div>
@@ -573,7 +577,7 @@
       <article class="panel-card flow-card form-card">
         <form id="questionnaire-form" class="form-grid" novalidate>
           <div class="form-section">
-            <div class="section-title"><span class="section-index">1.</span> Patient Identification & Study Details</div>
+            <div class="section-title"><span class="section-index">1.</span> <span id="questionnaire-section-1-title">Patient Details</span></div>
             <div class="locked-context-note">
               <span>Patient identifiers are carried forward from the intake setup.</span>
               <button class="btn-ghost" data-tab-jump="landing" type="button">Edit Setup</button>
@@ -597,25 +601,29 @@
                 <label for="uhid">Patient Unique ID <span class="required-marker">*</span></label>
                 <input id="uhid" name="uhid" type="text" placeholder="Unique patient ID" readonly required />
               </div>
-              <div class="field-block">
+              <!-- <div class="field-block hidden" data-kfre-questionnaire>
                 <label for="enrollment-date">Date of Enrollment</label>
                 <div class="date-input-shell" aria-label="Date of Enrollment">
                   <span class="date-icon" aria-hidden="true">Date</span>
                   <input id="enrollment-date" name="enrollmentDate" type="date" max="9999-12-31" />
                 </div>
                 <small class="field-help">Select the date when this patient was enrolled in the study.</small>
-              </div>
-              <div class="field-block">
+              </div> -->
+              <!-- Site / Center — removed from KFRE intake (uncomment to restore)
+              <div class="field-block hidden" data-kfre-questionnaire>
                 <label for="site-center">Site / Center</label>
                 <input id="site-center" name="siteCenter" type="text" placeholder="Enter site or center" />
               </div>
-              <div class="field-block full-span">
+              -->
+              <!-- Consent Obtained — removed from KFRE intake (uncomment to restore)
+              <div class="field-block full-span hidden" data-kfre-questionnaire data-kfre-required-choice="consentObtained">
                 <label>Consent Obtained</label>
                 <div class="choice-row compact-choice">
                   <label class="choice-tile"><input type="radio" name="consentObtained" value="Yes" /> Yes</label>
                   <label class="choice-tile"><input type="radio" name="consentObtained" value="No" /> No</label>
                 </div>
               </div>
+              -->
             </div>
           </div>
 
@@ -623,12 +631,12 @@
             <div class="section-title"><span class="section-index">2.</span> Demographics</div>
             <div class="section-grid">
               <div class="field-block">
-                <label for="patient-age">Age <span class="required-marker">*</span></label>
+                <label for="patient-age">Age <span class="required-marker hidden" data-kfre-only>*</span></label>
                 <input id="patient-age" name="age" type="number" min="18" max="120" step="1" placeholder="Age in years" required />
                 <small class="field-help">Adults only; accepted range is 18 to 120 years.</small>
               </div>
               <div class="field-block">
-                <label>Sex</label>
+                <label>Sex <span class="required-marker hidden" data-kfre-only>*</span></label>
                 <input id="patient-sex" name="sex" type="hidden" required />
                 <div class="choice-row compact-choice">
                   <label class="choice-tile"><input type="radio" name="questionnaireSex" value="Male" data-sync-target="patient-sex" /> Male</label>
@@ -636,28 +644,32 @@
                   <label class="choice-tile"><input type="radio" name="questionnaireSex" value="Other" data-sync-target="patient-sex" /> Other</label>
                 </div>
               </div>
-              <div class="field-block">
-                <label for="questionnaire-height">Height (cm) <span class="required-marker">*</span></label>
-                <input id="questionnaire-height" name="questionnaireHeight" type="number" min="50" max="250" step="0.1" placeholder="Height in cm" required />
+              <div class="field-block hidden" data-kfre-questionnaire data-kfre-required-control="questionnaire-height">
+                <label for="questionnaire-height">Height (cm)</label>
+                <input id="questionnaire-height" name="questionnaireHeight" type="number" min="50" max="250" step="0.1" placeholder="Height in cm" />
                 <small class="field-help">Required for BMI calculation; measured value in centimetres.</small>
               </div>
-              <div class="field-block">
-                <label for="patient-weight">Weight (kg) <span class="required-marker">*</span></label>
-                <input id="patient-weight" name="weight" type="number" min="10" max="400" step="0.1" placeholder="Weight in kg" required />
+              <div class="field-block hidden" data-kfre-questionnaire data-kfre-required-control="patient-weight">
+                <label for="patient-weight">Weight (kg)</label>
+                <input id="patient-weight" name="weight" type="number" min="10" max="400" step="0.1" placeholder="Weight in kg" />
                 <small class="field-help">Enter measured weight in kilograms.</small>
               </div>
-              <div class="field-block">
+              <div class="field-block hidden" data-kfre-questionnaire>
                 <label for="questionnaire-bmi">BMI (auto-calculated)</label>
                 <input id="questionnaire-bmi" name="questionnaireBmi" type="text" placeholder="Auto-calculated" readonly />
               </div>
-              <div class="field-block">
+              <!-- Ethnicity — removed from KFRE intake (uncomment to restore)
+              <div class="field-block hidden" data-kfre-questionnaire>
                 <label for="ethnicity">Ethnicity (if applicable)</label>
                 <input id="ethnicity" name="ethnicity" type="text" placeholder="Enter ethnicity" />
               </div>
-              <div class="field-block full-span">
+              -->
+              <!-- Occupation — removed from KFRE intake (uncomment to restore)
+              <div class="field-block full-span hidden" data-kfre-questionnaire>
                 <label for="occupation">Occupation</label>
                 <input id="occupation" name="occupation" type="text" placeholder="Enter occupation" />
               </div>
+              -->
             </div>
           </div>
 
@@ -667,42 +679,48 @@
               <div class="clinical-group">
                 <div class="clinical-group-heading">
                   <span>Kidney Profile</span>
-                  <small>CKD status and dialysis details</small>
+                  <small>Chronic kidney disease status</small>
                 </div>
                 <div class="clinical-group-grid">
                   <div class="field-block clinical-card">
-                    <label>Known CKD</label>
+                    <label>Chronic Kidney Disease (CKD) <span class="required-marker hidden" data-kfre-only>*</span></label>
                     <div class="choice-row compact-choice">
                       <label class="choice-tile"><input type="radio" name="knownCkd" value="Yes" /> Yes</label>
                       <label class="choice-tile"><input type="radio" name="knownCkd" value="No" /> No</label>
                     </div>
                   </div>
-                  <div class="field-block clinical-card">
-                    <label for="ckd-stage">Kidney Status / CKD Stage <span class="required-marker">*</span></label>
-                    <select id="ckd-stage" name="ckdStage" required>
+                  <div class="field-block clinical-card hidden" id="ckd-stage-block" data-kfre-questionnaire>
+                    <label for="ckd-stage">CKD Stage <span class="required-marker">*</span></label>
+                    <select id="ckd-stage" name="ckdStage">
                       <option value="" selected disabled>Select stage</option>
+                      <!-- Normal option removed — not applicable when Known CKD = Yes (uncomment to restore)
                       <option value="Normal">Normal (No CKD)</option>
-                      <option value="1">CKD Stage 1</option>
-                      <option value="2">CKD Stage 2</option>
-                      <option value="3a">CKD Stage 3a</option>
-                      <option value="3b">CKD Stage 3b</option>
-                      <option value="4">CKD Stage 4</option>
-                      <option value="5">CKD Stage 5 (End-Stage)</option>
+                      -->
+                      <option value="1">Stage 1</option>
+                      <option value="2">Stage 2</option>
+                      <option value="3a">Stage 3a</option>
+                      <option value="3b">Stage 3b</option>
+                      <option value="4">Stage 4</option>
+                      <option value="5">Stage 5 (End-Stage)</option>
+                      <!-- Other option removed (uncomment to restore)
                       <option value="Other">Other</option>
+                      -->
                     </select>
                   </div>
+                  <!-- CKD stage remarks block removed (tied to Other option — uncomment both to restore)
                   <div class="field-block clinical-card full-span hidden" id="ckd-stage-remarks-block">
                     <label for="ckd-stage-remarks">Other stage remarks <span class="required-marker">*</span></label>
                     <input id="ckd-stage-remarks" name="ckdStageRemarks" type="text" maxlength="240" placeholder="Specify the clinical classification or reason" />
                     <small class="field-help">Required when Other is selected.</small>
                   </div>
-                  <div class="field-block clinical-card">
+                  -->
+                  <div class="field-block clinical-card hidden" id="ckd-duration-block" data-kfre-questionnaire>
                     <label for="ckd-duration">Duration of CKD (if known)</label>
                     <input id="ckd-duration" name="ckdDuration" type="text" placeholder="e.g., 2 years" />
                   </div>
-                  <div class="clinical-detail hidden" id="dialysis-block">
+                  <div class="clinical-detail hidden" id="dialysis-block" data-kfre-questionnaire>
                     <div class="field-block clinical-card">
-                      <label>Dialysis</label>
+                      <label>Dialysis <span class="required-marker hidden" data-kfre-only>*</span></label>
                       <input id="dialysis-yes-no" name="dialysis" type="hidden" />
                       <div class="choice-row compact-choice">
                         <label class="choice-tile"><input type="radio" name="dialysisChoice" value="Yes" data-sync-target="dialysis-yes-no" /> Yes</label>
@@ -724,17 +742,18 @@
                 </div>
                 <div class="clinical-group-grid">
                   <div class="field-block clinical-card">
-                    <label>Diabetes Mellitus</label>
+                    <label>Diabetes <span class="required-marker hidden" data-kfre-only>*</span></label>
                     <input id="diabetic-yes-no" name="diabetic" type="hidden" required />
                     <div class="choice-row compact-choice">
                       <label class="choice-tile"><input type="radio" name="diabetesMellitus" value="Yes" data-sync-target="diabetic-yes-no" /> Yes</label>
                       <label class="choice-tile"><input type="radio" name="diabetesMellitus" value="No" data-sync-target="diabetic-yes-no" /> No</label>
                     </div>
                   </div>
-                  <div class="field-block clinical-card">
+                  <div class="field-block clinical-card hidden" data-kfre-questionnaire>
                     <label for="diabetes-duration">Duration of diabetes (years)</label>
                     <input id="diabetes-duration" name="diabetesDuration" type="number" min="0" max="120" step="0.1" placeholder="Years" />
                   </div>
+                  <!-- Diabetic classification — removed from KFRE intake (uncomment to restore)
                   <div id="diabetic-stage-block" class="field-block clinical-card hidden">
                     <label for="diabetic-stage">Diabetes classification</label>
                     <select id="diabetic-stage" name="diabeticStage">
@@ -748,21 +767,22 @@
                     </select>
                     <small class="field-help">Formal Stage 1-3 terminology is mainly used for type 1 diabetes; type 2 and gestational diabetes are captured as clinical classifications.</small>
                   </div>
+                  -->
                   <div class="field-block clinical-card">
-                    <label>Hypertension</label>
+                    <label>Hypertension <span class="required-marker hidden" data-kfre-only>*</span></label>
                     <div class="choice-row compact-choice">
                       <label class="choice-tile"><input type="radio" name="hypertension" value="Yes" /> Yes</label>
                       <label class="choice-tile"><input type="radio" name="hypertension" value="No" /> No</label>
                     </div>
                   </div>
-                  <div class="field-block clinical-card">
+                  <div class="field-block clinical-card hidden" data-kfre-questionnaire>
                     <label for="hypertension-duration">Duration of hypertension (years)</label>
                     <input id="hypertension-duration" name="hypertensionDuration" type="number" min="0" max="120" step="0.1" placeholder="Years" />
                   </div>
                 </div>
               </div>
 
-              <div class="clinical-group">
+              <div class="clinical-group hidden" data-kfre-questionnaire>
                 <div class="clinical-group-heading">
                   <span>Risk Factors</span>
                   <small>Relevant cardiovascular and family history</small>
@@ -803,16 +823,16 @@
       <div class="stage-access-banner hidden" id="egfr-access-banner" role="status" aria-live="polite">
         <span class="stage-access-badge">Preview only</span>
         <div>
-          <strong>Complete the questionnaire before clinical findings and files can be entered.</strong>
+          <strong>Complete the intake form before clinical findings and files can be entered.</strong>
           <p>You can inspect upload requirements now; submission remains protected.</p>
         </div>
-        <button class="btn-ghost" data-tab-jump="questionnaire" type="button">Go to Questionnaire</button>
+        <button class="btn-ghost" data-tab-jump="questionnaire" type="button">Go to Intake Form</button>
       </div>
       <article class="panel-card flow-card form-card">
         <form id="egfr-form" class="form-grid" novalidate>
           <div class="linked-record-card">
             <div>
-              <span>Patient context from Questionnaire</span>
+              <span>Patient context from Intake Form</span>
               <strong id="linked-patient-title">No patient selected yet</strong>
             </div>
             <div class="linked-record-grid">
@@ -820,13 +840,13 @@
               <div><small>Hospital ID</small><b id="linked-hospital-id">--</b></div>
               <div><small>Patient ID</small><b id="linked-uhid">--</b></div>
               <div><small>Age / Sex</small><b id="linked-age-sex">--</b></div>
-              <div><small>Kidney Status</small><b id="linked-ckd">--</b></div>
+              <div><small>CKD</small><b id="linked-ckd">--</b></div>
               <div><small>Diabetes</small><b id="linked-diabetic">--</b></div>
             </div>
           </div>
 
           <div class="form-section" id="egfr-ultrasound-section">
-            <div class="section-title"><span class="section-index">1.</span> Ultrasound Findings <span class="section-note">Enter findings available in the examination report</span></div>
+            <div class="section-title"><span class="section-index">2.</span> Ultrasound Findings <span class="section-note">Enter the findings available in the Examination Report</span></div>
             <div class="renal-findings-grid">
               <section class="renal-finding-card right-kidney-card" aria-labelledby="right-kidney-findings-title">
                 <header class="renal-finding-header">
@@ -990,7 +1010,7 @@
                 </div>
               </section>
             </div>
-            <section class="ultrasound-quality-card" aria-labelledby="ultrasound-quality-title">
+            <!-- <section class="ultrasound-quality-card" aria-labelledby="ultrasound-quality-title">
               <div>
                 <h3 id="ultrasound-quality-title">Image Quality</h3>
                 <p>Record suitability for analysis and annotation availability.</p>
@@ -1011,7 +1031,7 @@
                   </div>
                 </div>
               </div>
-            </section>
+            </section> -->
           </div>
 
           <div class="form-section" id="egfr-upload-method-section">
@@ -1030,7 +1050,7 @@
             </div>
           </div>
 
-          <div class="form-section" id="separate-upload-section">
+          <div class="form-section hidden" id="separate-upload-section">
             <div class="section-title"><span class="section-index">3.</span> Separate Patient Files <span class="section-note">(All uploads mandatory)</span></div>
             <div class="upload-grid">
               <label class="upload-tile">
@@ -1051,19 +1071,30 @@
             </div>
           </div>
 
-          <div class="form-section hidden" id="package-upload-section">
-            <div class="section-title"><span class="section-index">3.</span> Single Patient Package <span class="section-note">(ZIP required)</span></div>
+          <div class="form-section" id="package-upload-section">
+            <div class="section-title"><span class="section-index">1.</span> Patient File Package <span class="required-marker">*</span> <span class="section-note">Upload a ZIP file or Select files, or choose a Folder</span></div>
+            <p class="section-description">Add all available Patient Ultrasound images (DICOM files), and the Clinical PDF together. If you select files or a folder, the portal will automatically create one ZIP package before Submission.</p>
             <div class="upload-grid">
-              <label class="upload-tile wide">
-                <input id="patient-package-file" name="patientPackageFile" type="file" accept=".zip" />
-                <span class="upload-title">UPLOAD PATIENT ZIP</span>
-                <span class="upload-subtitle">One ZIP containing all patient images and clinical documents</span>
-              </label>
+              <div class="upload-tile wide package-upload-tile" id="patient-package-tile">
+                <span class="upload-title">UPLOAD PATIENT PACKAGE</span>
+                <span class="upload-subtitle">ZIP, multiple files, or a complete patient folder</span>
+                <div class="package-upload-actions">
+                  <label class="package-upload-action">
+                    <input id="patient-package-file" name="patientPackageFile" type="file" multiple />
+                    Choose ZIP or Files
+                  </label>
+                  <label class="package-upload-action">
+                    <input id="patient-package-folder" name="patientPackageFolder" type="file" webkitdirectory directory multiple />
+                    Choose Folder
+                  </label>
+                </div>
+                <div class="file-preview" id="patient-package-preview">No file selected</div>
+              </div>
             </div>
           </div>
 
           <div class="form-section" id="egfr-video-section">
-            <div class="section-title"><span class="section-index">4.</span> Ultrasound Video <span class="section-note">(Optional)</span></div>
+            <div class="section-title"><span class="section-index">3.</span> Ultrasound Video <span class="section-note">(Optional)</span></div>
             <div class="upload-grid">
               <label class="upload-tile wide">
                 <input id="ultrasound-video-file" name="ultrasoundVideoFile" type="file" accept="video/*" />
@@ -1073,10 +1104,74 @@
             </div>
           </div>
 
+          <div class="form-section hidden" id="kfre-document-section">
+            <div class="section-title"><span class="section-index">1.</span> Kidney Function Clinical Document <span class="required-marker">*</span> <span class="section-note">(Required)</span></div>
+            <p class="section-description">Upload the laboratory or clinical report used for the KFRE research record. Ultrasound images and videos are not required in this pathway.</p>
+            <div class="section-grid">
+              <div class="field-block full-span">
+                <label>Do you have the clinical document for uploading?</label>
+                <div class="choice-row compact-choice">
+                  <label class="choice-tile"><input type="radio" name="kfreDocumentAvailable" value="Yes" checked /> Yes</label>
+                  <label class="choice-tile"><input type="radio" name="kfreDocumentAvailable" value="No" /> No</label>
+                </div>
+              </div>
+            </div>
+            <div class="upload-grid" id="kfre-document-upload">
+              <label class="upload-tile wide">
+                <input id="kfre-clinical-document" name="kfreClinicalDocumentFile" type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" />
+                <span class="upload-title">UPLOAD CLINICAL DOCUMENT</span>
+                <span class="upload-subtitle">Kidney-related laboratory or clinical report</span>
+                <div class="file-preview">No file selected</div>
+              </label>
+            </div>
+            <div class="kfre-lab-panel hidden" id="kfre-lab-panel">
+              <p class="section-description">Enter lab values when no clinical document is available.</p>
+              <div class="section-grid">
+                <div class="field-block">
+                  <label for="kfre-lab-age">Age (18–100 years) <span class="required-marker">*</span></label>
+                  <input id="kfre-lab-age" name="kfreLabAge" type="number" min="18" max="100" step="1" placeholder="Years" />
+                </div>
+                <div class="field-block">
+                  <label for="kfre-lab-sex">Sex (Male/Female) <span class="required-marker">*</span></label>
+                  <select id="kfre-lab-sex" name="kfreLabSex">
+                    <option value="" selected disabled>Select</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                  </select>
+                </div>
+                <div class="field-block">
+                  <label for="kfre-egfr">eGFR <span class="required-marker">*</span></label>
+                  <input id="kfre-egfr" name="kfreEgfr" type="number" min="0" step="0.1" placeholder="mL/min/1.73 m²" />
+                </div>
+                <div class="field-block">
+                  <label for="kfre-acr">Urine Albumin-to-Creatinine Ratio (ACR) <span class="required-marker">*</span></label>
+                  <input id="kfre-acr" name="kfreAcr" type="number" min="0" step="0.1" placeholder="mg/g" />
+                </div>
+                <div class="field-block">
+                  <label for="kfre-serum-calcium">Serum Calcium</label>
+                  <input id="kfre-serum-calcium" name="kfreSerumCalcium" type="number" min="0" step="0.1" placeholder="mg/dL" />
+                </div>
+                <div class="field-block">
+                  <label for="kfre-serum-phosphate">Serum Phosphate</label>
+                  <input id="kfre-serum-phosphate" name="kfreSerumPhosphate" type="number" min="0" step="0.1" placeholder="mg/dL" />
+                </div>
+                <div class="field-block">
+                  <label for="kfre-serum-bicarbonate">Serum Bicarbonate</label>
+                  <input id="kfre-serum-bicarbonate" name="kfreSerumBicarbonate" type="number" min="0" step="0.1" placeholder="mmol/L" />
+                </div>
+                <div class="field-block">
+                  <label for="kfre-serum-albumin">Serum Albumin</label>
+                  <input id="kfre-serum-albumin" name="kfreSerumAlbumin" type="number" min="0" step="0.1" placeholder="g/dL" />
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="kfre-structured-form hidden" id="kfre-structured-form">
             <div class="form-section">
-              <div class="section-title"><span class="section-index">1.</span> Clinical Examination</div>
+              <div class="section-title"><span class="section-index">2.</span> Clinical Examination</div>
               <p class="section-description">Record measurements taken during clinical assessment.</p>
+              <p class="section-description">Measurements in centimeters (cm). Use WHO waist/hip landmarks. Common India/South Asia risk thresholds: waist ≥ 90 cm (men), ≥ 80 cm (women) and WHR > 0.90 (men), > 0.85 (women).</p>
               <div class="section-grid kfre-clinical-grid">
                 <div class="field-block">
                   <label for="kfre-systolic-bp">Systolic Blood Pressure (mmHg) <span class="required-marker">*</span></label>
@@ -1090,15 +1185,30 @@
                   <label for="kfre-heart-rate">Heart Rate (bpm) <span class="required-marker">*</span></label>
                   <input id="kfre-heart-rate" type="number" min="20" max="250" step="1" placeholder="e.g., 72" />
                 </div>
+                <!-- Waist-to-Hip Ratio input removed (uncomment to restore)
                 <div class="field-block">
                   <label for="kfre-waist-hip-ratio">Waist-to-Hip Ratio <span class="required-marker">*</span></label>
                   <input id="kfre-waist-hip-ratio" type="number" min="0.3" max="3" step="0.01" placeholder="e.g., 0.92" />
+                </div>
+                -->
+                <div class="field-block">
+                  <label for="kfre-waist">Waist (cm) <span class="required-marker">*</span></label>
+                  <input id="kfre-waist" type="number" min="40" max="200" step="0.1" placeholder="e.g., 88" />
+                </div>
+                <div class="field-block">
+                  <label for="kfre-hip">Hip (cm) <span class="required-marker">*</span></label>
+                  <input id="kfre-hip" type="number" min="50" max="220" step="0.1" placeholder="e.g., 97" />
+                </div>
+                <div class="field-block">
+                  <label for="kfre-whr-display">Waist-to-Hip Ratio</label>
+                  <input id="kfre-whr-display" type="text" placeholder="Auto-calculated" readonly aria-readonly="true" />
                 </div>
               </div>
             </div>
 
             <div class="form-section">
-              <div class="section-title"><span class="section-index">2.</span> Follow-up <span class="section-note">(Prospective Component)</span></div>
+              <div class="section-title"><span class="section-index">3.</span> Clinical Events <span class="section-note">(Hospitalization / Dialysis / Transplant)</span></div>
+              <!-- Follow-up detail fields removed (uncomment to restore)
               <div class="section-grid">
                 <div class="field-block full-span">
                   <label for="kfre-followup-status">Follow-up record available?</label>
@@ -1137,25 +1247,29 @@
                       <option value="Not assessed">Not assessed / unavailable</option>
                     </select>
                   </div>
-                  <div class="field-block">
-                    <label for="kfre-hospitalization">Hospitalization <span class="required-marker">*</span></label>
-                    <select id="kfre-hospitalization"><option value="" selected disabled>Select</option><option value="Yes">Yes</option><option value="No">No</option></select>
-                  </div>
-                  <div class="field-block">
-                    <label for="kfre-dialysis-initiated">Dialysis Initiated <span class="required-marker">*</span></label>
-                    <select id="kfre-dialysis-initiated"><option value="" selected disabled>Select</option><option value="Yes">Yes</option><option value="No">No</option></select>
-                  </div>
-                  <div class="field-block">
-                    <label for="kfre-transplant">Transplant <span class="required-marker">*</span></label>
-                    <select id="kfre-transplant"><option value="" selected disabled>Select</option><option value="Yes">Yes</option><option value="No">No</option></select>
-                  </div>
+                </div>
+              </div>
+              -->
+              <div class="section-grid">
+                <div class="field-block">
+                  <label for="kfre-hospitalization">Hospitalization <span class="required-marker">*</span></label>
+                  <select id="kfre-hospitalization"><option value="" selected disabled>Select</option><option value="Yes">Yes</option><option value="No">No</option></select>
+                </div>
+                <div class="field-block">
+                  <label for="kfre-dialysis-initiated">Dialysis Initiated <span class="required-marker">*</span></label>
+                  <select id="kfre-dialysis-initiated"><option value="" selected disabled>Select</option><option value="Yes">Yes</option><option value="No">No</option></select>
+                </div>
+                <div class="field-block">
+                  <label for="kfre-transplant">Transplant <span class="required-marker">*</span></label>
+                  <select id="kfre-transplant"><option value="" selected disabled>Select</option><option value="Yes">Yes</option><option value="No">No</option></select>
                 </div>
               </div>
             </div>
 
             <div class="form-section">
-              <div class="section-title"><span class="section-index">3.</span> Outcome Labels <span class="section-note"></span></div>
+              <div class="section-title"><span class="section-index">4.</span> Outcome Labels <span class="section-note"></span></div>
               <div class="section-grid">
+                <!-- CKD Stage removed (captured in intake form — uncomment to restore)
                 <div class="field-block">
                   <label for="kfre-outcome-ckd-stage">CKD Stage <span class="required-marker">*</span></label>
                   <select id="kfre-outcome-ckd-stage">
@@ -1168,6 +1282,7 @@
                     <option value="5">Stage 5 (G5 / Kidney Failure)</option>
                   </select>
                 </div>
+                -->
                 <div class="field-block">
                   <label for="kfre-rapid-progression">Rapid Progression <span class="required-marker">*</span></label>
                   <select id="kfre-rapid-progression"><option value="" selected disabled>Select</option><option value="Yes">Yes</option><option value="No">No</option></select>
@@ -1177,6 +1292,7 @@
                   <select id="kfre-kidney-failure-event"><option value="" selected disabled>Select</option><option value="Yes">Yes</option><option value="No">No</option></select>
                 </div>
               </div>
+              <!-- Event date/type removed (uncomment to restore)
               <div class="kfre-event-panel hidden" id="kfre-kidney-failure-details">
                 <p class="section-description">Complete these details when a kidney failure event is recorded.</p>
                 <div class="section-grid">
@@ -1197,18 +1313,7 @@
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-
-          <div class="form-section hidden" id="kfre-document-section">
-            <div class="section-title"><span class="section-index">4.</span> Kidney Function Clinical Document <span class="section-note">(Required)</span></div>
-            <p class="section-description">Upload the laboratory or clinical report used for the KFRE research record. Ultrasound images and videos are not required in this pathway.</p>
-            <div class="upload-grid">
-              <label class="upload-tile wide">
-                <input id="kfre-clinical-document" name="kfreClinicalDocumentFile" type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" />
-                <span class="upload-title">UPLOAD CLINICAL DOCUMENT</span>
-                <span class="upload-subtitle">Kidney-related laboratory or clinical report</span>
-              </label>
+              -->
             </div>
           </div>
 
@@ -1295,9 +1400,9 @@
 
             <div class="viz-grid admin-viz-grid">
               <section class="viz-card">
-                <div class="viz-header"><h3 id="admin-stage-title">Kidney Status Distribution</h3></div>
+                <div class="viz-header"><h3 id="admin-stage-title">Chronic Kidney Disease Status</h3></div>
                 <div class="donut-wrap">
-                  <div class="donut" id="ckd-stage-donut" aria-label="Kidney status distribution"></div>
+                  <div class="donut" id="ckd-stage-donut" aria-label="Chronic kidney disease status distribution"></div>
                   <div class="donut-center" id="ckd-stage-center">--</div>
                 </div>
                 <div class="viz-legend" id="ckd-stage-legend"></div>
@@ -1370,16 +1475,16 @@
 
           <div class="viz-grid">
             <section class="viz-card">
-              <div class="viz-header"><h3>My Kidney Status Distribution</h3></div>
+              <div class="viz-header"><h3>CKD Status</h3></div>
               <div class="donut-wrap">
-                <div class="donut" id="hosp-ckd-donut" aria-label="My kidney status distribution"></div>
+                <div class="donut" id="hosp-ckd-donut" aria-label="My chronic kidney disease status distribution"></div>
                 <div class="donut-center" id="hosp-ckd-center">--</div>
               </div>
               <div class="viz-legend" id="hosp-ckd-legend"></div>
             </section>
             <section class="viz-card">
               <div class="viz-header">
-                <h3>My Age Distribution</h3>
+                <h3>Age Distribution</h3>
                 <span class="viz-note">Adults 18+, with 80+ grouped</span>
               </div>
               <div class="histogram" id="hosp-age-histogram" aria-label="My age distribution"></div>
@@ -1388,7 +1493,7 @@
 
           <section class="table-section">
             <div class="viz-header">
-              <h3>My Recent Submissions</h3>
+              <h3>Recent Submissions</h3>
               <span class="viz-note">Latest records uploaded by your hospital</span>
             </div>
             <div class="table-wrap">
@@ -1465,7 +1570,7 @@
                 <th>Patient ID</th>
                 <th>Hospital</th>
                 <th>Age / Sex</th>
-                <th>Kidney Status</th>
+                <th>CKD Status</th>
                 <th>Mode</th>
                 <th>Files</th>
                 <th>Received</th>
@@ -1544,7 +1649,7 @@
       <ul class="admin-nav-list" role="list">
         <li><button class="admin-nav-btn active" data-section="overview" aria-current="page" type="button">Overview</button></li>
         <li><button class="admin-nav-btn" data-section="hospitals" type="button">Hospitals</button></li>
-        <li><button class="admin-nav-btn" data-section="submissions" type="button">Submissions</button></li>
+        <li><button class="admin-nav-btn" data-section="submissions" type="button">Patient Records</button></li>
         <li><button class="admin-nav-btn" data-section="audit" type="button">Audit Log</button></li>
         <li><button class="admin-nav-btn" data-section="analytics" type="button">Analytics</button></li>
         <li><button class="admin-nav-btn" data-section="system" type="button">System Health</button></li>
@@ -1587,9 +1692,9 @@
       </section>
 
       <!-- Submissions -->
-      <section id="admin-section-submissions" class="admin-section hidden" aria-label="Submissions">
+      <section id="admin-section-submissions" class="admin-section hidden" aria-label="Patient Records">
         <div class="admin-section-toolbar">
-          <input type="search" id="admin-sub-search" class="admin-search" placeholder="Search by Participant ID…" aria-label="Search submissions">
+          <input type="search" id="admin-sub-search" class="admin-search" placeholder="Search by study or patient ID…" aria-label="Search patient records">
           <select id="admin-sub-hospital-filter" class="admin-select" aria-label="Filter by hospital">
             <option value="">All Hospitals</option>
           </select>
@@ -1639,15 +1744,15 @@
         </div>
         <div class="admin-analytics-grid">
           <div class="admin-card">
-            <h2 class="admin-card-title">Submission Trend</h2>
+            <h2 class="admin-card-title">Patient Record Trend</h2>
             <div id="analytics-trend-wrap"><p class="admin-empty">Loading…</p></div>
           </div>
           <div class="admin-card">
-            <h2 class="admin-card-title">CKD Stage Distribution</h2>
+            <h2 class="admin-card-title">CKD Yes/No Distribution</h2>
             <div id="analytics-ckd-wrap"><p class="admin-empty">Loading…</p></div>
           </div>
           <div class="admin-card admin-card-wide">
-            <h2 class="admin-card-title">Submissions by Hospital</h2>
+            <h2 class="admin-card-title">Patient Records by Hospital</h2>
             <div id="analytics-hosp-wrap"><p class="admin-empty">Loading…</p></div>
           </div>
         </div>

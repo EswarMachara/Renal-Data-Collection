@@ -1,3 +1,4 @@
+const kfreOnlyMarkers = document.querySelectorAll("[data-kfre-only]");
 import {
   state,
   loadAuthSession,
@@ -202,25 +203,28 @@ const clinicalPageMeta = document.getElementById("clinical-page-meta");
 
 function isConsentConfirmed() {
   return state.studyFlow === "kfre"
-    ? Boolean(kfreConsentCheckbox.checked)
-    : Boolean(consentCheckbox.checked);
+    ? Boolean(kfreConsentCheckbox?.checked)
+    : Boolean(consentCheckbox?.checked);
 }
 
 function applyStudyFlowUI() {
   const isKfre = state.studyFlow === "kfre";
+  kfreOnlyMarkers.forEach((marker) => marker.classList.toggle("hidden", !isKfre));
   consentFlowPanels.forEach((panel) => {
     panel.classList.toggle("hidden", panel.dataset.consentFlow !== state.studyFlow);
   });
   landingStudyEyebrow.textContent = isKfre ? "Kidney Failure Risk Equation Study" : "AI-Based eGFR Research Registry";
   landingStudyDescription.textContent = isKfre
-    ? "Collect consented kidney-related clinical reports for KFRE recalibration and validation in a guided workflow."
-    : "Collect consented kidney ultrasound data, clinical reports, and questionnaire details in one guided workflow.";
-  workflowRecordsTitle.textContent = isKfre ? "KFRE Clinical Record" : "eGFR Record Upload";
-  workflowRecordsSubtitle.textContent = isKfre ? "Clinical data + report" : "Ultrasound + reports";
-  consentPageMeta.textContent = isKfre
-    ? "KFRE Study · Please verify the patient context before continuing"
-    : "eGFR Study · Please verify the patient context before continuing";
-  questionnairePageMeta.textContent = isKfre ? "KFRE Research Intake Questionnaire" : "eGFR Research Intake Questionnaire";
+    ? "Collect patient-linked kidney-related clinical reports for KFRE recalibration and validation in a guided workflow."
+    : "Collect patient-linked kidney ultrasound data, clinical reports, and intake details in one guided workflow.";
+  workflowRecordsTitle.textContent = isKfre ? "KFRE Clinical Record" : "eGFR Package Upload";
+  workflowRecordsSubtitle.textContent = isKfre ? "Clinical data + report" : "Package + findings";
+  if (consentPageMeta) {
+    consentPageMeta.textContent = isKfre
+      ? "KFRE Study · Please verify the patient context before continuing"
+      : "eGFR Study · Please verify the patient context before continuing";
+  }
+  questionnairePageMeta.textContent = isKfre ? "KFRE Research Intake Form" : "eGFR Research Intake Form";
   questionnaireStudyTitle.textContent = isKfre
     ? "Recalibration and Validation of the Kidney Failure Risk Equation in an Indian Chronic Kidney Disease Cohort"
     : "AI-Based Multimodal Estimation of eGFR Using Kidney Ultrasound and Clinical Parameters";
@@ -235,6 +239,7 @@ function applyStudyFlowUI() {
     : "Ultrasound findings and clinical record uploads";
   clinicalPageMeta.textContent = isKfre ? "KFRE Study · Clinical document only" : "eGFR Study · Ultrasound and clinical files";
   questionnaireContinueBtn.textContent = isKfre ? "Continue to KFRE Flow" : "Continue to eGFR Flow";
+  updateKfreQuestionnaireVisibility({ clearHidden: false });
   updateGeneratedStudyId();
   updateStudySpecificUploadVisibility();
   updateWorkflowAccess();
@@ -242,11 +247,10 @@ function applyStudyFlowUI() {
 
 function getWorkflowAccess() {
   const patientReady = Boolean(hospitalIdInput?.value.trim() && uhidInput?.value.trim());
-  const consentReady = patientReady && Boolean(state.consentId);
   return {
-    consent: patientReady,
-    questionnaire: consentReady,
-    egfr: consentReady && state.questionnaireCompleted
+    consent: false,
+    questionnaire: patientReady,
+    egfr: patientReady && state.questionnaireCompleted
   };
 }
 
@@ -269,8 +273,8 @@ function restorePreviewValue(control) {
 
 function showPreviewLockedNotice(form) {
   const message = form === questionnaireForm
-    ? "Complete and record e-consent to enter questionnaire details."
-    : "Complete the questionnaire to enter clinical record details.";
+    ? "Complete patient setup to enter intake details."
+    : "Complete the intake form to enter clinical record details.";
   showToast(message);
 }
 
@@ -339,16 +343,16 @@ function setWorkflowNavState(nav, banner, unlocked, title) {
 function updateWorkflowAccess() {
   const access = getWorkflowAccess();
   setWorkflowNavState(consentNav, consentAccessBanner, access.consent, "E-Consent Form");
-  setWorkflowNavState(questionnaireNav, questionnaireAccessBanner, access.questionnaire, "Questionnaire");
+  setWorkflowNavState(questionnaireNav, questionnaireAccessBanner, access.questionnaire, "Intake Form");
   setWorkflowNavState(egfrNav, egfrAccessBanner, access.egfr, "eGFR Flow");
 
   document.getElementById("tab-consent")?.classList.toggle("preview-locked", !access.consent);
   [consentCheckbox, kfreConsentCheckbox].forEach((checkbox) => {
-    checkbox.disabled = !access.consent || Boolean(state.consentId);
+    if (checkbox) checkbox.disabled = !access.consent || Boolean(state.consentId);
   });
-  if (!access.consent || state.consentId) {
+  if (consentContinueBtn && (!access.consent || state.consentId)) {
     consentContinueBtn.disabled = true;
-  } else {
+  } else if (consentContinueBtn) {
     consentContinueBtn.disabled = !isConsentConfirmed();
   }
 
@@ -401,8 +405,14 @@ const bmiInput = document.getElementById("questionnaire-bmi");
 const ethnicityInput = document.getElementById("ethnicity");
 const occupationInput = document.getElementById("occupation");
 const knownCkdInputs = document.querySelectorAll("input[name='knownCkd']");
+const kfreQuestionnaireFields = document.querySelectorAll("[data-kfre-questionnaire]");
+const kfreQuestionnaireRequiredChoices = document.querySelectorAll("[data-kfre-required-choice]");
+const kfreQuestionnaireRequiredControls = document.querySelectorAll("[data-kfre-required-control]");
+const questionnaireSection1Title = document.getElementById("questionnaire-section-1-title");
 const ckdDurationInput = document.getElementById("ckd-duration");
 const ckdStageInput = document.getElementById("ckd-stage");
+const ckdStageBlock = document.getElementById("ckd-stage-block");
+const ckdDurationBlock = document.getElementById("ckd-duration-block");
 const ckdStageRemarksBlock = document.getElementById("ckd-stage-remarks-block");
 const ckdStageRemarksInput = document.getElementById("ckd-stage-remarks");
 const dialysisBlock = document.getElementById("dialysis-block");
@@ -428,8 +438,22 @@ const leftKidneyFileInput = document.getElementById("left-kidney-file");
 const rightKidneyFileInput = document.getElementById("right-kidney-file");
 const egfrReportInput = document.getElementById("egfr-report");
 const patientPackageFileInput = document.getElementById("patient-package-file");
+const patientPackageFolderInput = document.getElementById("patient-package-folder");
+const patientPackageTile = document.getElementById("patient-package-tile");
+const patientPackagePreview = document.getElementById("patient-package-preview");
 const ultrasoundVideoFileInput = document.getElementById("ultrasound-video-file");
 const kfreClinicalDocumentInput = document.getElementById("kfre-clinical-document");
+const kfreDocumentChoiceInputs = document.querySelectorAll("input[name='kfreDocumentAvailable']");
+const kfreDocumentUpload = document.getElementById("kfre-document-upload");
+const kfreLabPanel = document.getElementById("kfre-lab-panel");
+const kfreLabAgeInput = document.getElementById("kfre-lab-age");
+const kfreLabSexInput = document.getElementById("kfre-lab-sex");
+const kfreEgfrInput = document.getElementById("kfre-egfr");
+const kfreAcrInput = document.getElementById("kfre-acr");
+const kfreSerumCalciumInput = document.getElementById("kfre-serum-calcium");
+const kfreSerumPhosphateInput = document.getElementById("kfre-serum-phosphate");
+const kfreSerumBicarbonateInput = document.getElementById("kfre-serum-bicarbonate");
+const kfreSerumAlbuminInput = document.getElementById("kfre-serum-albumin");
 const egfrUltrasoundSection = document.getElementById("egfr-ultrasound-section");
 const egfrUploadMethodSection = document.getElementById("egfr-upload-method-section");
 const egfrVideoSection = document.getElementById("egfr-video-section");
@@ -439,23 +463,30 @@ const clinicalSubmitButton = document.getElementById("clinical-submit-button");
 const kfreSystolicBpInput = document.getElementById("kfre-systolic-bp");
 const kfreDiastolicBpInput = document.getElementById("kfre-diastolic-bp");
 const kfreHeartRateInput = document.getElementById("kfre-heart-rate");
-const kfreWaistHipRatioInput = document.getElementById("kfre-waist-hip-ratio");
-const kfreFollowupStatusInput = document.getElementById("kfre-followup-status");
-const kfreFollowupFields = document.getElementById("kfre-followup-fields");
-const kfreFollowupVisitInput = document.getElementById("kfre-followup-visit");
-const kfreFollowupMonthsInput = document.getElementById("kfre-followup-months");
-const kfreRepeatCreatinineInput = document.getElementById("kfre-repeat-creatinine");
-const kfreUpdatedEgfrInput = document.getElementById("kfre-updated-egfr");
-const kfreCkdProgressionInput = document.getElementById("kfre-ckd-progression");
+// kfre-waist-hip-ratio replaced by separate waist/hip inputs (uncomment to revert)
+// const kfreWaistHipRatioInput = document.getElementById("kfre-waist-hip-ratio");
+const kfreWaistInput = document.getElementById("kfre-waist");
+const kfreHipInput = document.getElementById("kfre-hip");
+const kfreWhrDisplay = document.getElementById("kfre-whr-display");
+// Follow-up status + fields removed (uncomment to revert)
+// const kfreFollowupStatusInput = document.getElementById("kfre-followup-status");
+// const kfreFollowupFields = document.getElementById("kfre-followup-fields");
+// const kfreFollowupVisitInput = document.getElementById("kfre-followup-visit");
+// const kfreFollowupMonthsInput = document.getElementById("kfre-followup-months");
+// const kfreRepeatCreatinineInput = document.getElementById("kfre-repeat-creatinine");
+// const kfreUpdatedEgfrInput = document.getElementById("kfre-updated-egfr");
+// const kfreCkdProgressionInput = document.getElementById("kfre-ckd-progression");
 const kfreHospitalizationInput = document.getElementById("kfre-hospitalization");
 const kfreDialysisInitiatedInput = document.getElementById("kfre-dialysis-initiated");
 const kfreTransplantInput = document.getElementById("kfre-transplant");
-const kfreOutcomeCkdStageInput = document.getElementById("kfre-outcome-ckd-stage");
+// kfre-outcome-ckd-stage removed (CKD stage captured in questionnaire — uncomment to revert)
+// const kfreOutcomeCkdStageInput = document.getElementById("kfre-outcome-ckd-stage");
 const kfreRapidProgressionInput = document.getElementById("kfre-rapid-progression");
 const kfreKidneyFailureEventInput = document.getElementById("kfre-kidney-failure-event");
-const kfreKidneyFailureDetails = document.getElementById("kfre-kidney-failure-details");
-const kfreKidneyFailureDateInput = document.getElementById("kfre-kidney-failure-date");
-const kfreKidneyFailureTypeInput = document.getElementById("kfre-kidney-failure-type");
+// Event date/type removed (uncomment to revert)
+// const kfreKidneyFailureDetails = document.getElementById("kfre-kidney-failure-details");
+// const kfreKidneyFailureDateInput = document.getElementById("kfre-kidney-failure-date");
+// const kfreKidneyFailureTypeInput = document.getElementById("kfre-kidney-failure-type");
 const toast = document.getElementById("toast");
 
 const uploadProgressPanel = document.getElementById("upload-progress-panel");
@@ -561,6 +592,12 @@ function updateLandingHospitalId() {
   updateGeneratedStudyId();
 }
 
+function setLandingEnrollmentDateToday() {
+  if (landingEnrollmentDateInput) {
+    landingEnrollmentDateInput.value = new Date().toISOString().slice(0, 10);
+  }
+}
+
 function getActiveTabKey() {
   const activePanel = Object.entries(panels).find(([, panel]) => panel?.classList.contains("visible"));
   return activePanel?.[0] || "landing";
@@ -578,7 +615,7 @@ function isDemoIntakeActive() {
 function updateDemoAutofillVisibility() {
   if (!demoAutofillBtn) return;
   const activeTab = getActiveTabKey();
-  const supportedTab = ["landing", "consent", "questionnaire", "egfr"].includes(activeTab);
+  const supportedTab = ["landing", "questionnaire", "egfr"].includes(activeTab);
   const appVisible = !document.querySelector(".app-container")?.classList.contains("hidden");
   demoAutofillBtn.classList.toggle("hidden", !appVisible || !supportedTab || !isDemoIntakeActive());
 }
@@ -663,39 +700,39 @@ function fillDemoConsent() {
 
 function fillDemoQuestionnaire() {
   if (questionnaireForm.classList.contains("preview-locked")) {
-    showToast("Record e-consent before using demo questionnaire fill.");
+    showToast("Complete demo patient setup before using intake demo fill.");
     return;
   }
 
-  setDemoValue(siteCenterInput, "HOSP-DEMO Research Desk");
-  setDemoRadio("consentObtained", "Yes");
   setDemoValue(ageInput, "52");
   setDemoRadio("questionnaireSex", "Female");
-  setDemoValue(heightInput, "162");
-  setDemoValue(weightInput, "68");
-  updateQuestionnaireBmi();
-  setDemoValue(ethnicityInput, "Indian");
-  setDemoValue(occupationInput, "Teacher");
   setDemoRadio("knownCkd", "Yes");
-  setDemoValue(ckdDurationInput, "2 years");
   setDemoValue(ckdStageInput, "2");
   updateDialysisVisibility();
+  if (state.studyFlow === "kfre") {
+    setDemoRadio("consentObtained", "Yes");
+    setDemoValue(heightInput, "162");
+    setDemoValue(weightInput, "64");
+    setDemoValue(ethnicityInput, "Indian");
+    setDemoValue(occupationInput, "Teacher");
+    setDemoValue(ckdDurationInput, "2 years");
+    setDemoValue(diabetesDurationInput, "6");
+    setDemoValue(diabeticStageInput, "Type 2 diabetes");
+    setDemoValue(hypertensionDurationInput, "4");
+    setDemoRadio("cardiovascularDisease", "No");
+    setDemoRadio("familyKidneyHistory", "No");
+  }
   setDemoRadio("diabetesMellitus", "Yes");
   updateDiabeticVisibility();
-  setDemoValue(diabeticStageInput, "Type 2 diabetes");
-  setDemoValue(diabetesDurationInput, "6");
   setDemoRadio("hypertension", "Yes");
-  setDemoValue(hypertensionDurationInput, "4");
-  setDemoRadio("cardiovascularDisease", "No");
-  setDemoRadio("familyKidneyHistory", "No");
   updateLinkedPatientSummary();
   updateQuestionnaireContinueState();
-  showToast("Questionnaire demo values filled. Review once, then continue.");
+  showToast("Intake demo values filled. Review once, then continue.");
 }
 
 function fillDemoEgfrFlow() {
   if (egfrForm.classList.contains("preview-locked")) {
-    showToast("Complete the questionnaire before using clinical demo fill.");
+    showToast("Complete the intake form before using clinical demo fill.");
     return;
   }
 
@@ -703,10 +740,15 @@ function fillDemoEgfrFlow() {
     setDemoValue(kfreSystolicBpInput, "128");
     setDemoValue(kfreDiastolicBpInput, "82");
     setDemoValue(kfreHeartRateInput, "76");
-    setDemoValue(kfreWaistHipRatioInput, "0.91");
-    setDemoValue(kfreFollowupStatusInput, "None");
+    // kfreWaistHipRatioInput replaced by waist/hip (uncomment to revert)
+    // setDemoValue(kfreWaistHipRatioInput, "0.91");
+    if (kfreWaistInput) { kfreWaistInput.value = "88"; kfreWaistInput.dispatchEvent(new Event("input")); }
+    if (kfreHipInput)   { kfreHipInput.value = "97";  kfreHipInput.dispatchEvent(new Event("input")); }
+    // kfreFollowupStatusInput removed (uncomment to revert)
+    // setDemoValue(kfreFollowupStatusInput, "None");
     updateKfreConditionalFields({ clearHidden: true });
-    setDemoValue(kfreOutcomeCkdStageInput, "2");
+    // kfreOutcomeCkdStageInput removed (uncomment to revert)
+    // setDemoValue(kfreOutcomeCkdStageInput, "2");
     setDemoValue(kfreRapidProgressionInput, "No");
     setDemoValue(kfreKidneyFailureEventInput, "No");
     updateKfreConditionalFields({ clearHidden: true });
@@ -748,7 +790,6 @@ function fillCurrentDemoPage() {
   }
   const activeTab = getActiveTabKey();
   if (activeTab === "landing") fillDemoLanding();
-  else if (activeTab === "consent") fillDemoConsent();
   else if (activeTab === "questionnaire") fillDemoQuestionnaire();
   else if (activeTab === "egfr") fillDemoEgfrFlow();
   else showToast("Demo auto-fill is available on intake pages only.");
@@ -813,13 +854,18 @@ function initializeGlobalValidation() {
       if (input.value !== cleaned) {
         input.value = cleaned;
       }
-      if (input === landingUhidInput) updateGeneratedStudyId();
+      if (input === landingUhidInput) {
+        updateGeneratedStudyId();
+        updateStartIntakeState();
+      }
     });
   });
 
-  [landingEnrollmentDateInput, enrollmentDateInput].forEach((input) => {
-    input.addEventListener("change", () => validateDateInput(input));
-  });
+  [landingEnrollmentDateInput, enrollmentDateInput]
+    .filter(Boolean)
+    .forEach((input) => {
+      input.addEventListener("change", () => validateDateInput(input));
+    });
 }
 
 function updateLinkedPatientSummary() {
@@ -833,11 +879,13 @@ function updateLinkedPatientSummary() {
   linkedHospitalId.textContent = hospitalIdInput.value || "--";
   linkedUhid.textContent = patientId;
   linkedAgeSex.textContent = ageSex;
-  linkedCkd.textContent = formatCkdStage(ckdStageInput.value, ckdStageRemarksInput.value.trim());
+  linkedCkd.textContent = getCheckedValue(knownCkdInputs) || "--";
   linkedDiabetic.textContent = diabeticInput.value || "--";
+  syncKfreLabDemographics();
 }
 
 function updateConsentContext() {
+  if (!consentContextPatient || !consentContextHospital || !consentContextHospitalId || !consentContextUhid || !consentContextDate) return;
   const selectedHospital = getSelectableIntakeSources().find((hospital) => hospital.id === hospitalNameInput.value);
   const hospitalName = selectedHospital?.name || "--";
   const patientId = uhidInput.value.trim() || "--";
@@ -846,7 +894,8 @@ function updateConsentContext() {
   consentContextHospital.textContent = hospitalName;
   consentContextHospitalId.textContent = hospitalIdInput.value || "--";
   consentContextUhid.textContent = patientId;
-  consentContextDate.textContent = formatDisplayDate(document.getElementById("enrollment-date").value);
+  const enrollmentValue = enrollmentDateInput?.value || landingEnrollmentDateInput?.value || "";
+  consentContextDate.textContent = formatDisplayDate(enrollmentValue);
 }
 
 function syncIntakeToQuestionnaire() {
@@ -855,7 +904,9 @@ function syncIntakeToQuestionnaire() {
   studyIdInput.value = landingStudyIdInput.value.trim();
   hospitalIdInput.value = landingHospitalIdInput.value;
   uhidInput.value = landingUhidInput.value.trim();
-  enrollmentDateInput.value = landingEnrollmentDateInput.value;
+  if (enrollmentDateInput) {
+    enrollmentDateInput.value = landingEnrollmentDateInput.value;
+  }
   updateConsentContext();
   updateLinkedPatientSummary();
 }
@@ -892,6 +943,225 @@ function ensurePreview(input) {
     tile.appendChild(preview);
   }
   return preview;
+}
+
+const zipCrcTable = (() => {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i += 1) {
+    let c = i;
+    for (let k = 0; k < 8; k += 1) {
+      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    }
+    table[i] = c >>> 0;
+  }
+  return table;
+})();
+
+let preparedPatientPackageFile = null;
+let patientPackageSourceFiles = [];
+let patientPackageSourceKind = null;
+let patientPackageIsPreparing = false;
+
+function crc32(bytes) {
+  let crc = 0xffffffff;
+  for (let i = 0; i < bytes.length; i += 1) {
+    crc = zipCrcTable[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function dosDateTime(date = new Date()) {
+  const year = Math.max(date.getFullYear(), 1980);
+  const dosTime = (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2);
+  const dosDate = ((year - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate();
+  return { dosTime, dosDate };
+}
+
+function writeUint16(view, offset, value) {
+  view.setUint16(offset, value, true);
+}
+
+function writeUint32(view, offset, value) {
+  view.setUint32(offset, value >>> 0, true);
+}
+
+function createZipHeader(length) {
+  return new Uint8Array(length);
+}
+
+function sanitizeZipPath(value) {
+  return (value || "upload")
+    .replace(/\\/g, "/")
+    .replace(/^\/+/, "")
+    .split("/")
+    .filter((part) => part && part !== "." && part !== "..")
+    .join("/") || "upload";
+}
+
+function uniqueZipEntries(files) {
+  const used = new Map();
+  return files.map((file) => {
+    const rawPath = sanitizeZipPath(file.webkitRelativePath || file.name || "upload");
+    const count = used.get(rawPath) || 0;
+    used.set(rawPath, count + 1);
+    if (!count) return { file, path: rawPath };
+    const dotIndex = rawPath.lastIndexOf(".");
+    const nextPath = dotIndex > 0
+      ? `${rawPath.slice(0, dotIndex)}-${count + 1}${rawPath.slice(dotIndex)}`
+      : `${rawPath}-${count + 1}`;
+    return { file, path: nextPath };
+  });
+}
+
+async function createZipPackage(files, zipName) {
+  const encoder = new TextEncoder();
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+
+  for (const entry of uniqueZipEntries(files)) {
+    const data = new Uint8Array(await entry.file.arrayBuffer());
+    const nameBytes = encoder.encode(entry.path);
+    const checksum = crc32(data);
+    const { dosTime, dosDate } = dosDateTime(entry.file.lastModified ? new Date(entry.file.lastModified) : new Date());
+
+    const localHeader = createZipHeader(30 + nameBytes.length);
+    const localView = new DataView(localHeader.buffer);
+    writeUint32(localView, 0, 0x04034b50);
+    writeUint16(localView, 4, 20);
+    writeUint16(localView, 6, 0x0800);
+    writeUint16(localView, 8, 0);
+    writeUint16(localView, 10, dosTime);
+    writeUint16(localView, 12, dosDate);
+    writeUint32(localView, 14, checksum);
+    writeUint32(localView, 18, data.length);
+    writeUint32(localView, 22, data.length);
+    writeUint16(localView, 26, nameBytes.length);
+    writeUint16(localView, 28, 0);
+    localHeader.set(nameBytes, 30);
+    localParts.push(localHeader, data);
+
+    const centralHeader = createZipHeader(46 + nameBytes.length);
+    const centralView = new DataView(centralHeader.buffer);
+    writeUint32(centralView, 0, 0x02014b50);
+    writeUint16(centralView, 4, 20);
+    writeUint16(centralView, 6, 20);
+    writeUint16(centralView, 8, 0x0800);
+    writeUint16(centralView, 10, 0);
+    writeUint16(centralView, 12, dosTime);
+    writeUint16(centralView, 14, dosDate);
+    writeUint32(centralView, 16, checksum);
+    writeUint32(centralView, 20, data.length);
+    writeUint32(centralView, 24, data.length);
+    writeUint16(centralView, 28, nameBytes.length);
+    writeUint16(centralView, 30, 0);
+    writeUint16(centralView, 32, 0);
+    writeUint16(centralView, 34, 0);
+    writeUint16(centralView, 36, 0);
+    writeUint32(centralView, 38, 0);
+    writeUint32(centralView, 42, offset);
+    centralHeader.set(nameBytes, 46);
+    centralParts.push(centralHeader);
+    offset += localHeader.length + data.length;
+  }
+
+  const centralSize = centralParts.reduce((sum, part) => sum + part.length, 0);
+  const endHeader = createZipHeader(22);
+  const endView = new DataView(endHeader.buffer);
+  writeUint32(endView, 0, 0x06054b50);
+  writeUint16(endView, 4, 0);
+  writeUint16(endView, 6, 0);
+  writeUint16(endView, 8, files.length);
+  writeUint16(endView, 10, files.length);
+  writeUint32(endView, 12, centralSize);
+  writeUint32(endView, 16, offset);
+  writeUint16(endView, 20, 0);
+
+  return new File([...localParts, ...centralParts, endHeader], zipName, { type: "application/zip" });
+}
+
+function getPackageSourceKind(files) {
+  if (files.length === 1 && /\.zip$/i.test(files[0].name)) return "zip";
+  if (files.some((file) => file.webkitRelativePath)) return "folder";
+  return files.length === 1 ? "file" : "files";
+}
+
+function packageZipName() {
+  const studyId = (studyIdInput.value || generateStudyId(hospitalIdInput.value, uhidInput.value) || "patient-package")
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  return `${studyId || "patient-package"}.zip`;
+}
+
+function renderPatientPackagePreview({ status, files = [], packageFile = null, loading = false }) {
+  if (!patientPackagePreview || !patientPackageTile) return;
+  patientPackagePreview.innerHTML = "";
+  patientPackagePreview.classList.toggle("has-file", Boolean(packageFile || files.length));
+  patientPackageTile.classList.toggle("tile-loading", loading);
+  patientPackageTile.classList.toggle("tile-has-file", Boolean(packageFile));
+
+  if (!packageFile && !files.length) {
+    patientPackagePreview.textContent = "No file selected";
+    return;
+  }
+
+  const visibleFiles = files.slice(0, 12);
+  const remaining = Math.max(files.length - visibleFiles.length, 0);
+  const listItems = visibleFiles.map((file) => `
+    <li>
+      <svg class="file-check-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <circle cx="8" cy="8" r="7" fill="#14868c"/>
+        <path d="M5 8.2l2.2 2.2L11 5.5" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>${escapeHTML(file.webkitRelativePath || file.name)}</span>
+    </li>
+  `).join("");
+
+  patientPackagePreview.innerHTML = `
+    <div class="file-preview-details">
+      <strong class="package-upload-status">${escapeHTML(status)}</strong>
+      ${packageFile ? `<small>Prepared package: ${escapeHTML(packageFile.name)} · ${formatBytes(packageFile.size)}</small>` : "<small>Preparing ZIP package…</small>"}
+      <ul class="package-file-list">${listItems}${remaining ? `<li>+ ${remaining} more file(s)</li>` : ""}</ul>
+    </div>
+  `;
+}
+
+async function preparePatientPackage(files) {
+  const selectedFiles = Array.from(files || []).filter((file) => file.size >= 0);
+  preparedPatientPackageFile = null;
+  patientPackageSourceFiles = selectedFiles;
+  patientPackageSourceKind = getPackageSourceKind(selectedFiles);
+  patientPackageIsPreparing = false;
+
+  if (!selectedFiles.length) {
+    renderPatientPackagePreview({ status: "", files: [] });
+    return;
+  }
+
+  const status = patientPackageSourceKind === "folder"
+    ? `Folder with ${selectedFiles.length} file(s) got uploaded`
+    : patientPackageSourceKind === "files"
+      ? `${selectedFiles.length} file(s) got uploaded`
+      : "File is uploaded";
+
+  renderPatientPackagePreview({ status, files: selectedFiles, loading: patientPackageSourceKind !== "zip" });
+
+  try {
+    patientPackageIsPreparing = patientPackageSourceKind !== "zip";
+    preparedPatientPackageFile = patientPackageSourceKind === "zip"
+      ? (selectedFiles[0].type ? selectedFiles[0] : new File([selectedFiles[0]], selectedFiles[0].name, { type: "application/zip", lastModified: selectedFiles[0].lastModified }))
+      : await createZipPackage(selectedFiles, packageZipName());
+    renderPatientPackagePreview({ status, files: selectedFiles, packageFile: preparedPatientPackageFile });
+    showToast(`✓ ${status}`);
+  } catch (err) {
+    preparedPatientPackageFile = null;
+    renderPatientPackagePreview({ status: "Could not prepare ZIP package. Please try again.", files: selectedFiles });
+    showToast(err.message || "Could not prepare ZIP package. Please try again.");
+  } finally {
+    patientPackageIsPreparing = false;
+    patientPackageTile?.classList.remove("tile-loading");
+  }
 }
 
 function renderFilePreview(input, fieldName) {
@@ -955,6 +1225,13 @@ function clearFilePreviews() {
     preview.classList.remove("has-file");
     preview.innerHTML = "No file selected";
   });
+  preparedPatientPackageFile = null;
+  patientPackageSourceFiles = [];
+  patientPackageSourceKind = null;
+  patientPackageIsPreparing = false;
+  if (patientPackageFileInput) patientPackageFileInput.value = "";
+  if (patientPackageFolderInput) patientPackageFolderInput.value = "";
+  patientPackageTile?.classList.remove("tile-has-file", "tile-loading");
 }
 
 let filePreviewsInitialized = false;
@@ -965,12 +1242,19 @@ function initializeFilePreviews() {
     [leftKidneyFileInput, "leftKidney"],
     [rightKidneyFileInput, "rightKidney"],
     [egfrReportInput, "egfrReport"],
-    [patientPackageFileInput, "patientPackage"],
     [ultrasoundVideoFileInput, "ultrasoundVideo"],
     [kfreClinicalDocumentInput, "clinicalDocument"]
   ].filter(([input]) => input).forEach(([input, fieldName]) => {
     renderFilePreview(input, fieldName);
     input.addEventListener("change", () => renderFilePreview(input, fieldName));
+  });
+  patientPackageFileInput?.addEventListener("change", () => {
+    if (patientPackageFolderInput) patientPackageFolderInput.value = "";
+    preparePatientPackage(patientPackageFileInput.files);
+  });
+  patientPackageFolderInput?.addEventListener("change", () => {
+    if (patientPackageFileInput) patientPackageFileInput.value = "";
+    preparePatientPackage(patientPackageFolderInput.files);
   });
 }
 
@@ -1019,7 +1303,7 @@ const draftToastClear = document.getElementById("draft-toast-clear");
 const draftToastDismiss = document.getElementById("draft-toast-dismiss");
 
 // Which nav-tab key maps to which step number
-const TAB_TO_STEP = { landing: 1, consent: 2, questionnaire: 3, egfr: 4 };
+const TAB_TO_STEP = { landing: 1, questionnaire: 2, egfr: 3 };
 function updateStepper(tabKey) {
   const currentStep = TAB_TO_STEP[tabKey];
   const isIntakeTab  = Boolean(currentStep);
@@ -1033,10 +1317,10 @@ function updateStepper(tabKey) {
 
   intakeStepper.classList.remove("hidden");
   const access = getWorkflowAccess();
-  const stepAccess = { 1: true, 2: access.consent, 3: access.questionnaire, 4: access.egfr };
-  const completed = { 1: access.consent, 2: access.questionnaire, 3: access.egfr, 4: false };
+  const stepAccess = { 1: true, 2: access.questionnaire, 3: access.egfr };
+  const completed = { 1: access.questionnaire, 2: access.egfr, 3: false };
 
-  [1, 2, 3, 4].forEach((n) => {
+  [1, 2, 3].forEach((n) => {
     const el = document.getElementById(`stp-${n}`);
     if (!el) return;
     el.classList.remove("stp-active", "stp-done", "stp-pending", "stp-locked");
@@ -1189,13 +1473,13 @@ document.querySelectorAll("[data-tab-jump]").forEach((btn) => {
   }
 });
 
-consentCheckbox.addEventListener("change", () => {
+consentCheckbox?.addEventListener("change", () => {
   if (!state.consentId && getWorkflowAccess().consent) {
     consentContinueBtn.textContent = "Accept & Continue";
     consentContinueBtn.disabled = !isConsentConfirmed();
   }
 });
-kfreConsentCheckbox.addEventListener("change", () => {
+kfreConsentCheckbox?.addEventListener("change", () => {
   if (!state.consentId && getWorkflowAccess().consent) {
     consentContinueBtn.textContent = "Accept & Continue";
     consentContinueBtn.disabled = !isConsentConfirmed();
@@ -1214,7 +1498,7 @@ landingHospitalInput.addEventListener("change", () => {
   updateLandingHospitalId();
   state.hospitalSession = null;
   patientStartForm.reset();
-  landingEnrollmentDateInput.value = new Date().toISOString().slice(0, 10);
+  setLandingEnrollmentDateToday();
   updateGeneratedStudyId();
   questionnaireForm.reset();
   hospitalNameInput.value = "";
@@ -1230,6 +1514,7 @@ landingHospitalInput.addEventListener("change", () => {
   updateConsentContext();
   updateLinkedPatientSummary();
   updateWorkflowAccess();
+  updateStartIntakeState();
 });
 
 hospitalSessionForm.addEventListener("submit", (event) => {
@@ -1237,49 +1522,71 @@ hospitalSessionForm.addEventListener("submit", (event) => {
   updateLandingHospitalId();
   if (saveHospitalSession()) {
     updateGeneratedStudyId();
+    setLandingEnrollmentDateToday();
     landingUhidInput.focus();
+    updateStartIntakeState();
   }
 });
 
-patientStartForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-
+function handlePatientStart() {
+  updateLandingHospitalId();
+  setLandingEnrollmentDateToday();
   if (!state.hospitalSession) {
-    showToast("Save the hospital session before adding patients.");
-    landingHospitalInput.focus();
-    return;
+    if (!saveHospitalSession()) {
+      landingHospitalInput.focus();
+      return false;
+    }
   }
 
   if (!landingUhidInput.value.trim()) {
-    showToast("Enter Patient Unique ID before consent.");
+    showToast("Enter Patient Unique ID before continuing.");
     landingUhidInput.focus();
-    return;
+    return false;
   }
 
   updateGeneratedStudyId();
   if (!landingStudyIdInput.value.trim()) {
     showToast("Study ID could not be generated. Verify hospital and Patient Unique ID.");
     landingUhidInput.focus();
-    return;
+    return false;
   }
 
   if (!validateDateInput(landingEnrollmentDateInput)) {
     landingEnrollmentDateInput.reportValidity();
-    return;
+    return false;
   }
 
   syncIntakeToQuestionnaire();
   resetConsentRecord();
+  state.questionnaireCompleted = false;
   state.currentUploadSession = null;
-  consentCheckbox.checked = false;
-  kfreConsentCheckbox.checked = false;
-  consentContinueBtn.disabled = true;
+  if (consentCheckbox) consentCheckbox.checked = false;
+  if (kfreConsentCheckbox) kfreConsentCheckbox.checked = false;
+  if (consentContinueBtn) consentContinueBtn.disabled = true;
   updateWorkflowAccess();
-  activateTab("consent");
+  activateTab("questionnaire");
   window.scrollTo({ top: 0, behavior: "smooth" });
+  return true;
+}
+
+function updateStartIntakeState() {
+  if (!startPatientConsentBtn) return;
+  const hasHospital = Boolean(landingHospitalInput?.value);
+  const hasPatientId = Boolean(landingUhidInput?.value.trim());
+  startPatientConsentBtn.disabled = !(hasHospital && hasPatientId);
+}
+
+patientStartForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  handlePatientStart();
 });
 
-consentContinueBtn.addEventListener("click", async () => {
+startPatientConsentBtn?.addEventListener("click", (event) => {
+  event.preventDefault();
+  handlePatientStart();
+});
+
+consentContinueBtn?.addEventListener("click", async () => {
   if (!hospitalIdInput.value || !uhidInput.value.trim()) {
     showToast("Create the patient intake before accepting consent.");
     activateTab("landing");
@@ -1332,32 +1639,105 @@ function updateQuestionnaireBmi() {
   updateQuestionnaireContinueState();
 }
 
+function setRadioGroupRequired(groupName, required) {
+  document.querySelectorAll(`input[name='${groupName}']`).forEach((input) => {
+    input.required = required;
+  });
+}
+
+function setControlRequired(controlId, required) {
+  const control = document.getElementById(controlId);
+  if (control) control.required = required;
+}
+
+function updateKfreQuestionnaireVisibility({ clearHidden = false } = {}) {
+  const isKfre = state.studyFlow === "kfre";
+  const knownCkd = getCheckedValue(knownCkdInputs);
+  const showCkdDetails = isKfre && knownCkd === "Yes";
+  const showDialysisDetails = showCkdDetails && ["3a", "3b", "4", "5"].includes(ckdStageInput.value);
+  const requireDialysisDetails = showCkdDetails && ["4", "5"].includes(ckdStageInput.value);
+  const showOtherCkdRemarks = showCkdDetails && ckdStageInput.value === "Other";
+
+  if (questionnaireSection1Title) {
+    questionnaireSection1Title.textContent = isKfre ? "Patient Identification & Study Details" : "Patient Details";
+  }
+
+  kfreQuestionnaireFields.forEach((field) => {
+    field.classList.toggle("hidden", !isKfre);
+  });
+  if (ckdStageBlock) ckdStageBlock.classList.toggle("hidden", !showCkdDetails);
+  if (ckdDurationBlock) ckdDurationBlock.classList.toggle("hidden", !showCkdDetails);
+  dialysisBlock.classList.toggle("hidden", !showDialysisDetails);
+  // ckdStageRemarksBlock removed (Other option removed — uncomment to revert)
+  // ckdStageRemarksBlock?.classList.toggle("hidden", !showOtherCkdRemarks);
+
+  kfreQuestionnaireRequiredChoices.forEach((field) => {
+    setRadioGroupRequired(field.dataset.kfreRequiredChoice, isKfre);
+  });
+  kfreQuestionnaireRequiredControls.forEach((field) => {
+    setControlRequired(field.dataset.kfreRequiredControl, isKfre);
+  });
+  ckdStageInput.required = showCkdDetails;
+  // ckdStageRemarksInput removed (Other option removed — uncomment to revert)
+  // if (ckdStageRemarksInput) ckdStageRemarksInput.required = showOtherCkdRemarks;
+  dialysisInput.required = requireDialysisDetails;
+  dialysisFrequencyInput.required = requireDialysisDetails && dialysisInput.value === "Yes";
+
+  if (knownCkd === "No" || !isKfre) {
+    ckdStageInput.value = "";
+    ckdDurationInput.value = "";
+    // if (ckdStageRemarksInput) ckdStageRemarksInput.value = "";  // uncomment to revert
+  }
+  if (!showDialysisDetails) {
+    dialysisInput.value = "";
+    dialysisFrequencyInput.value = "";
+    document.querySelectorAll("input[name='dialysisChoice']").forEach((input) => {
+      input.checked = false;
+      input.required = false;
+    });
+  } else {
+    document.querySelectorAll("input[name='dialysisChoice']").forEach((input) => {
+      input.required = requireDialysisDetails;
+    });
+  }
+  // if (!showOtherCkdRemarks && ckdStageRemarksInput) ckdStageRemarksInput.value = "";  // uncomment to revert
+  if (clearHidden && !isKfre) {
+    kfreQuestionnaireFields.forEach((field) => clearControlsInPanel(field));
+  }
+
+  updateQuestionnaireBmi();
+  updateDiabeticVisibility();
+}
+
 function isQuestionnaireReadyForClinicalFlow() {
-  const requiresDialysis = ["3a", "3b", "4", "5"].includes(ckdStageInput.value);
-  const calculatedBmi = Number(bmiInput.value);
+  const isKfre = state.studyFlow === "kfre";
+  const knownCkd = getCheckedValue(knownCkdInputs);
+  const height = Number(heightInput.value);
+  const weight = Number(weightInput.value);
+  const dialysisRequiredStage = ["4", "5"].includes(ckdStageInput.value);
   return Boolean(
     hospitalIdInput.value &&
     uhidInput.value.trim() &&
-    enrollmentDateInput.value &&
     ageInput.value.trim() &&
     Number(ageInput.value) >= 18 &&
     Number(ageInput.value) <= 120 &&
     sexInput.value &&
-    heightInput.value.trim() &&
-    Number(heightInput.value) >= 50 &&
-    Number(heightInput.value) <= 250 &&
-    weightInput.value.trim() &&
-    Number(weightInput.value) >= 10 &&
-    Number(weightInput.value) <= 400 &&
-    Number.isFinite(calculatedBmi) &&
-    calculatedBmi >= 5 &&
-    calculatedBmi <= 100 &&
-    ckdStageInput.value &&
-    (ckdStageInput.value !== "Other" || ckdStageRemarksInput.value.trim()) &&
-    (!requiresDialysis || dialysisInput.value) &&
-    (!requiresDialysis || dialysisInput.value !== "Yes" || dialysisFrequencyInput.value.trim()) &&
+    knownCkd &&
     diabeticInput.value &&
-    (diabeticInput.value !== "Yes" || diabeticStageInput.value)
+    getCheckedValue(hypertensionInputs) &&
+    (!isKfre || (
+      // getCheckedValue(consentObtainedInputs) &&  // Consent Obtained removed from intake (uncomment to revert)
+      Number.isFinite(height) && height >= 50 && height <= 250 &&
+      Number.isFinite(weight) && weight >= 10 && weight <= 400 &&
+      (knownCkd === "No" || (
+        ckdStageInput.value &&
+        (ckdStageInput.value !== "Other" || ckdStageRemarksInput?.value.trim()) &&
+        (!dialysisRequiredStage || (
+          dialysisInput.value &&
+          (dialysisInput.value !== "Yes" || dialysisFrequencyInput.value.trim())
+        ))
+      ))
+    ))
   );
 }
 
@@ -1372,14 +1752,10 @@ function validateQuestionnaireForClinicalUpload() {
     return false;
   }
 
-  const numericInputs = [ageInput, heightInput, weightInput, dialysisFrequencyInput, diabetesDurationInput, hypertensionDurationInput]
-    .filter((input) => input.value.trim());
-  if (!numericInputs.every(validateNumericInput)) {
-    return false;
-  }
-
-  if (!validateDateInput(enrollmentDateInput)) {
-    enrollmentDateInput.reportValidity();
+  const numericInputs = state.studyFlow === "kfre"
+    ? [ageInput, heightInput, weightInput, dialysisFrequencyInput, diabetesDurationInput, hypertensionDurationInput]
+    : [ageInput];
+  if (!numericInputs.filter((input) => input.value.trim()).every(validateNumericInput)) {
     return false;
   }
 
@@ -1394,67 +1770,58 @@ function validateQuestionnaireForClinicalUpload() {
     return false;
   }
 
-  if (!heightInput.value.trim() || Number(heightInput.value) < 50 || Number(heightInput.value) > 250) {
-    showToast("Enter measured height between 50 and 250 cm.");
-    heightInput.focus();
+  if (!getCheckedValue(knownCkdInputs)) {
+    showToast("Select Chronic Kidney Disease (CKD) status.");
     return false;
   }
 
-  if (!weightInput.value.trim() || Number(weightInput.value) < 10 || Number(weightInput.value) > 400) {
-    showToast("Enter measured weight between 10 and 400 kg.");
-    weightInput.focus();
-    return false;
-  }
-
-  const calculatedBmi = Number(bmiInput.value);
-  if (!Number.isFinite(calculatedBmi) || calculatedBmi < 5 || calculatedBmi > 100) {
-    showToast("Height and weight produce an implausible BMI; verify both measurements.");
-    heightInput.focus();
-    return false;
-  }
-
-  if (!ckdStageInput.value) {
-    showToast("Select CKD stage.");
-    ckdStageInput.focus();
-    return false;
-  }
-
-  if (ckdStageInput.value === "Other" && !ckdStageRemarksInput.value.trim()) {
-    showToast("Enter remarks for Other CKD stage.");
-    ckdStageRemarksInput.focus();
-    return false;
-  }
-
-  if (["3a", "3b", "4", "5"].includes(ckdStageInput.value) && !dialysisInput.value) {
-    showToast("Select dialysis status for CKD stage 3a, 3b, 4, or 5.");
-    return false;
-  }
-
-  if (["3a", "3b", "4", "5"].includes(ckdStageInput.value) && dialysisInput.value === "Yes" && !dialysisFrequencyInput.value.trim()) {
-    showToast("Enter dialysis frequency.");
-    dialysisFrequencyInput.focus();
-    return false;
+  if (state.studyFlow === "kfre") {
+    // Consent Obtained removed from intake (uncomment to revert)
+    // if (!getCheckedValue(consentObtainedInputs)) {
+    //   showToast("Select whether patient consent was obtained.");
+    //   return false;
+    // }
+    if (!heightInput.value.trim() || !weightInput.value.trim()) {
+      showToast("Enter height and weight for the KFRE questionnaire.");
+      return false;
+    }
+    if (getCheckedValue(knownCkdInputs) === "Yes" && !ckdStageInput.value) {
+      showToast("Select CKD stage for the KFRE questionnaire.");
+      return false;
+    }
+    // ckdStageRemarks removed (Other option removed — uncomment to revert)
+    // if (ckdStageInput.value === "Other" && !ckdStageRemarksInput.value.trim()) {
+    //   showToast("Enter CKD stage remarks for Other.");
+    //   return false;
+    // }
+    if (["4", "5"].includes(ckdStageInput.value) && !dialysisInput.value) {
+      showToast("Select dialysis status for CKD stage 4 or 5.");
+      return false;
+    }
+    if (dialysisInput.value === "Yes" && !dialysisFrequencyInput.value.trim()) {
+      showToast("Enter dialysis frequency.");
+      return false;
+    }
   }
 
   if (!diabeticInput.value) {
-    showToast("Select diabetes mellitus status.");
+    showToast("Select diabetes status.");
     return false;
   }
 
-  if (diabeticInput.value === "Yes" && !diabeticStageInput.value) {
-    showToast("Select diabetes classification.");
-    diabeticStageInput.focus();
+  if (!getCheckedValue(hypertensionInputs)) {
+    showToast("Select hypertension status.");
     return false;
   }
 
   return true;
 }
 
-questionnaireHeightInput.addEventListener("input", updateQuestionnaireBmi);
-questionnaireWeightInput.addEventListener("input", updateQuestionnaireBmi);
-questionnaireForm.addEventListener("input", updateQuestionnaireContinueState);
-questionnaireForm.addEventListener("change", updateQuestionnaireContinueState);
-questionnaireContinueBtn.addEventListener("click", () => {
+questionnaireHeightInput?.addEventListener("input", updateQuestionnaireBmi);
+questionnaireWeightInput?.addEventListener("input", updateQuestionnaireBmi);
+questionnaireForm?.addEventListener("input", updateQuestionnaireContinueState);
+questionnaireForm?.addEventListener("change", updateQuestionnaireContinueState);
+questionnaireContinueBtn?.addEventListener("click", () => {
   if (!questionnaireForm.checkValidity()) {
     questionnaireForm.reportValidity();
     updateQuestionnaireContinueState();
@@ -1472,28 +1839,36 @@ questionnaireContinueBtn.addEventListener("click", () => {
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
 
-hospitalNameInput.addEventListener("change", updateHospitalId);
-[studyIdInput, uhidInput, enrollmentDateInput, ageInput, sexInput, weightInput, ckdStageInput, ckdStageRemarksInput, diabeticInput].forEach((input) => {
-  input.addEventListener("input", updateLinkedPatientSummary);
+hospitalNameInput?.addEventListener("change", updateHospitalId);
+[studyIdInput, uhidInput, enrollmentDateInput, ageInput, sexInput, weightInput, ckdStageInput, ckdStageRemarksInput, diabeticInput]
+  .filter(Boolean)
+  .forEach((input) => {
+    input.addEventListener("input", updateLinkedPatientSummary);
+    input.addEventListener("change", updateLinkedPatientSummary);
+  });
+[...knownCkdInputs, ...hypertensionInputs].filter(Boolean).forEach((input) => {
   input.addEventListener("change", updateLinkedPatientSummary);
 });
 
-enrollmentDateInput.addEventListener("change", updateConsentContext);
+enrollmentDateInput?.addEventListener("change", updateConsentContext);
 
 function getUploadMode() {
   if (state.studyFlow === "kfre") {
     return "clinical_document";
   }
-  return document.querySelector("input[name='uploadMode']:checked")?.value || "separate";
+  return "package";
 }
 
 function updateStudySpecificUploadVisibility() {
   const isKfre = state.studyFlow === "kfre";
-  [egfrUltrasoundSection, egfrUploadMethodSection, separateUploadSection, packageUploadSection, egfrVideoSection]
+  [egfrUltrasoundSection, packageUploadSection, egfrVideoSection]
     .forEach((section) => section?.classList.toggle("hidden", isKfre));
+  packageUploadSection?.classList.toggle("flow-hidden", isKfre);
+  [egfrUploadMethodSection, separateUploadSection].forEach((section) => section?.classList.add("hidden"));
   kfreStructuredForm?.classList.toggle("hidden", !isKfre);
   kfreDocumentSection?.classList.toggle("hidden", !isKfre);
-  kfreClinicalDocumentInput.required = isKfre;
+  kfreDocumentSection?.classList.toggle("flow-hidden", !isKfre);
+  updateKfreDocumentAvailability({ clearHidden: true });
   clinicalSubmitButton.textContent = isKfre ? "Submit KFRE Record" : "Submit eGFR Record";
   updateKfreConditionalFields();
 
@@ -1508,6 +1883,64 @@ function updateStudySpecificUploadVisibility() {
   }
 }
 
+function getKfreDocumentAvailability() {
+  return document.querySelector("input[name='kfreDocumentAvailable']:checked")?.value || "Yes";
+}
+
+function syncKfreLabDemographics() {
+  if (!kfreLabAgeInput || !kfreLabSexInput) return;
+  const ageValue = ageInput?.value.trim() || "";
+  if (ageValue) {
+    kfreLabAgeInput.value = ageValue;
+    kfreLabAgeInput.readOnly = true;
+  } else {
+    kfreLabAgeInput.readOnly = false;
+  }
+  const sexValue = sexInput?.value || "";
+  if (sexValue === "Male" || sexValue === "Female") {
+    kfreLabSexInput.value = sexValue;
+    kfreLabSexInput.disabled = true;
+  } else {
+    if (!kfreLabSexInput.disabled) kfreLabSexInput.value = kfreLabSexInput.value || "";
+    kfreLabSexInput.disabled = false;
+  }
+}
+
+function updateKfreDocumentAvailability({ clearHidden = false } = {}) {
+  const isKfre = state.studyFlow === "kfre";
+  const hasDocument = getKfreDocumentAvailability() !== "No";
+  const showUpload = isKfre && hasDocument;
+  const showLabs = isKfre && !hasDocument;
+
+  kfreDocumentUpload?.classList.toggle("hidden", !showUpload);
+  kfreDocumentUpload?.classList.toggle("flow-hidden", !showUpload);
+  kfreLabPanel?.classList.toggle("hidden", !showLabs);
+  kfreLabPanel?.classList.toggle("flow-hidden", !showLabs);
+
+  if (kfreClinicalDocumentInput) {
+    kfreClinicalDocumentInput.required = showUpload;
+  }
+
+  const requireLabs = showLabs;
+  if (kfreLabAgeInput) kfreLabAgeInput.required = requireLabs;
+  if (kfreLabSexInput) kfreLabSexInput.required = requireLabs;
+  if (kfreEgfrInput) kfreEgfrInput.required = requireLabs;
+  if (kfreAcrInput) kfreAcrInput.required = requireLabs;
+  [kfreSerumCalciumInput, kfreSerumPhosphateInput, kfreSerumBicarbonateInput, kfreSerumAlbuminInput]
+    .filter(Boolean)
+    .forEach((input) => { input.required = false; });
+
+  if (clearHidden && showUpload && kfreLabPanel) {
+    clearControlsInPanel(kfreLabPanel);
+  }
+  if (clearHidden && showLabs && kfreClinicalDocumentInput) {
+    kfreClinicalDocumentInput.value = "";
+    renderFilePreview(kfreClinicalDocumentInput, "clinicalDocument");
+  }
+
+  syncKfreLabDemographics();
+}
+
 function clearControlsInPanel(panel) {
   panel?.querySelectorAll("input, select").forEach((input) => {
     input.value = "";
@@ -1516,26 +1949,29 @@ function clearControlsInPanel(panel) {
 
 function updateKfreConditionalFields({ clearHidden = false } = {}) {
   const isKfre = state.studyFlow === "kfre";
-  const followupAvailable = isKfre && kfreFollowupStatusInput.value === "Available";
-  const kidneyFailureRecorded = isKfre && kfreKidneyFailureEventInput.value === "Yes";
+  // kfreWaistHipRatioInput replaced by kfreWaistInput/kfreHipInput (uncomment old line to revert)
+  // const alwaysRequired = [kfreSystolicBpInput, kfreDiastolicBpInput, kfreHeartRateInput, kfreWaistHipRatioInput, kfreOutcomeCkdStageInput, kfreRapidProgressionInput, kfreKidneyFailureEventInput];
   const alwaysRequired = [
-    kfreSystolicBpInput, kfreDiastolicBpInput, kfreHeartRateInput, kfreWaistHipRatioInput,
-    kfreOutcomeCkdStageInput, kfreRapidProgressionInput, kfreKidneyFailureEventInput
+    kfreSystolicBpInput, kfreDiastolicBpInput, kfreHeartRateInput,
+    kfreWaistInput, kfreHipInput,
+    kfreRapidProgressionInput, kfreKidneyFailureEventInput,
+    kfreHospitalizationInput, kfreDialysisInitiatedInput, kfreTransplantInput
   ];
-  const followupRequired = [
-    kfreFollowupVisitInput, kfreFollowupMonthsInput, kfreRepeatCreatinineInput, kfreUpdatedEgfrInput,
-    kfreCkdProgressionInput, kfreHospitalizationInput, kfreDialysisInitiatedInput, kfreTransplantInput
-  ];
+  alwaysRequired.filter(Boolean).forEach((input) => { input.required = false; });
 
-  alwaysRequired.forEach((input) => { input.required = isKfre; });
-  followupRequired.forEach((input) => { input.required = followupAvailable; });
-  kfreKidneyFailureDateInput.required = kidneyFailureRecorded;
-  kfreKidneyFailureTypeInput.required = kidneyFailureRecorded;
-  kfreFollowupFields.classList.toggle("hidden", !followupAvailable);
-  kfreKidneyFailureDetails.classList.toggle("hidden", !kidneyFailureRecorded);
+  // Follow-up conditional fields removed (uncomment block to revert)
+  // const followupAvailable = isKfre && kfreFollowupStatusInput.value === "Available";
+  // const followupRequired = [kfreFollowupVisitInput, kfreFollowupMonthsInput, kfreRepeatCreatinineInput, kfreUpdatedEgfrInput, kfreCkdProgressionInput, kfreHospitalizationInput, kfreDialysisInitiatedInput, kfreTransplantInput];
+  // followupRequired.forEach((input) => { input.required = followupAvailable; });
+  // kfreFollowupFields.classList.toggle("hidden", !followupAvailable);
+  // if (clearHidden && !followupAvailable) clearControlsInPanel(kfreFollowupFields);
 
-  if (clearHidden && !followupAvailable) clearControlsInPanel(kfreFollowupFields);
-  if (clearHidden && !kidneyFailureRecorded) clearControlsInPanel(kfreKidneyFailureDetails);
+  // Event date/type removed (uncomment to revert)
+  // const kidneyFailureRecorded = isKfre && kfreKidneyFailureEventInput.value === "Yes";
+  // kfreKidneyFailureDateInput.required = kidneyFailureRecorded;
+  // kfreKidneyFailureTypeInput.required = kidneyFailureRecorded;
+  // kfreKidneyFailureDetails.classList.toggle("hidden", !kidneyFailureRecorded);
+  // if (clearHidden && !kidneyFailureRecorded) clearControlsInPanel(kfreKidneyFailureDetails);
 }
 
 function updateUploadModeVisibility() {
@@ -1543,29 +1979,14 @@ function updateUploadModeVisibility() {
     return;
   }
   const mode = getUploadMode();
-  separateUploadSection.classList.toggle("hidden", mode !== "separate");
-  packageUploadSection?.classList.toggle("hidden", mode !== "package");
+  separateUploadSection?.classList.add("hidden");
+  packageUploadSection?.classList.remove("hidden");
 
-  leftKidneyFileInput.required = mode === "separate";
-  rightKidneyFileInput.required = mode === "separate";
-  egfrReportInput.required = mode === "separate";
-  if (patientPackageFileInput) {
-    patientPackageFileInput.required = mode === "package";
-  }
-
-  if (mode === "separate") {
-    if (patientPackageFileInput) {
-      patientPackageFileInput.value = "";
-      renderFilePreview(patientPackageFileInput, "patientPackage");
-    }
-  } else {
-    leftKidneyFileInput.value = "";
-    rightKidneyFileInput.value = "";
-    egfrReportInput.value = "";
-    renderFilePreview(leftKidneyFileInput, "leftKidney");
-    renderFilePreview(rightKidneyFileInput, "rightKidney");
-    renderFilePreview(egfrReportInput, "egfrReport");
-  }
+  if (leftKidneyFileInput)  { leftKidneyFileInput.required  = false; leftKidneyFileInput.value  = ""; }
+  if (rightKidneyFileInput) { rightKidneyFileInput.required = false; rightKidneyFileInput.value = ""; }
+  if (egfrReportInput)      { egfrReportInput.required      = false; egfrReportInput.value      = ""; }
+  if (patientPackageFileInput)  patientPackageFileInput.required  = false;
+  if (patientPackageFolderInput) patientPackageFolderInput.required = false;
 
   uploadModeCards.forEach((card) => {
     card.classList.toggle("selected", card.dataset.uploadModeCard === mode);
@@ -1575,47 +1996,46 @@ function updateUploadModeVisibility() {
 uploadModeInputs.forEach((input) => {
   input.addEventListener("change", updateUploadModeVisibility);
 });
+kfreDocumentChoiceInputs.forEach((input) => {
+  input.addEventListener("change", () => updateKfreDocumentAvailability({ clearHidden: true }));
+});
 demoAutofillBtn?.addEventListener("click", fillCurrentDemoPage);
-kfreFollowupStatusInput.addEventListener("change", () => updateKfreConditionalFields({ clearHidden: true }));
+// kfreFollowupStatusInput removed (uncomment to revert)
+// kfreFollowupStatusInput.addEventListener("change", () => updateKfreConditionalFields({ clearHidden: true }));
 kfreKidneyFailureEventInput.addEventListener("change", () => updateKfreConditionalFields({ clearHidden: true }));
-kfreKidneyFailureDateInput.addEventListener("change", () => validateDateInput(kfreKidneyFailureDateInput));
+// kfreKidneyFailureDateInput removed (uncomment to revert)
+// kfreKidneyFailureDateInput.addEventListener("change", () => validateDateInput(kfreKidneyFailureDateInput));
+
+// Waist-Hip Ratio auto-calculation from individual measurements
+function updateKfreWhr() {
+  const waist = parseFloat(kfreWaistInput?.value);
+  const hip   = parseFloat(kfreHipInput?.value);
+  if (kfreWhrDisplay) {
+    kfreWhrDisplay.value = (waist > 0 && hip > 0) ? (waist / hip).toFixed(2) : "";
+  }
+}
+kfreWaistInput?.addEventListener("input", updateKfreWhr);
+kfreHipInput?.addEventListener("input", updateKfreWhr);
+updateKfreWhr();
 
 function updateDialysisVisibility() {
-  const stage = ckdStageInput.value;
-  const shouldShow = ["3a", "3b", "4", "5"].includes(stage);
-  const shouldShowRemarks = stage === "Other";
-  dialysisBlock.classList.toggle("hidden", !shouldShow);
-  ckdStageRemarksBlock.classList.toggle("hidden", !shouldShowRemarks);
-  ckdStageRemarksInput.required = shouldShowRemarks;
-
-  if (!shouldShow) {
-    dialysisInput.value = "";
-    dialysisFrequencyInput.value = "";
-    document.querySelectorAll("input[name='dialysisChoice']").forEach((input) => {
-      input.checked = false;
-    });
-  }
-
-  if (!shouldShowRemarks) {
-    ckdStageRemarksInput.value = "";
-  }
-
+  updateKfreQuestionnaireVisibility({ clearHidden: true });
   updateLinkedPatientSummary();
-  updateQuestionnaireContinueState();
 }
 
 function updateDiabeticVisibility() {
-  const isDiabetic = diabeticInput.value === "Yes";
-  diabeticStageBlock.classList.toggle("hidden", !isDiabetic);
-  if (!isDiabetic) {
-    diabeticStageInput.value = "";
-  }
+  // diabeticStageBlock removed from KFRE intake (uncomment to revert)
+  // const showClassification = state.studyFlow === "kfre" && diabeticInput.value === "Yes";
+  // diabeticStageBlock?.classList.toggle("hidden", !showClassification);
+  // if (!showClassification && diabeticStageInput) diabeticStageInput.value = "";
   updateLinkedPatientSummary();
   updateQuestionnaireContinueState();
 }
 
 ckdStageInput.addEventListener("change", updateDialysisVisibility);
+knownCkdInputs.forEach((input) => input.addEventListener("change", () => updateKfreQuestionnaireVisibility({ clearHidden: true })));
 diabeticInput.addEventListener("change", updateDiabeticVisibility);
+dialysisInput.addEventListener("change", () => updateKfreQuestionnaireVisibility({ clearHidden: false }));
 
 const adminDashboardTabs = [...document.querySelectorAll("[data-admin-dashboard-view]")];
 adminDashboardTabs.forEach((button, index) => {
@@ -1926,106 +2346,147 @@ function getUltrasoundQualityReviewRows(findings) {
   ];
 }
 
-function collectKfreForm() {
-  const hasFollowup = kfreFollowupStatusInput.value === "Available";
-  const hasKidneyFailureEvent = kfreKidneyFailureEventInput.value === "Yes";
+function collectKfreLabValues() {
   return {
+    age: kfreLabAgeInput?.value.trim() || "",
+    sex: kfreLabSexInput?.value || "",
+    egfr: kfreEgfrInput?.value.trim() || "",
+    acr: kfreAcrInput?.value.trim() || "",
+    serumCalcium: kfreSerumCalciumInput?.value.trim() || "",
+    serumPhosphate: kfreSerumPhosphateInput?.value.trim() || "",
+    serumBicarbonate: kfreSerumBicarbonateInput?.value.trim() || "",
+    serumAlbumin: kfreSerumAlbuminInput?.value.trim() || ""
+  };
+}
+
+function collectKfreForm() {
+  const documentAvailable = getKfreDocumentAvailability() !== "No" ? "Yes" : "No";
+  // Followup status removed — hospitalization/dialysis/transplant now always collected
+  // const hasFollowup = kfreFollowupStatusInput.value === "Available";
+  // const hasKidneyFailureEvent = kfreKidneyFailureEventInput.value === "Yes";
+  return {
+    documentAvailable,
     clinicalExamination: {
       systolicBp: kfreSystolicBpInput.value.trim(),
       diastolicBp: kfreDiastolicBpInput.value.trim(),
       heartRate: kfreHeartRateInput.value.trim(),
-      waistHipRatio: kfreWaistHipRatioInput.value.trim()
+      // waistHipRatio replaced by individual fields (uncomment to revert)
+      // waistHipRatio: kfreWaistHipRatioInput.value.trim(),
+      waistCm: kfreWaistInput?.value.trim() || "",
+      hipCm: kfreHipInput?.value.trim() || "",
+      waistHipRatio: kfreWhrDisplay?.value || ""
     },
-    followUp: hasFollowup ? {
-      visit: kfreFollowupVisitInput.value,
-      months: kfreFollowupMonthsInput.value.trim(),
-      repeatCreatinine: kfreRepeatCreatinineInput.value.trim(),
-      updatedEgfr: kfreUpdatedEgfrInput.value.trim(),
-      ckdProgression: kfreCkdProgressionInput.value,
+    clinicalEvents: {
       hospitalization: kfreHospitalizationInput.value,
       dialysisInitiated: kfreDialysisInitiatedInput.value,
       transplant: kfreTransplantInput.value
-    } : null,
+    },
+    // Extended follow-up removed (uncomment block to revert)
+    // followUp: hasFollowup ? { visit: kfreFollowupVisitInput.value, months: kfreFollowupMonthsInput.value.trim(), repeatCreatinine: kfreRepeatCreatinineInput.value.trim(), updatedEgfr: kfreUpdatedEgfrInput.value.trim(), ckdProgression: kfreCkdProgressionInput.value } : null,
     outcomes: {
-      ckdStage: kfreOutcomeCkdStageInput.value,
+      // ckdStage removed from outcomes (already in questionnaire — uncomment to revert)
+      // ckdStage: kfreOutcomeCkdStageInput.value,
       rapidProgression: kfreRapidProgressionInput.value,
-      kidneyFailureEvent: kfreKidneyFailureEventInput.value,
-      eventDate: hasKidneyFailureEvent ? kfreKidneyFailureDateInput.value : "-",
-      eventType: hasKidneyFailureEvent ? kfreKidneyFailureTypeInput.value : "-"
-    }
+      kidneyFailureEvent: kfreKidneyFailureEventInput.value
+      // eventDate/eventType removed (uncomment to revert)
+      // eventDate: hasKidneyFailureEvent ? kfreKidneyFailureDateInput.value : "-",
+      // eventType: hasKidneyFailureEvent ? kfreKidneyFailureTypeInput.value : "-"
+    },
+    labs: collectKfreLabValues()
   };
 }
 
 function getKfreReviewRows(kfreForm) {
   if (!kfreForm) return [];
   const examination = kfreForm.clinicalExamination || {};
-  const followUp = kfreForm.followUp;
+  const events = kfreForm.clinicalEvents || {};
   const outcomes = kfreForm.outcomes || {};
+  const labs = kfreForm.labs || {};
   const rows = [
     ["Blood Pressure", `${examination.systolicBp}/${examination.diastolicBp} mmHg`],
     ["Heart Rate", `${examination.heartRate} bpm`],
+    // Waist/Hip now shown instead of single WHR (uncomment old line to revert)
+    // ["Waist-to-Hip Ratio", examination.waistHipRatio],
+    ["Waist", `${examination.waistCm} cm`],
+    ["Hip", `${examination.hipCm} cm`],
     ["Waist-to-Hip Ratio", examination.waistHipRatio],
-    ["Follow-up", followUp ? `${followUp.visit} · ${followUp.months} months` : "None"],
-    ["Outcome CKD Stage", formatCkdStage(outcomes.ckdStage)],
+    // Outcome CKD Stage removed from KFRE review (captured in questionnaire — uncomment to revert)
+    // ["Outcome CKD Stage", formatCkdStage(outcomes.ckdStage)],
+    ["Hospitalization", events.hospitalization],
+    ["Dialysis Initiated", events.dialysisInitiated],
+    ["Transplant", events.transplant],
     ["Rapid Progression", outcomes.rapidProgression],
     ["Kidney Failure Event", outcomes.kidneyFailureEvent]
+    // Event date/type removed (uncomment to revert)
+    // ["Failure Event Date", outcomes.eventDate], ["Failure Event Type", outcomes.eventType]
   ];
-  if (followUp) {
-    rows.push(
-      ["Repeat Creatinine", `${followUp.repeatCreatinine} mg/dL`],
-      ["Updated eGFR", `${followUp.updatedEgfr} mL/min/1.73 m²`],
-      ["CKD Progression", followUp.ckdProgression],
-      ["Hospitalization", followUp.hospitalization],
-      ["Dialysis Initiated", followUp.dialysisInitiated],
-      ["Transplant", followUp.transplant]
-    );
-  }
-  if (outcomes.kidneyFailureEvent === "Yes") {
-    rows.push(["Failure Event Date", outcomes.eventDate], ["Failure Event Type", outcomes.eventType]);
-  }
+  const labRows = [
+    ["eGFR", labs.egfr ? `${labs.egfr} mL/min/1.73 m²` : "-"],
+    ["Urine ACR", labs.acr ? `${labs.acr} mg/g` : "-"],
+    ["Serum Calcium", labs.serumCalcium ? `${labs.serumCalcium} mg/dL` : "-"],
+    ["Serum Phosphate", labs.serumPhosphate ? `${labs.serumPhosphate} mg/dL` : "-"],
+    ["Serum Bicarbonate", labs.serumBicarbonate ? `${labs.serumBicarbonate} mmol/L` : "-"],
+    ["Serum Albumin", labs.serumAlbumin ? `${labs.serumAlbumin} g/dL` : "-"]
+  ].filter(([, value]) => value !== "-");
+  rows.push(...labRows);
+  // Extended follow-up removed (uncomment block to revert)
+  // if (kfreForm.followUp) { rows.push(...); }
   return rows;
 }
 
 function buildSubmissionFromForm() {
   const selectedHospital = getSelectableIntakeSources().find((hospital) => hospital.id === hospitalNameInput.value);
   const isKfre = state.studyFlow === "kfre";
+  const kfreHasDocument = isKfre ? getKfreDocumentAvailability() !== "No" : false;
   const uploadMode = getUploadMode();
   const hospitalId = hospitalIdInput.value.trim();
   const hospitalName = selectedHospital?.name || "";
   const uhid = uhidInput.value.trim();
   const studyId = generateStudyId(hospitalId, uhid);
-  const enrollmentDate = enrollmentDateInput.value;
-  const siteCenter = siteCenterInput.value.trim();
-  const consentObtained = getCheckedValue(consentObtainedInputs);
-  const age = ageInput.value.trim();
-  const sex = sexInput.value;
-  const heightCm = heightInput.value.trim();
-  const weight = weightInput.value.trim();
-  const bmi = bmiInput.value.trim();
-  const ethnicity = ethnicityInput.value.trim();
-  const occupation = occupationInput.value.trim();
+  const enrollmentDate = enrollmentDateInput?.value || landingEnrollmentDateInput?.value || "";
+  const siteCenter = siteCenterInput?.value.trim() || "-";  // siteCenterInput may be null (removed from KFRE intake)
+  const consentObtained = isKfre ? (getCheckedValue(consentObtainedInputs) || "-") : "";  // consentObtainedInputs may be empty
+  const intakeAge = ageInput.value.trim();
+  const intakeSex = sexInput.value;
+  const labAge = kfreLabAgeInput?.value.trim() || "";
+  const labSex = kfreLabSexInput?.value || "";
+  const age = intakeAge || labAge;
+  const sex = (intakeSex === "Male" || intakeSex === "Female")
+    ? intakeSex
+    : (labSex || intakeSex);
+  const heightCm = isKfre ? heightInput.value.trim() : "";
+  const weight = isKfre ? weightInput.value.trim() : "";
+  const bmi = isKfre ? bmiInput.value.trim() : "";
+  const ethnicity = isKfre ? (ethnicityInput?.value.trim() || "-") : "";  // ethnicityInput may be null (removed)
+  const occupation = isKfre ? (occupationInput?.value.trim() || "-") : "";  // occupationInput may be null (removed)
   const knownCkd = getCheckedValue(knownCkdInputs);
-  const ckdDuration = ckdDurationInput.value.trim();
-  const ckdStage = ckdStageInput.value;
-  const ckdStageRemarks = ckdStageRemarksInput.value.trim();
-  const dialysis = dialysisInput.value;
-  const dialysisFrequency = dialysisFrequencyInput.value.trim();
+  const ckdDuration = isKfre ? ckdDurationInput.value.trim() : "";
+  const ckdStage = isKfre
+    ? (knownCkd === "No" ? "Normal" : ckdStageInput.value)
+    : (knownCkd === "No" ? "Normal" : knownCkd === "Yes" ? "Other" : "");
+  const ckdStageRemarks = isKfre
+    ? (ckdStage === "Other" ? (ckdStageRemarksInput?.value.trim() || "-") : "-")  // ckdStageRemarksInput may be null
+    : (knownCkd === "Yes" ? "CKD reported; stage not collected in simplified intake." : "-");
+  const dialysis = isKfre ? dialysisInput.value : "";
+  const dialysisFrequency = isKfre ? dialysisFrequencyInput.value.trim() : "";
   const diabetic = diabeticInput.value;
-  const diabeticStage = diabeticStageInput.value.trim();
-  const diabetesDuration = diabetesDurationInput.value.trim();
+  // diabeticStageInput removed from KFRE intake (uncomment to revert)
+  const diabeticStage = (diabeticInput.value === "Yes" ? "Not collected in simplified intake" : "-");
+  // const diabeticStage = isKfre && diabeticInput.value === "Yes" ? (diabeticStageInput?.value || "-") : (diabeticInput.value === "Yes" ? "Not collected" : "-");
+  const diabetesDuration = isKfre ? diabetesDurationInput.value.trim() : "";
   const hypertension = getCheckedValue(hypertensionInputs);
-  const hypertensionDuration = hypertensionDurationInput.value.trim();
-  const cardiovascularDisease = getCheckedValue(cardiovascularDiseaseInputs);
-  const familyKidneyHistory = getCheckedValue(familyKidneyHistoryInputs);
+  const hypertensionDuration = isKfre ? hypertensionDurationInput.value.trim() : "";
+  const cardiovascularDisease = isKfre ? getCheckedValue(cardiovascularDiseaseInputs) : "";
+  const familyKidneyHistory = isKfre ? getCheckedValue(familyKidneyHistoryInputs) : "";
   const ultrasoundFindings = isKfre ? null : {
     right: collectKidneyFindings("right"),
     left: collectKidneyFindings("left"),
     ...collectUltrasoundQualityFindings()
   };
-  const leftKidneyFile = leftKidneyFileInput.files[0];
-  const rightKidneyFile = rightKidneyFileInput.files[0];
-  const egfrReportFile = egfrReportInput.files[0];
-  const patientPackageFile = patientPackageFileInput?.files[0];
+  const leftKidneyFile  = leftKidneyFileInput?.files[0];
+  const rightKidneyFile = rightKidneyFileInput?.files[0];
+  const egfrReportFile  = egfrReportInput?.files[0];
+  const patientPackageFile = preparedPatientPackageFile;
   const ultrasoundVideoFile = ultrasoundVideoFileInput.files[0];
   const kfreClinicalDocumentFile = kfreClinicalDocumentInput.files[0];
 
@@ -2041,12 +2502,6 @@ function buildSubmissionFromForm() {
     return null;
   }
 
-  if (!state.consentId) {
-    showToast("Record e-consent before submitting clinical files.");
-    activateTab("consent");
-    return null;
-  }
-
   if (!validateQuestionnaireForClinicalUpload()) {
     return null;
   }
@@ -2057,16 +2512,40 @@ function buildSubmissionFromForm() {
     return null;
   }
 
+  if (isKfre && !kfreHasDocument) {
+    if (!age || !sex) {
+      showToast("Enter age and sex for the KFRE lab entry.");
+      return null;
+    }
+    if (!Number.isFinite(Number(age)) || Number(age) < 18 || Number(age) > 100) {
+      showToast("Enter age between 18 and 100 years for the KFRE lab entry.");
+      return null;
+    }
+    if (!['Male', 'Female'].includes(sex)) {
+      showToast("Select sex (Male or Female) for the KFRE lab entry.");
+      return null;
+    }
+    if (!kfreEgfrInput?.value.trim() || !validateNumericInput(kfreEgfrInput)) {
+      showToast("Enter eGFR value for the KFRE lab entry.");
+      return null;
+    }
+    if (!kfreAcrInput?.value.trim() || !validateNumericInput(kfreAcrInput)) {
+      showToast("Enter Urine ACR value for the KFRE lab entry.");
+      return null;
+    }
+  }
+
   if (isKfre && Number(kfreSystolicBpInput.value) <= Number(kfreDiastolicBpInput.value)) {
     showToast("Systolic blood pressure must be greater than diastolic blood pressure.");
     kfreSystolicBpInput.focus();
     return null;
   }
 
-  if (isKfre && kfreKidneyFailureEventInput.value === "Yes" && !validateDateInput(kfreKidneyFailureDateInput)) {
-    kfreKidneyFailureDateInput.reportValidity();
-    return null;
-  }
+  // Event date removed from KFRE intake (uncomment to revert)
+  // if (isKfre && kfreKidneyFailureEventInput.value === "Yes" && !validateDateInput(kfreKidneyFailureDateInput)) {
+  //   kfreKidneyFailureDateInput.reportValidity();
+  //   return null;
+  // }
 
   const invalidKidneyMeasurement = !isKfre && Array.from(kidneyMeasurementInputs)
     .find((input) => input.value.trim() && !validateNumericInput(input));
@@ -2076,8 +2555,8 @@ function buildSubmissionFromForm() {
     return null;
   }
 
-  if (!age || !sex || !heightCm || !weight) {
-    showToast("Age, sex, height, and weight are required.");
+  if (!age || !sex) {
+    showToast("Age and sex are required.");
     return null;
   }
 
@@ -2086,23 +2565,8 @@ function buildSubmissionFromForm() {
     return null;
   }
 
-  if (!ckdStage) {
-    showToast("Select CKD stage.");
-    return null;
-  }
-
-  if (ckdStage === "Other" && !ckdStageRemarks) {
-    showToast("Enter remarks for Other CKD stage.");
-    return null;
-  }
-
-  if ((ckdStage === "3" || ckdStage === "4") && !dialysis) {
-    showToast("Select dialysis status for CKD stage 3 or 4.");
-    return null;
-  }
-
-  if ((ckdStage === "3" || ckdStage === "4") && dialysis === "Yes" && !dialysisFrequency) {
-    showToast("Enter dialysis frequency per week.");
+  if (!knownCkd) {
+    showToast("Select Chronic Kidney Disease (CKD) status.");
     return null;
   }
 
@@ -2111,38 +2575,31 @@ function buildSubmissionFromForm() {
     return null;
   }
 
-  if (diabetic === "Yes" && !diabeticStage) {
-    showToast("Enter diabetic stage.");
+  if (!hypertension) {
+    showToast("Select hypertension status.");
     return null;
   }
 
   let uploadFiles = [];
 
   if (isKfre) {
-    if (!kfreClinicalDocumentFile) {
-      showToast("Upload the KFRE clinical document.");
-      return null;
+    if (kfreHasDocument) {
+      if (!kfreClinicalDocumentFile) {
+        showToast("Upload the KFRE clinical document.");
+        return null;
+      }
+      uploadFiles = [{ fieldName: "clinicalDocument", file: kfreClinicalDocumentFile }];
+    } else {
+      uploadFiles = [];
     }
-    uploadFiles = [{ fieldName: "clinicalDocument", file: kfreClinicalDocumentFile }];
-  } else if (uploadMode === "separate") {
-    if (!leftKidneyFile || !rightKidneyFile) {
-      showToast("Upload both left and right kidney files.");
-      return null;
-    }
-
-    if (!egfrReportFile) {
-      showToast("Upload the eGFR report.");
-      return null;
-    }
-
-    uploadFiles = [
-      { fieldName: "leftKidney", file: leftKidneyFile },
-      { fieldName: "rightKidney", file: rightKidneyFile },
-      { fieldName: "egfrReport", file: egfrReportFile }
-    ];
   } else {
+    if (patientPackageIsPreparing) {
+      showToast("Please wait until the patient package is prepared.");
+      return null;
+    }
+
     if (!patientPackageFile) {
-      showToast("Upload the patient ZIP package.");
+      showToast("Upload a ZIP file or Select files, or choose a Folder to Submit.");
       return null;
     }
 
@@ -2172,23 +2629,23 @@ function buildSubmissionFromForm() {
     age,
     sex,
     heightCm: heightCm || "-",
-    weight,
+    weight: weight || "-",
     bmi: bmi || "-",
     ethnicity: ethnicity || "-",
     occupation: occupation || "-",
     knownCkd: knownCkd || "-",
     ckdDuration: ckdDuration || "-",
     ckdStage,
-    ckdStageRemarks: ckdStage === "Other" ? ckdStageRemarks : "-",
-    dialysis: ckdStage === "3" || ckdStage === "4" ? dialysis : "-",
-    dialysisFrequency: ckdStage === "3" || ckdStage === "4" && dialysis === "Yes" ? dialysisFrequency : "-",
+    ckdStageRemarks,
+    dialysis: "-",
+    dialysisFrequency: "-",
     diabetic,
-    diabeticStage: diabetic === "Yes" ? diabeticStage : "-",
+    diabeticStage,
     diabetesDuration: diabetesDuration || "-",
     hypertension: hypertension || "-",
     hypertensionDuration: hypertensionDuration || "-",
-    cardiovascularDisease: cardiovascularDisease || "-",
-    familyKidneyHistory: familyKidneyHistory || "-",
+    cardiovascularDisease: "-",
+    familyKidneyHistory: "-",
     ultrasoundFindings,
     kfreForm: isKfre ? collectKfreForm() : null,
     files: uploadFiles.map((upload) => upload.file.name),
@@ -2213,25 +2670,13 @@ function renderReviewSubmission(submission) {
     ["Hospital", submission.hospitalName],
     ["Hospital ID", submission.hospitalId],
     ["Patient ID", submission.uhid],
-    ["Consent ID", submission.consentId || "-"],
     ["Study ID", submission.studyId || "-"],
-    ["Enrollment Date", submission.enrollmentDate || "-"],
-    ["Consent Obtained", submission.consentObtained || "-"],
     ["Upload Method", subUploadMode(submission.uploadMode)],
     ["Age", submission.age],
     ["Sex", submission.sex],
-    ["Height", submission.heightCm && submission.heightCm !== "-" ? `${submission.heightCm} cm` : "-"],
-    ["Weight", `${submission.weight} kg`],
-    ["BMI", submission.bmi || "-"],
-    ["Known CKD", submission.knownCkd || "-"],
-    ["Kidney Status", formatCkdStage(submission.ckdStage, submission.ckdStageRemarks)],
-    ["Dialysis", submission.dialysis || "-"],
-    ["Dialysis / Week", submission.dialysisFrequency || "-"],
-    ["Diabetic", submission.diabetic],
-    ["Diabetes Classification", submission.diabeticStage || "-"],
-    ["Hypertension", submission.hypertension || "-"],
-    ["Cardiovascular Disease", submission.cardiovascularDisease || "-"],
-    ["Family Kidney History", submission.familyKidneyHistory || "-"]
+    ["Chronic Kidney Disease (CKD)", submission.knownCkd || "-"],
+    ["Diabetes", submission.diabetic],
+    ["Hypertension", submission.hypertension || "-"]
   ];
   const ultrasoundFindingRows = [
     ...getKidneyFindingReviewRows("Right Kidney", submission.ultrasoundFindings?.right),
@@ -2339,6 +2784,7 @@ function resetEgfrForm() {
   egfrForm.reset();
   clearFilePreviews();
   updateKfreConditionalFields();
+  updateKfreDocumentAvailability({ clearHidden: true });
   updateUploadModeVisibility();
   updateDialysisVisibility();
   updateDiabeticVisibility();
@@ -2351,14 +2797,16 @@ function resetPatientIntakeForNextRecord() {
   resetConsentRecord();
   patientStartForm.reset();
   questionnaireForm.reset();
-  landingEnrollmentDateInput.value = new Date().toISOString().slice(0, 10);
+  setLandingEnrollmentDateToday();
   hospitalNameInput.value = landingHospitalInput.value;
   hospitalIdInput.value = landingHospitalIdInput.value;
   updateGeneratedStudyId();
-  consentCheckbox.checked = false;
-  kfreConsentCheckbox.checked = false;
-  consentContinueBtn.disabled = true;
-  consentContinueBtn.textContent = "Accept & Continue";
+  if (consentCheckbox) consentCheckbox.checked = false;
+  if (kfreConsentCheckbox) kfreConsentCheckbox.checked = false;
+  if (consentContinueBtn) {
+    consentContinueBtn.disabled = true;
+    consentContinueBtn.textContent = "Accept & Continue";
+  }
   updateQuestionnaireBmi();
   updateConsentContext();
   updateLinkedPatientSummary();
@@ -2424,7 +2872,11 @@ async function uploadReviewedSubmission() {
     resetPatientIntakeForNextRecord();
     await loadBackendDashboard();
     refreshDashboard();
-    activateTab("dashboard");
+    activateTab("landing");
+    window.setTimeout(() => {
+      scrollToLandingSection(intakeWorkspace);
+      landingUhidInput?.focus({ preventScroll: true });
+    }, 100);
   } catch (err) {
     state.pendingSubmission = {
       ...state.pendingSubmission,
@@ -2568,13 +3020,16 @@ loginForm?.addEventListener("submit", async (event) => {
     await loadHospitalsFromApi();
     showApp();
     applyStudyFlowUI();
+    populateHospitals();
+    activateTab("landing");
+    updateLandingHospitalId();
     initializeGlobalValidation();
     initializeFilePreviews();
     updateUploadModeVisibility();
     updateDialysisVisibility();
     updateDiabeticVisibility();
     applyHospitalAuthContext();
-    landingEnrollmentDateInput.value = new Date().toISOString().slice(0, 10);
+    setLandingEnrollmentDateToday();
     loadHospitalSession();
     updateGeneratedStudyId();
     updateConsentContext();
@@ -2624,6 +3079,7 @@ document.getElementById("ls-pw-toggle")?.addEventListener("click", () => {
 (async function init() {
   initializeLandingReveal();
   initializeMobileNavigation();
+  setLandingEnrollmentDateToday();
   loadStudyFlow();
   const storedStudyChoice = document.querySelector(`input[name='loginStudyFlow'][value='${state.studyFlow}']`);
   if (storedStudyChoice) storedStudyChoice.checked = true;
@@ -2672,7 +3128,7 @@ document.getElementById("ls-pw-toggle")?.addEventListener("click", () => {
   // These run only when the session is ready
   applyStudyFlowUI();
   populateHospitals();
-  landingEnrollmentDateInput.value = new Date().toISOString().slice(0, 10);
+  setLandingEnrollmentDateToday();
   updateLandingHospitalId();
   loadHospitalSession();
   updateGeneratedStudyId();

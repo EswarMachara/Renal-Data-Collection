@@ -36,7 +36,7 @@ function subBadge(reviewed) {
 
 export function subUploadMode(mode) {
   if (mode === "clinical_document") return "Clinical Document";
-  return mode === "package" ? "ZIP Package" : "Separate Files";
+  return mode === "package" ? "Patient Package" : "Separate Files";
 }
 
 export async function loadSubmissions(page = 1) {
@@ -99,7 +99,7 @@ export function renderSubmissionsTable(items) {
       <td class="sub-uhid">${escapeHTML(item.uhid)}</td>
       <td class="sub-hospital" title="${escapeHTML(item.hospitalName || "")}">${escapeHTML(item.hospitalId)}</td>
       <td>${escapeHTML(item.age || "—")} / ${escapeHTML(item.sex || "—")}</td>
-      <td><span class="sub-stage-badge stage-${getCkdStageClass(item.ckdStage)}">${escapeHTML(formatCkdStage(item.ckdStage))}</span></td>
+      <td><span class="sub-stage-badge stage-${getCkdStageClass(item.ckdStage)}">${escapeHTML(item.knownCkd || (item.ckdStage === "Normal" ? "No" : "Yes"))}</span></td>
       <td>${escapeHTML(item.studyFlow === "kfre" ? "KFRE · Clinical Document" : subUploadMode(item.uploadMode))}</td>
       <td>${item.fileCount}</td>
       <td class="sub-date">${subFormatDate(item.receivedAt)}</td>
@@ -199,26 +199,12 @@ export function renderSubmissionDetail(submission) {
       ${field("Patient ID", submission.uhid)}
       ${field("Age", submission.age)}
       ${field("Sex", submission.sex)}
-      ${field("Height (cm)", submission.heightCm)}
-      ${field("Weight (kg)", submission.weight)}
-      ${field("BMI", submission.bmi)}
-      ${field("Ethnicity", submission.ethnicity)}
-      ${field("Occupation", submission.occupation)}
     </section>
     <section class="sub-detail-section">
       <h3 class="sub-detail-section-title">Clinical</h3>
-      ${field("Kidney Status", formatCkdStage(submission.ckdStage, submission.ckdStageRemarks))}
-      ${field("Known CKD", submission.knownCkd)}
-      ${field("CKD Duration", submission.ckdDuration)}
-      ${field("Dialysis", submission.dialysis)}
-      ${field("Dialysis Frequency", submission.dialysisFrequency)}
-      ${field("Diabetic", submission.diabetic)}
-      ${field("Diabetic Stage", submission.diabeticStage)}
-      ${field("Diabetes Duration", submission.diabetesDuration)}
+      ${field("Chronic Kidney Disease (CKD)", submission.knownCkd || (submission.ckdStage === "Normal" ? "No" : "Yes"))}
+      ${field("Diabetes", submission.diabetic)}
       ${field("Hypertension", submission.hypertension)}
-      ${field("Hypert. Duration", submission.hypertensionDuration)}
-      ${field("Cardiovascular Dis.", submission.cardiovascularDisease)}
-      ${field("Family Kidney Hist.", submission.familyKidneyHistory)}
     </section>
     ${ultrasoundFindingSection}
     ${kfreSection}
@@ -227,8 +213,6 @@ export function renderSubmissionDetail(submission) {
       ${field("Hospital", submission.hospitalName || submission.hospitalId)}
       ${field("Study Pathway", submission.studyFlow === "kfre" ? "KFRE Study" : "eGFR Study")}
       ${field("Upload Mode", subUploadMode(submission.uploadMode))}
-      ${field("Enrollment Date", submission.enrollmentDate)}
-      ${field("Consent ID", submission.consentId)}
       ${field("Batch ID", submission.batchId)}
       ${field("Received At", subFormatDate(submission.receivedAt))}
     </section>

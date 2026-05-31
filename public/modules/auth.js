@@ -64,12 +64,16 @@ export function hideLoginError() {
 export function updateHospitalSessionUI() {
   const activeHospitalName = document.getElementById("active-hospital-name");
   const activeHospitalId = document.getElementById("active-hospital-id");
+  const landingHospitalInput = document.getElementById("landing-hospital");
   const session = state.hospitalSession;
   const hasSession = Boolean(session);
+  const selectedHospital = getSelectableIntakeSources().find((entry) => entry.id === landingHospitalInput?.value);
+  const displaySession = session || (selectedHospital ? { id: selectedHospital.id, name: selectedHospital.name } : null);
+  const hasHospitalChoice = Boolean(selectedHospital);
 
-  if (activeHospitalName) activeHospitalName.textContent = session?.name || "No hospital selected";
-  if (activeHospitalId) activeHospitalId.textContent = session ? `Hospital ID: ${session.id}` : "Save hospital session first";
-  setPatientFieldsEnabled(hasSession);
+  if (activeHospitalName) activeHospitalName.textContent = displaySession?.name || "No hospital selected";
+  if (activeHospitalId) activeHospitalId.textContent = displaySession ? `Hospital ID: ${displaySession.id}` : "Save hospital session first";
+  setPatientFieldsEnabled(hasSession || hasHospitalChoice);
 }
 
 export function applyHospitalAuthContext() {

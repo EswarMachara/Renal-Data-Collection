@@ -101,7 +101,7 @@ export function getUploadLabel(fieldName) {
     leftKidney: "Left Kidney",
     rightKidney: "Right Kidney",
     egfrReport: "Clinical Report",
-    patientPackage: "ZIP Package",
+    patientPackage: "Patient Package",
     ultrasoundVideo: "Ultrasound Video",
     clinicalDocument: "KFRE Clinical Document"
   };

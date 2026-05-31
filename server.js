@@ -91,12 +91,21 @@ const ALLOWED_FILE_MIMES = {
   rightKidney:      ["image/jpeg", "image/png", "image/webp"],
   ultrasoundVideo:  ["video/mp4", "video/quicktime", "video/x-msvideo", "video/avi"],
   egfrReport:       ["application/pdf"],
-  clinicalDocument: ["application/pdf"],
+  clinicalDocument: [
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "image/jpeg",
+    "image/png"
+  ],
   patientPackage:   ["application/zip", "application/x-zip-compressed"]
 };
 
 const MAGIC_BYTES = {
   "application/pdf":              { offset: 0, sig: [0x25, 0x50, 0x44, 0x46] },                         // %PDF
+  "application/msword":           { offset: 0, sig: [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1] }, // OLE
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+                                  { offset: 0, sig: [0x50, 0x4B, 0x03, 0x04] },                         // PK (zip)
   "image/jpeg":                   { offset: 0, sig: [0xFF, 0xD8, 0xFF] },
   "image/png":                    { offset: 0, sig: [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A] },
   "image/webp":                   { offset: 8, sig: [0x57, 0x45, 0x42, 0x50] },                         // WEBP
@@ -761,7 +770,7 @@ async function initializeDatabase() {
         age                  integer NOT NULL,
         sex                  text NOT NULL,
         height_cm            numeric(6,2),
-        weight_kg            numeric(6,2) NOT NULL,
+        weight_kg            numeric(6,2),
         bmi                  numeric(5,2),
         ethnicity            text,
         occupation           text,
@@ -787,6 +796,7 @@ async function initializeDatabase() {
         created_at           timestamptz NOT NULL DEFAULT now()
       )
     `);
+    await client.query("ALTER TABLE submissions ALTER COLUMN weight_kg DROP NOT NULL");
 
     // Add consent_id to existing tables if upgrading (idempotent)
     await client.query("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS participant_id text REFERENCES participants(participant_id)");
@@ -995,7 +1005,7 @@ async function persistRecordsToDatabase({ batchId, batchDir, records, gcsResult 
           toNullable(record.studyId), toNullable(record.enrollmentDate),
           toNullable(record.siteCenter), toNullable(record.consentObtained),
           record.uploadMode, record.uhid, Number(record.age), record.sex,
-          toNumberOrNull(record.heightCm), Number(record.weight),
+          toNumberOrNull(record.heightCm), toNumberOrNull(record.weight),
           toNumberOrNull(record.bmi), toNullable(record.ethnicity),
           toNullable(record.occupation), toNullable(record.knownCkd),
           toNullable(record.ckdDuration), record.ckdStage, toNullable(record.ckdStageRemarks),
@@ -1036,10 +1046,11 @@ async function getDatabasePathwaySummary(studyFlow, scopeHospitalId = null) {
     ? "WHERE s.study_flow = $1 AND s.hospital_id = $2"
     : "WHERE s.study_flow = $1";
   const diabeticCond = `${cond} AND ckd_stage <> 'Normal'`;
+  const ckdStatusExpr = "COALESCE(NULLIF(known_ckd, ''), CASE WHEN ckd_stage = 'Normal' THEN 'No' ELSE 'Yes' END)";
 
   const [summary, stages, diabetic, files, recent, ages, kfreOutcome] = await Promise.all([
     dbPool.query(`SELECT COUNT(*)::int AS patients, (COUNT(*) FILTER (WHERE reviewed_at IS NOT NULL))::int AS reviewed FROM submissions ${cond}`, filter),
-    dbPool.query(`SELECT ckd_stage AS label, COUNT(*)::int AS value FROM submissions ${cond} GROUP BY ckd_stage ORDER BY CASE ckd_stage WHEN 'Normal' THEN 0 WHEN '1' THEN 1 WHEN '2' THEN 2 WHEN '3a' THEN 3 WHEN '3b' THEN 4 WHEN '4' THEN 5 WHEN '5' THEN 6 WHEN 'Other' THEN 7 ELSE 8 END`, filter),
+    dbPool.query(`SELECT ${ckdStatusExpr} AS label, COUNT(*)::int AS value FROM submissions ${cond} GROUP BY ${ckdStatusExpr} ORDER BY CASE ${ckdStatusExpr} WHEN 'Yes' THEN 0 WHEN 'No' THEN 1 ELSE 2 END`, filter),
     dbPool.query(`SELECT diabetic AS label, COUNT(*)::int AS value FROM submissions ${diabeticCond} GROUP BY diabetic`, filter),
     dbPool.query(
       `SELECT
@@ -1130,6 +1141,7 @@ async function getDatabaseSummary(scopeHospitalId = null) {
   const diabeticCond = scopeHospitalId
     ? "WHERE hospital_id = $1 AND ckd_stage <> 'Normal'"
     : "WHERE ckd_stage <> 'Normal'";
+  const ckdStatusExpr = "COALESCE(NULLIF(known_ckd, ''), CASE WHEN ckd_stage = 'Normal' THEN 'No' ELSE 'Yes' END)";
   const hospitalBreakdownQuery = `
     SELECT h.hospital_id, h.hospital_name,
            COUNT(DISTINCT s.record_id)::int AS patients,
@@ -1147,7 +1159,7 @@ async function getDatabaseSummary(scopeHospitalId = null) {
   const [partners, summary, stages, diabetic, videos, recent, breakdown, ages] = await Promise.all([
     dbPool.query(`SELECT COUNT(*)::int AS hospitals FROM hospitals WHERE active = true ${activeHospitalCond}`, filter),
     dbPool.query(`SELECT COUNT(*)::int AS patients, (COUNT(*) FILTER (WHERE reviewed_at IS NOT NULL))::int AS reviewed FROM submissions ${cond}`, filter),
-    dbPool.query(`SELECT ckd_stage AS label, COUNT(*)::int AS value FROM submissions ${cond} GROUP BY ckd_stage ORDER BY CASE ckd_stage WHEN 'Normal' THEN 0 WHEN '1' THEN 1 WHEN '2' THEN 2 WHEN '3a' THEN 3 WHEN '3b' THEN 4 WHEN '4' THEN 5 WHEN '5' THEN 6 WHEN 'Other' THEN 7 ELSE 8 END`, filter),
+    dbPool.query(`SELECT ${ckdStatusExpr} AS label, COUNT(*)::int AS value FROM submissions ${cond} GROUP BY ${ckdStatusExpr} ORDER BY CASE ${ckdStatusExpr} WHEN 'Yes' THEN 0 WHEN 'No' THEN 1 ELSE 2 END`, filter),
     dbPool.query(`SELECT diabetic AS label, COUNT(*)::int AS value FROM submissions ${diabeticCond} GROUP BY diabetic`, filter),
     dbPool.query(videoQuery, filter),
     dbPool.query(`SELECT record_id, study_id, participant_id, batch_id, hospital_id, hospital_name, uhid, study_flow, upload_mode, received_at, reviewed_at FROM submissions ${cond} ORDER BY received_at DESC LIMIT 10`, filter),
@@ -1406,20 +1418,51 @@ function normalizeKfreForm(rawForm, studyFlow) {
   }
   const examination = rawForm.clinicalExamination || {};
   const outcomes = rawForm.outcomes || {};
+  const events = rawForm.clinicalEvents || {};
+  const documentAvailableRaw = optionalYesNo(rawForm, "documentAvailable", "Clinical document availability");
+  const documentAvailable = documentAvailableRaw === "-" ? "Yes" : documentAvailableRaw;
+  const labs = rawForm.labs && typeof rawForm.labs === "object" && !Array.isArray(rawForm.labs)
+    ? rawForm.labs
+    : {};
+  const ratioCandidate = cleanText(examination.waistHipRatio, 20);
+  let resolvedRatio = ratioCandidate && ratioCandidate !== "-" ? ratioCandidate : "";
+  if (!resolvedRatio) {
+    const waist = optionalNumber(examination, "waistCm", "Waist", { min: 40, max: 200 });
+    const hip = optionalNumber(examination, "hipCm", "Hip", { min: 50, max: 220 });
+    if (waist !== "-" && hip !== "-") {
+      resolvedRatio = String((Number(waist) / Number(hip)).toFixed(2));
+    }
+  }
   const normalized = {
+    documentAvailable,
     clinicalExamination: {
       systolicBp:    requiredNumber(examination, "systolicBp", "Systolic blood pressure", { min: 50, max: 300, integer: true }),
       diastolicBp:   requiredNumber(examination, "diastolicBp", "Diastolic blood pressure", { min: 30, max: 200, integer: true }),
       heartRate:     requiredNumber(examination, "heartRate", "Heart rate", { min: 20, max: 250, integer: true }),
-      waistHipRatio: requiredNumber(examination, "waistHipRatio", "Waist-to-hip ratio", { min: 0.3, max: 3 })
+      waistCm:       optionalNumber(examination, "waistCm", "Waist", { min: 40, max: 200 }),
+      hipCm:         optionalNumber(examination, "hipCm", "Hip", { min: 50, max: 220 }),
+      waistHipRatio: requiredNumber({ value: resolvedRatio }, "value", "Waist-to-hip ratio", { min: 0.3, max: 3 })
+    },
+    clinicalEvents: {
+      hospitalization:   optionalYesNo(events, "hospitalization", "Hospitalization"),
+      dialysisInitiated: optionalYesNo(events, "dialysisInitiated", "Dialysis initiated"),
+      transplant:        optionalYesNo(events, "transplant", "Transplant")
+    },
+    labs: {
+      egfr:            optionalNumber(labs, "egfr", "eGFR", { min: 0, max: 300 }),
+      acr:             optionalNumber(labs, "acr", "Urine ACR", { min: 0, max: 10000 }),
+      serumCalcium:    optionalNumber(labs, "serumCalcium", "Serum calcium", { min: 0, max: 20 }),
+      serumPhosphate:  optionalNumber(labs, "serumPhosphate", "Serum phosphate", { min: 0, max: 20 }),
+      serumBicarbonate: optionalNumber(labs, "serumBicarbonate", "Serum bicarbonate", { min: 0, max: 60 }),
+      serumAlbumin:    optionalNumber(labs, "serumAlbumin", "Serum albumin", { min: 0, max: 10 })
     },
     followUp: null,
     outcomes: {
-      ckdStage:           requiredChoice(outcomes, "ckdStage", "KFRE outcome CKD stage", allowedKfreOutcomeStages),
+      ckdStage:           optionalChoice(outcomes, "ckdStage", "KFRE outcome CKD stage", allowedKfreOutcomeStages),
       rapidProgression:   requiredChoice(outcomes, "rapidProgression", "Rapid progression", allowedYesNoValues),
       kidneyFailureEvent: requiredChoice(outcomes, "kidneyFailureEvent", "Kidney failure event", allowedYesNoValues),
-      eventDate:          "-",
-      eventType:          "-"
+      eventDate:          optionalDate(outcomes, "eventDate", "Kidney failure event date"),
+      eventType:          optionalChoice(outcomes, "eventType", "Kidney failure event type", allowedKfreEventTypes)
     }
   };
   if (Number(normalized.clinicalExamination.systolicBp) <= Number(normalized.clinicalExamination.diastolicBp)) {
@@ -1446,8 +1489,13 @@ function normalizeKfreForm(rawForm, studyFlow) {
   }
 
   if (normalized.outcomes.kidneyFailureEvent === "Yes") {
-    normalized.outcomes.eventDate = requiredDate(outcomes, "eventDate", "Kidney failure event date");
-    normalized.outcomes.eventType = requiredChoice(outcomes, "eventType", "Kidney failure event type", allowedKfreEventTypes);
+    if (normalized.outcomes.eventDate === "-") normalized.outcomes.eventDate = "-";
+    if (normalized.outcomes.eventType === "-") normalized.outcomes.eventType = "-";
+  }
+
+  if (documentAvailable === "No") {
+    normalized.labs.egfr = requiredNumber(labs, "egfr", "eGFR", { min: 0, max: 300 });
+    normalized.labs.acr = requiredNumber(labs, "acr", "Urine ACR", { min: 0, max: 10000 });
   }
 
   return normalized;
@@ -1463,7 +1511,6 @@ function computeDataQualityWarnings(record) {
   if (Number.isFinite(age) && age >= 90) warnings.push("Patient age is 90 years or above; verify age entry.");
   if (Number.isFinite(weightKg) && (weightKg < 30 || weightKg > 180)) warnings.push("Weight is outside the usual adult range; verify weight entry.");
   if (Number.isFinite(heightCm) && (heightCm < 120 || heightCm > 210)) warnings.push("Height is outside the usual adult range; verify height entry.");
-  if (!Number.isFinite(heightCm)) warnings.push("Height is missing; BMI cannot be independently verified.");
   if (Number.isFinite(heightCm) && Number.isFinite(weightKg) && Number.isFinite(bmi)) {
     const calculatedBmi = weightKg / ((heightCm / 100) ** 2);
     if (Math.abs(calculatedBmi - bmi) > 1) warnings.push("BMI differs from height/weight calculation; verify BMI.");
@@ -1491,13 +1538,19 @@ function normalizeSubmission(item, options = {}) {
   const uploadMode = requiredChoice(item, "uploadMode", "Upload mode", allowedUploadModes);
   const files      = normalizeFiles(item.files, options);
   const consentId  = cleanText(item.consentId || item.consent_id, 100) || null;
-  const heightCm   = requiredNumber(item, "heightCm", "Height", { min: 50, max: 250 });
-  const weight     = requiredNumber(item, "weight", "Weight", { min: 10, max: 400 });
-  const bmiValue   = Number((Number(weight) / ((Number(heightCm) / 100) ** 2)).toFixed(2));
-  if (bmiValue < 5 || bmiValue > 100) {
-    throw new Error("Height and weight produce an implausible BMI; verify both measurements.");
+  const heightCm   = optionalNumber(item, "heightCm", "Height", { min: 50, max: 250 });
+  const weight     = optionalNumber(item, "weight", "Weight", { min: 10, max: 400 });
+  let bmi          = optionalNumber(item, "bmi", "BMI", { min: 5, max: 100 });
+  if (heightCm !== "-" && weight !== "-") {
+    const bmiValue = Number((Number(weight) / ((Number(heightCm) / 100) ** 2)).toFixed(2));
+    if (bmiValue < 5 || bmiValue > 100) {
+      throw new Error("Height and weight produce an implausible BMI; verify both measurements.");
+    }
+    bmi = String(bmiValue);
   }
-  const bmi        = String(bmiValue);
+  const knownCkd   = requiredChoice(item, "knownCkd", "Chronic Kidney Disease (CKD)", allowedYesNoValues);
+  const ckdStage   = optionalChoice(item, "ckdStage", "CKD stage", allowedCkdStages);
+  const ckdStageRemarks = optionalText(item.ckdStageRemarks, 240);
 
   const normalized = {
     hospitalSessionId:    hospitalId,
@@ -1519,16 +1572,16 @@ function normalizeSubmission(item, options = {}) {
     bmi,
     ethnicity:            optionalText(item.ethnicity, 100),
     occupation:           optionalText(item.occupation, 120),
-    knownCkd:             optionalYesNo(item, "knownCkd", "Known CKD"),
+    knownCkd,
     ckdDuration:          optionalText(item.ckdDuration, 80),
-    ckdStage:             requiredChoice(item, "ckdStage", "CKD stage", allowedCkdStages),
-    ckdStageRemarks:      optionalText(item.ckdStageRemarks, 240),
+    ckdStage:             ckdStage === "-" ? (knownCkd === "No" ? "Normal" : "Other") : ckdStage,
+    ckdStageRemarks,
     dialysis:             optionalYesNo(item, "dialysis", "Dialysis"),
     dialysisFrequency:    optionalNumber(item, "dialysisFrequency", "Dialysis frequency", { min: 0, max: 21, integer: true }),
     diabetic:             requiredChoice(item, "diabetic", "Diabetic status", allowedYesNoValues),
     diabeticStage:        optionalText(item.diabeticStage, 120),
     diabetesDuration:     optionalNumber(item, "diabetesDuration", "Diabetes duration", { min: 0, max: 120 }),
-    hypertension:         optionalYesNo(item, "hypertension", "Hypertension"),
+    hypertension:         requiredChoice(item, "hypertension", "Hypertension", allowedYesNoValues),
     hypertensionDuration: optionalNumber(item, "hypertensionDuration", "Hypertension duration", { min: 0, max: 120 }),
     cardiovascularDisease:  optionalYesNo(item, "cardiovascularDisease", "Cardiovascular disease"),
     familyKidneyHistory:    optionalYesNo(item, "familyKidneyHistory", "Family history of kidney disease"),
@@ -1545,8 +1598,14 @@ function normalizeSubmission(item, options = {}) {
     throw new Error("Clinical-document-only upload is available only for KFRE submissions.");
   }
   if (studyFlow === "kfre") {
-    if (files.length !== 1 || !files.some((file) => file.fieldName === "clinicalDocument")) {
-      throw new Error("KFRE submission requires one kidney-related clinical document.");
+    const hasClinicalDoc = files.some((file) => file.fieldName === "clinicalDocument");
+    const requiresDocument = normalized.kfreForm?.documentAvailable !== "No";
+    if (requiresDocument) {
+      if (files.length !== 1 || !hasClinicalDoc) {
+        throw new Error("KFRE submission requires one kidney-related clinical document.");
+      }
+    } else if (files.length && (files.length !== 1 || !hasClinicalDoc)) {
+      throw new Error("KFRE submissions without a clinical document can only include the clinical document file if provided.");
     }
   } else if (files.some((file) => file.fieldName === "clinicalDocument")) {
     throw new Error("KFRE clinical documents cannot be uploaded through the eGFR pathway.");
@@ -1561,11 +1620,12 @@ function normalizeSubmission(item, options = {}) {
   if (uploadMode === "package" && files.some((f) => f.fieldName === "patientPackage" && path.extname(f.name || "").toLowerCase() !== ".zip")) {
     throw new Error("Patient package must be a .zip file.");
   }
-  if (["3a", "3b", "4", "5"].includes(normalized.ckdStage) && normalized.dialysis === "-") {
-    throw new Error("Dialysis status is required for CKD stage 3a, 3b, 4, or 5.");
+  // Require dialysis only for advanced CKD stages 4 and 5 (KFRE-specific rule)
+  if (["4", "5"].includes(normalized.ckdStage) && normalized.dialysis === "-") {
+    throw new Error("Dialysis status is required for CKD stage 4 or 5.");
   }
   if (normalized.ckdStage === "Other" && normalized.ckdStageRemarks === "-") {
-    throw new Error("Remarks are required when CKD stage is Other.");
+    normalized.ckdStageRemarks = "CKD reported; stage not collected in simplified intake.";
   }
   if (normalized.ckdStage !== "Other") {
     normalized.ckdStageRemarks = "-";
@@ -1573,10 +1633,6 @@ function normalizeSubmission(item, options = {}) {
   if (normalized.dialysis === "Yes" && normalized.dialysisFrequency === "-") {
     throw new Error("Dialysis frequency is required when dialysis is Yes.");
   }
-  if (normalized.diabetic === "Yes" && normalized.diabeticStage === "-") {
-    throw new Error("Diabetes classification is required when diabetic status is Yes.");
-  }
-
   normalized.dataQualityWarnings = computeDataQualityWarnings(normalized);
   return normalized;
 }
@@ -2237,19 +2293,20 @@ async function handleAdminAnalyticsDistribution(req, res) {
   if (!requireAdminDatabase(res)) return;
 
   try {
+    const ckdStatusExpr = "COALESCE(NULLIF(known_ckd, ''), CASE WHEN ckd_stage = 'Normal' THEN 'No' ELSE 'Yes' END)";
     const [egfrStages, ckdStages, byHospital] = await Promise.all([
       dbPool.query(
-        `SELECT ckd_stage AS stage, COUNT(*)::int AS count
+        `SELECT ${ckdStatusExpr} AS stage, COUNT(*)::int AS count
          FROM submissions
          WHERE study_flow = 'egfr'
-         GROUP BY ckd_stage
-         ORDER BY ckd_stage`
+         GROUP BY ${ckdStatusExpr}
+         ORDER BY CASE ${ckdStatusExpr} WHEN 'Yes' THEN 0 WHEN 'No' THEN 1 ELSE 2 END`
       ),
       dbPool.query(
-        `SELECT ckd_stage AS stage, COUNT(*)::int AS count
+        `SELECT ${ckdStatusExpr} AS stage, COUNT(*)::int AS count
          FROM submissions
-         GROUP BY ckd_stage
-         ORDER BY ckd_stage`
+         GROUP BY ${ckdStatusExpr}
+         ORDER BY CASE ${ckdStatusExpr} WHEN 'Yes' THEN 0 WHEN 'No' THEN 1 ELSE 2 END`
       ),
       dbPool.query(
         `SELECT h.hospital_id, h.hospital_name, COUNT(s.record_id)::int AS count
@@ -2393,7 +2450,7 @@ async function finalizeSubmissionBatch({ normalizedSubmissions, session, req }) 
   }
 
   for (const record of normalizedSubmissions) {
-    await verifySubmissionConsent(record);
+    if (record.consentId) await verifySubmissionConsent(record);
   }
 
   const now      = new Date();
@@ -2569,7 +2626,7 @@ async function handleUploadInit(req, res) {
       sendJson(res, 403, { ok: false, error: "You can only submit records for your assigned hospital." });
       return;
     }
-    await verifySubmissionConsent(normalizedSubmission);
+    if (normalizedSubmission.consentId) await verifySubmissionConsent(normalizedSubmission);
 
     const uploadId   = crypto.randomBytes(16).toString("hex");
     const now        = new Date().toISOString();
@@ -2910,6 +2967,7 @@ async function handleGetSubmissions(req, res) {
       studyFlow:    r.studyFlow || "egfr",
       age:          r.age,
       sex:          r.sex,
+      knownCkd:     r.knownCkd || null,
       ckdStage:     r.ckdStage,
       uploadMode:   r.uploadMode,
       fileCount:    Array.isArray(r.files) ? r.files.length : 0,
@@ -3108,9 +3166,9 @@ function getFilesystemPathwaySummary(records) {
     if (files.some((file) => file.fieldName === "ultrasoundVideo")) totalVideos++;
     if (files.some((file) => file.fieldName === "egfrReport" || file.fieldName === "clinicalDocument")) totalDocuments++;
     if (record.reviewedAt) totalReviewed++;
-    const stage = record.ckdStage || "Other";
-    stageCounts[stage] = (stageCounts[stage] || 0) + 1;
-    if (stage !== "Normal") {
+    const ckdStatus = record.knownCkd === "No" || record.ckdStage === "Normal" ? "No" : "Yes";
+    stageCounts[ckdStatus] = (stageCounts[ckdStatus] || 0) + 1;
+    if (ckdStatus === "Yes") {
       const diabetic = record.diabetic === "Yes" ? "Yes" : "No";
       diabeticCounts[diabetic] = (diabeticCounts[diabetic] || 0) + 1;
     }
@@ -3124,7 +3182,7 @@ function getFilesystemPathwaySummary(records) {
     if (record.kfreForm?.outcomes?.kidneyFailureEvent === "Yes") failureEvents++;
   }
 
-  const stageOrder = ["Normal", "1", "2", "3a", "3b", "4", "5", "Other"];
+  const stageOrder = ["Yes", "No"];
   const ageBucketOrder = ["18-29", "30-39", "40-49", "50-59", "60-69", "70-79", "80+"];
 
   return {
@@ -3196,12 +3254,12 @@ async function getFilesystemSummary(scopeHospitalId = null) {
     if (hasVideo) { hospitalMap[hid].videos++; totalVideos++; }
     if (r.reviewedAt) { hospitalMap[hid].reviewed++; totalReviewed++; }
 
-    // CKD stage distribution
-    const stage = r.ckdStage || "Other";
-    stageCounts[stage] = (stageCounts[stage] || 0) + 1;
+    // CKD yes/no distribution
+    const ckdStatus = r.knownCkd === "No" || r.ckdStage === "Normal" ? "No" : "Yes";
+    stageCounts[ckdStatus] = (stageCounts[ckdStatus] || 0) + 1;
 
     // Diabetic split (exclude Normal kidney status)
-    if (r.ckdStage !== "Normal") {
+    if (ckdStatus === "Yes") {
       const diab = r.diabetic === "Yes" ? "Yes" : "No";
       diabeticCounts[diab] = (diabeticCounts[diab] || 0) + 1;
     }
@@ -3231,7 +3289,7 @@ async function getFilesystemSummary(scopeHospitalId = null) {
     reviewedAt:  r.reviewedAt || null
   }));
 
-  const stageOrder = ["Normal","1","2","3a","3b","4","5","Other"];
+  const stageOrder = ["Yes","No"];
   const stages = Object.entries(stageCounts)
     .map(([label, value]) => ({ label, value }))
     .sort((a, b) => (stageOrder.indexOf(a.label) + 1 || 99) - (stageOrder.indexOf(b.label) + 1 || 99));

@@ -9,18 +9,24 @@ function subFormatDate(iso) {
 
 function subUploadMode(mode) {
   if (mode === "clinical_document") return "Clinical Document";
-  return mode === "package" ? "ZIP Package" : "Separate Files";
+  return mode === "package" ? "Patient Package" : "Separate Files";
 }
 
-const CKD_DONUT_SEGMENTS = (counts) => [
-  { label: "Normal", value: counts["Normal"] || 0, color: "#0f9a87" },
-  { label: "Stage 1", value: counts["1"] || 0, color: "#2dd4bf" },
-  { label: "Stage 2", value: counts["2"] || 0, color: "#60a5fa" },
-  { label: "Stage 3a", value: counts["3a"] || 0, color: "#fbbf24" },
-  { label: "Stage 3b", value: counts["3b"] || 0, color: "#f97316" },
-  { label: "Stage 4", value: counts["4"] || 0, color: "#f87171" },
-  { label: "Stage 5", value: counts["5"] || 0, color: "#dc2626" },
-  { label: "Other", value: counts["Other"] || 0, color: "#8b5cf6" }
+function ckdStatusCounts(items) {
+  const counts = { Yes: 0, No: 0 };
+  (items || []).forEach((item) => {
+    const label = String(item.label ?? item.stage ?? "").trim();
+    const value = Number(item.value ?? item.count ?? 0);
+    if (!value) return;
+    if (label === "No" || label === "Normal") counts.No += value;
+    else counts.Yes += value;
+  });
+  return counts;
+}
+
+const CKD_STATUS_DONUT_SEGMENTS = (counts) => [
+  { label: "CKD: Yes", value: counts.Yes || 0, color: "#0f9a87" },
+  { label: "CKD: No", value: counts.No || 0, color: "#94a3b8" }
 ];
 
 function chartColorClass(color) {
@@ -156,7 +162,7 @@ export function updateDashboards() {
     set("study-summary-files", isKfre ? kfreFollowUpCount : pathway.summary?.videos ?? 0);
     set("study-summary-files-label", isKfre ? "FOLLOW-UP RECORDS" : "ULTRASOUND VIDEOS");
     set("study-summary-pending", pathway.summary?.pending ?? 0);
-    set("admin-stage-title", isKfre ? "KFRE Cohort CKD Status" : "Kidney Status Distribution");
+    set("admin-stage-title", isKfre ? "KFRE CKD Status" : "Chronic Kidney Disease Status");
     set("admin-secondary-title", isKfre ? "Prospective Follow-up" : "Age Distribution");
     set("admin-secondary-note", isKfre ? "Follow-up information recorded" : "Adults 18+, with 80+ grouped");
     set("admin-tertiary-title", isKfre ? "Kidney Failure Events" : "CKD Diabetic vs Non-Diabetic");
@@ -165,11 +171,10 @@ export function updateDashboards() {
       ? "Latest clinical document submissions across all hospitals"
       : "Latest eGFR submissions across all hospitals");
 
-    const stageCounts = {};
-    (pathway.stages || []).forEach((stage) => { stageCounts[stage.label] = stage.value; });
+    const stageCounts = ckdStatusCounts(pathway.stages);
     const total = pathway.summary?.patients || 0;
     renderDonut("ckd-stage-donut", "ckd-stage-center", "ckd-stage-legend",
-      CKD_DONUT_SEGMENTS(stageCounts), String(total));
+      CKD_STATUS_DONUT_SEGMENTS(stageCounts), String(total));
 
     const ageHistogram = document.getElementById("age-histogram");
     const followupWidget = document.getElementById("kfre-followup-widget");
@@ -211,11 +216,10 @@ export function updateDashboards() {
     const updEl = document.getElementById("dash-hospital-updated");
     if (updEl) updEl.textContent = nowStr;
 
-    const stageCounts = {};
-    (d.stages || []).forEach((stage) => { stageCounts[stage.label] = stage.value; });
+    const stageCounts = ckdStatusCounts(d.stages);
     const total = d.summary?.patients || 0;
     renderDonut("hosp-ckd-donut", "hosp-ckd-center", "hosp-ckd-legend",
-      CKD_DONUT_SEGMENTS(stageCounts), String(total));
+      CKD_STATUS_DONUT_SEGMENTS(stageCounts), String(total));
 
     const ageBuckets = (d.ageBuckets || []).map((bucket) => ({ label: bucket.bucket, value: bucket.count }));
     renderHistogram("hosp-age-histogram", ageBuckets);

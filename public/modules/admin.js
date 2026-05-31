@@ -7,8 +7,13 @@ async function apiGet(path) {
   try {
     const res = await authedFetch(path);
     if (res.status === 401) { handle401(); return { ok: false }; }
-    return res.json();
-  } catch { return { ok: false }; }
+    const payload = await res.json();
+    if (!payload.ok && payload.error) showToast(payload.error);
+    return payload;
+  } catch {
+    showToast("Admin portal could not connect to the server.");
+    return { ok: false };
+  }
 }
 
 async function apiReq(path, body, method = "POST") {
@@ -36,6 +41,11 @@ function fmtUptime(seconds) {
   return [d && `${d}d`, h && `${h}h`, `${m}m`].filter(Boolean).join(" ");
 }
 
+function subUploadMode(mode) {
+  if (mode === "clinical_document") return "Clinical Document";
+  return mode === "package" ? "Patient Package" : "Separate Files";
+}
+
 // Apply bar widths via JS after innerHTML so no inline style= is in HTML
 function applyBarWidths(container) {
   container.querySelectorAll("[data-pct]").forEach((el) => {
@@ -58,7 +68,7 @@ export function setAdminLogoutCallback(fn) {
 const SECTION_TITLES = {
   overview: "Overview",
   hospitals: "Hospitals",
-  submissions: "Submissions",
+  submissions: "Patient Records",
   audit: "Audit Log",
   analytics: "Analytics",
   system: "System Health",
@@ -148,20 +158,35 @@ export function initAdminPortal() {
 
 // ── Overview ──────────────────────────────────────────────────────────────────
 async function loadOverview() {
-  const [summary, auditResult] = await Promise.all([
+  let [summary, auditResult] = await Promise.all([
     apiGet("/api/admin/analytics/summary"),
     apiGet("/api/admin/audit?limit=8"),
   ]);
+  if (!summary.ok) {
+    const fallback = await apiGet("/api/dashboard-summary");
+    if (fallback.ok && fallback.summary) {
+      summary = {
+        ok: true,
+        total_hospitals: fallback.summary.hospitals,
+        active_hospitals: fallback.summary.hospitals,
+        total_submissions: fallback.summary.patients,
+        submissions_today: "—",
+        submissions_this_week: "—",
+        submissions_this_month: "—",
+        active_sessions: state.authSession ? 1 : 0
+      };
+    }
+  }
 
   const grid = document.getElementById("admin-stat-grid");
   if (grid && summary.ok) {
     grid.innerHTML = [
-      { label: "Total Hospitals",    value: summary.total_hospitals,       accent: false },
-      { label: "Active Hospitals",   value: summary.active_hospitals,      accent: true  },
-      { label: "Total Submissions",  value: summary.total_submissions,     accent: false },
-      { label: "Today",              value: summary.submissions_today,     accent: true  },
-      { label: "This Week",          value: summary.submissions_this_week, accent: false },
-      { label: "This Month",         value: summary.submissions_this_month,accent: false },
+      { label: "Partner Hospitals",  value: summary.total_hospitals,       accent: false },
+      { label: "Enabled Accounts",   value: summary.active_hospitals,      accent: true  },
+      { label: "Patient Records",    value: summary.total_submissions,     accent: false },
+      { label: "Records Today",      value: summary.submissions_today,     accent: true  },
+      { label: "Last 7 Days",        value: summary.submissions_this_week, accent: false },
+      { label: "Last 30 Days",       value: summary.submissions_this_month,accent: false },
       { label: "Active Sessions",    value: summary.active_sessions,       accent: false },
     ].map((c) => `<div class="admin-stat-card${c.accent ? " accent" : ""}">
       <div class="admin-stat-label">${escapeHTML(c.label)}</div>
@@ -251,7 +276,8 @@ function handleHospitalClick(e) {
 function populateHospitalDropdowns() {
   ["admin-sub-hospital-filter", "audit-hospital-filter"].forEach((selId) => {
     const sel = document.getElementById(selId);
-    if (!sel || sel.options.length > 1) return;
+    if (!sel) return;
+    while (sel.options.length > 1) sel.remove(1);
     adminHospitals.forEach((h) => {
       const o = document.createElement("option");
       o.value = h.id;
@@ -349,28 +375,34 @@ async function loadAdminSubs(page = subPage) {
   const res  = await apiGet(`/api/submissions?${params}`);
   const wrap = document.getElementById("admin-sub-table-wrap");
   if (!wrap) return;
+  const submissions = res.items || res.submissions || [];
 
-  if (!res.ok || !res.submissions?.length) {
+  if (!res.ok || !submissions.length) {
     wrap.innerHTML = `<p class="admin-empty">No submissions found.</p>`;
-    document.getElementById("admin-sub-pagination").innerHTML = "";
+    const pagination = document.getElementById("admin-sub-pagination");
+    if (pagination) pagination.innerHTML = "";
     return;
   }
 
   wrap.innerHTML = `<table class="admin-table">
     <thead><tr>
-      <th>Participant ID</th><th>Hospital</th><th>Kidney Status</th><th>Submitted</th>
+      <th>Study ID</th><th>Patient ID</th><th>Hospital</th><th>Study</th><th>CKD</th><th>Package</th><th>Submitted</th><th>Status</th>
     </tr></thead>
     <tbody>
-      ${res.submissions.map((s) => `<tr>
-        <td>${escapeHTML(s.participant_id || s.record_id || "—")}</td>
-        <td>${escapeHTML(s.hospital_name || s.hospital_id || "—")}</td>
-        <td>${escapeHTML(s.ckd_stage || "—")}</td>
-        <td class="admin-nowrap">${fmtDate(s.created_at)}</td>
+      ${submissions.map((s) => `<tr>
+        <td>${escapeHTML(s.studyId || s.participantId || s.recordId || "—")}</td>
+        <td>${escapeHTML(s.uhid || "—")}</td>
+        <td>${escapeHTML(s.hospitalName || s.hospitalId || "—")}</td>
+        <td>${escapeHTML((s.studyFlow || "egfr").toUpperCase())}</td>
+        <td>${escapeHTML(s.knownCkd || (s.ckdStage === "Normal" ? "No" : "Yes"))}</td>
+        <td>${escapeHTML(subUploadMode(s.uploadMode))}</td>
+        <td class="admin-nowrap">${fmtDate(s.receivedAt || s.created_at)}</td>
+        <td>${s.reviewedAt ? "Reviewed" : "Awaiting Review"}</td>
       </tr>`).join("")}
     </tbody>
   </table>`;
 
-  renderPagination("admin-sub-pagination", page, res.total ?? res.submissions.length, SUB_PAGE_SIZE, loadAdminSubs);
+  renderPagination("admin-sub-pagination", page, res.total ?? submissions.length, SUB_PAGE_SIZE, loadAdminSubs);
 }
 
 async function doExportCsv() {
@@ -436,10 +468,24 @@ function buildAuditTable(logs, showHospital = false) {
 // ── Analytics ─────────────────────────────────────────────────────────────────
 async function loadAnalytics() {
   const days = document.getElementById("trend-days")?.value || 30;
-  const [trends, dist] = await Promise.all([
+  let [trends, dist] = await Promise.all([
     apiGet(`/api/admin/analytics/trends?days=${days}`),
     apiGet("/api/admin/analytics/distribution"),
   ]);
+  if (!dist.ok) {
+    const fallback = await apiGet("/api/dashboard-summary");
+    if (fallback.ok && fallback.summary) {
+      dist = {
+        ok: true,
+        ckd_stages: (fallback.summary.stages || []).map((item) => ({ stage: item.label, count: item.value })),
+        by_hospital: (fallback.summary.hospitalBreakdown || []).map((item) => ({
+          hospital_id: item.hospitalId,
+          hospital_name: item.hospitalName,
+          count: item.patients
+        }))
+      };
+    }
+  }
 
   const trendWrap = document.getElementById("analytics-trend-wrap");
   if (trendWrap) {
@@ -467,7 +513,7 @@ async function loadAnalytics() {
       const maxVal = Math.max(...dist.ckd_stages.map((s) => s.count), 1);
       ckdWrap.innerHTML = `<div class="analytics-bar-chart">
         ${dist.ckd_stages.map((s) => `<div class="analytics-bar-row">
-          <span class="analytics-bar-label">${escapeHTML(String(s.stage ?? "Unknown"))}</span>
+          <span class="analytics-bar-label">${escapeHTML(s.stage === "Yes" ? "CKD: Yes" : s.stage === "No" ? "CKD: No" : String(s.stage ?? "Unknown"))}</span>
           <div class="analytics-bar-track">
             <div class="analytics-bar-fill analytics-bar-teal" data-pct="${Math.round((s.count / maxVal) * 100)}"></div>
           </div>
