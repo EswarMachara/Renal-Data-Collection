@@ -145,7 +145,7 @@
         <!-- E-consent tab temporarily disabled.
         <button class="nav-link workflow-nav is-locked" id="consent-nav" data-tab="consent" type="button"><span>E-Consent Form</span><small class="nav-gate-badge">Locked</small></button>
         -->
-        <button class="nav-link workflow-nav is-locked" id="questionnaire-nav" data-tab="questionnaire" type="button"><span>Intake Form</span><small class="nav-gate-badge">Locked</small></button>
+        <button class="nav-link workflow-nav is-locked" id="questionnaire-nav" data-tab="questionnaire" type="button"><span>Data Collection Form</span><small class="nav-gate-badge">Locked</small></button>
         <button class="nav-link workflow-nav is-locked" id="egfr-nav" data-tab="egfr" type="button"><span id="clinical-flow-nav-label">eGFR Flow</span><small class="nav-gate-badge">Locked</small></button>
         <button class="nav-link" data-tab="dashboard" type="button">Dashboard</button>
         <button class="nav-link" id="submissions-nav" data-tab="submissions" type="button">Submissions</button>
@@ -181,7 +181,7 @@
             <svg class="stp-check" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </div>
           <div class="stp-label-wrap">
-            <span class="stp-label">Intake Form</span>
+            <span class="stp-label">Data Collection Form</span>
             <span class="stp-sub">Core patient details</span>
           </div>
         </li>
@@ -280,7 +280,7 @@
             </div>
             <div class="flow-step reveal-item">
               <span>3</span>
-              <strong>Intake Form</strong>
+              <strong>Data Collection Form</strong>
               <small>Age, sex, clinical status</small>
             </div>
             <div class="flow-step reveal-item">
@@ -359,7 +359,7 @@
               </div>
               <div class="actions setup-actions">
                 <p>Next: complete the intake form.</p>
-                <button class="btn-premium" id="start-patient-consent" type="submit" disabled>Start Intake Form</button>
+                <button class="btn-premium" id="start-patient-consent" type="submit" disabled>Start Data Collection Form</button>
               </div>
             </form>
           </div>
@@ -553,11 +553,11 @@
     </section>
     </template>
 
-    <section class="tab-panel" id="tab-questionnaire" aria-labelledby="Intake Form">
+    <section class="tab-panel" id="tab-questionnaire" aria-labelledby="Data Collection Form">
       <div class="page-hero form-hero">
-        <h1>Intake Form</h1>
+        <h1>Data Collection Form</h1>
         <p>Core patient details and clinical history</p>
-        <span class="hero-meta" id="questionnaire-page-meta">eGFR Research Intake Form</span>
+        <span class="hero-meta" id="questionnaire-page-meta">eGFR Research Data Collection Form</span>
       </div>
       <div class="stage-access-banner hidden" id="questionnaire-access-banner" role="status" aria-live="polite">
         <span class="stage-access-badge">Preview only</span>
@@ -577,12 +577,12 @@
       <article class="panel-card flow-card form-card">
         <form id="questionnaire-form" class="form-grid" novalidate>
           <div class="form-section">
-            <div class="section-title"><span class="section-index">1.</span> <span id="questionnaire-section-1-title">Patient Details</span></div>
+            <div class="section-title"><span class="section-index">1.</span> <span id="questionnaire-section-1-title">Patient Identification &amp; Study Details</span></div>
             <div class="locked-context-note">
               <span>Patient identifiers are carried forward from the intake setup.</span>
               <button class="btn-ghost" data-tab-jump="landing" type="button">Edit Setup</button>
             </div>
-            <div class="section-grid">
+            <div class="section-grid section-grid-inline-identifiers">
               <div class="field-block">
                 <label for="study-id">Study ID <span class="required-marker">*</span></label>
                 <input id="study-id" name="studyId" type="text" placeholder="Auto-generated research ID" readonly required />
@@ -826,13 +826,13 @@
           <strong>Complete the intake form before clinical findings and files can be entered.</strong>
           <p>You can inspect upload requirements now; submission remains protected.</p>
         </div>
-        <button class="btn-ghost" data-tab-jump="questionnaire" type="button">Go to Intake Form</button>
+        <button class="btn-ghost" data-tab-jump="questionnaire" type="button">Go to Data Collection Form</button>
       </div>
       <article class="panel-card flow-card form-card">
         <form id="egfr-form" class="form-grid" novalidate>
           <div class="linked-record-card">
             <div>
-              <span>Patient context from Intake Form</span>
+              <span>Patient context from Data Collection Form</span>
               <strong id="linked-patient-title">No patient selected yet</strong>
             </div>
             <div class="linked-record-grid">

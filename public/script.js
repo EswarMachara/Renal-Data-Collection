@@ -224,7 +224,7 @@ function applyStudyFlowUI() {
       ? "KFRE Study · Please verify the patient context before continuing"
       : "eGFR Study · Please verify the patient context before continuing";
   }
-  questionnairePageMeta.textContent = isKfre ? "KFRE Research Intake Form" : "eGFR Research Intake Form";
+  questionnairePageMeta.textContent = isKfre ? "KFRE Research Data Collection Form" : "eGFR Research Data Collection Form";
   questionnaireStudyTitle.textContent = isKfre
     ? "Recalibration and Validation of the Kidney Failure Risk Equation in an Indian Chronic Kidney Disease Cohort"
     : "AI-Based Multimodal Estimation of eGFR Using Kidney Ultrasound and Clinical Parameters";
@@ -343,7 +343,7 @@ function setWorkflowNavState(nav, banner, unlocked, title) {
 function updateWorkflowAccess() {
   const access = getWorkflowAccess();
   setWorkflowNavState(consentNav, consentAccessBanner, access.consent, "E-Consent Form");
-  setWorkflowNavState(questionnaireNav, questionnaireAccessBanner, access.questionnaire, "Intake Form");
+  setWorkflowNavState(questionnaireNav, questionnaireAccessBanner, access.questionnaire, "Data Collection Form");
   setWorkflowNavState(egfrNav, egfrAccessBanner, access.egfr, "eGFR Flow");
 
   document.getElementById("tab-consent")?.classList.toggle("preview-locked", !access.consent);
@@ -1659,7 +1659,7 @@ function updateKfreQuestionnaireVisibility({ clearHidden = false } = {}) {
   const showOtherCkdRemarks = showCkdDetails && ckdStageInput.value === "Other";
 
   if (questionnaireSection1Title) {
-    questionnaireSection1Title.textContent = isKfre ? "Patient Identification & Study Details" : "Patient Details";
+    questionnaireSection1Title.textContent = "Patient Identification & Study Details";
   }
 
   kfreQuestionnaireFields.forEach((field) => {
