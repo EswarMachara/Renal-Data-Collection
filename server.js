@@ -1888,6 +1888,30 @@ function revokeHospitalMemorySessions(hospitalId) {
   return removed;
 }
 
+function getActiveMemorySessionCount() {
+  const now = Date.now();
+  let active = 0;
+  for (const [sessionId, activeSession] of memorySessions) {
+    if (now > activeSession.expiresAt) {
+      memorySessions.delete(sessionId);
+      continue;
+    }
+    active += 1;
+  }
+  return active;
+}
+
+async function getActiveSessionCount() {
+  const memoryCount = getActiveMemorySessionCount();
+  if (!dbPool || !dbReady) return memoryCount;
+  try {
+    const result = await dbPool.query("SELECT COUNT(*)::int AS value FROM sessions WHERE expires_at > now()");
+    return Math.max(memoryCount, result.rows[0]?.value || 0);
+  } catch {
+    return memoryCount;
+  }
+}
+
 // GET /api/admin/hospitals
 async function handleAdminGetHospitals(req, res) {
   const session = await requireAuth(req, res);
@@ -1896,9 +1920,30 @@ async function handleAdminGetHospitals(req, res) {
     sendJson(res, 403, { ok: false, error: "Forbidden" });
     return;
   }
-  if (!requireAdminDatabase(res)) return;
-
   try {
+    if (!dbPool || !dbReady) {
+      const submissions = await readAllSubmissions();
+      const counts = new Map();
+      submissions.forEach((item) => {
+        const hospitalId = item.hospitalId;
+        if (!hospitalId || hospitalId === adminIntakeSource.id) return;
+        counts.set(hospitalId, (counts.get(hospitalId) || 0) + 1);
+      });
+      const fallbackHospitals = hospitals
+        .filter((hospital) => hospital.id !== adminIntakeSource.id)
+        .map((hospital) => ({
+          id: hospital.id,
+          name: hospital.name,
+          active: true,
+          last_login_at: null,
+          created_at: null,
+          submission_count: counts.get(hospital.id) || 0
+        }))
+        .sort((first, second) => first.name.localeCompare(second.name));
+      sendJson(res, 200, { ok: true, hospitals: fallbackHospitals });
+      return;
+    }
+
     const result = await dbPool.query(
       `SELECT h.hospital_id AS id, h.hospital_name AS name, h.active, h.last_login_at, h.created_at,
               COUNT(s.record_id)::int AS submission_count
@@ -2119,22 +2164,46 @@ async function handleAdminGetSessions(req, res) {
     return;
   }
 
+  const merged = new Map();
   const now = Date.now();
-  const sessions = [];
+
+  if (dbPool && dbReady) {
+    try {
+      const dbSessions = await dbPool.query(
+        `SELECT session_id, user_id, hospital_id, role, created_at, expires_at
+         FROM sessions
+         WHERE expires_at > now()
+         ORDER BY created_at DESC`
+      );
+      dbSessions.rows.forEach((row) => {
+        merged.set(row.session_id, {
+          userId: row.user_id,
+          hospitalId: row.hospital_id,
+          role: row.role,
+          createdAt: row.created_at || null,
+          expiresAt: row.expires_at
+        });
+      });
+    } catch { /* fall back to memory sessions */ }
+  }
+
   for (const [sessionId, activeSession] of memorySessions) {
     if (now > activeSession.expiresAt) {
       memorySessions.delete(sessionId);
       continue;
     }
-    sessions.push({
-      userId: activeSession.userId,
-      hospitalId: activeSession.hospitalId,
-      role: activeSession.role,
-      createdAt: activeSession.createdAt || null,
-      expiresAt: new Date(activeSession.expiresAt).toISOString()
-    });
+    if (!merged.has(sessionId)) {
+      merged.set(sessionId, {
+        userId: activeSession.userId,
+        hospitalId: activeSession.hospitalId,
+        role: activeSession.role,
+        createdAt: activeSession.createdAt || null,
+        expiresAt: new Date(activeSession.expiresAt).toISOString()
+      });
+    }
   }
-  sendJson(res, 200, { ok: true, sessions });
+
+  sendJson(res, 200, { ok: true, sessions: Array.from(merged.values()) });
 }
 
 // DELETE /api/admin/sessions/:userId
@@ -2226,6 +2295,7 @@ async function handleAdminAnalyticsSummary(req, res) {
   if (!requireAdminDatabase(res)) return;
 
   try {
+    const activeSessions = await getActiveSessionCount();
     const [hospitalMetrics, submissionMetrics] = await Promise.all([
       dbPool.query(
         "SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE active)::int AS active FROM hospitals WHERE hospital_id <> $1",
@@ -2248,7 +2318,7 @@ async function handleAdminAnalyticsSummary(req, res) {
       submissions_today: submissionMetrics.rows[0]?.today || 0,
       submissions_this_week: submissionMetrics.rows[0]?.this_week || 0,
       submissions_this_month: submissionMetrics.rows[0]?.this_month || 0,
-      active_sessions: memorySessions.size
+      active_sessions: activeSessions
     });
   } catch (err) {
     sendJson(res, 500, { ok: false, error: err.message });
@@ -2338,6 +2408,7 @@ async function handleAdminSystem(req, res) {
     return;
   }
 
+  const activeSessions = await getActiveSessionCount();
   sendJson(res, 200, {
     ok: true,
     uptime_seconds: Math.floor(process.uptime()),
@@ -2345,7 +2416,7 @@ async function handleAdminSystem(req, res) {
     memory_rss_mb: Math.round(process.memoryUsage().rss / 1024 / 1024),
     db_ready: dbReady,
     gcs_configured: Boolean(GCS_BUCKET),
-    active_sessions: memorySessions.size,
+    active_sessions: activeSessions,
     auth_configured: authConfigured
   });
 }

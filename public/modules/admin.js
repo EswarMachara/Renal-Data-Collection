@@ -104,6 +104,7 @@ export function showAdminPortal() {
   document.getElementById("admin-portal")?.classList.remove("hidden");
   const label = document.getElementById("admin-user-label");
   if (label) label.textContent = state.authSession?.userId ?? "Administrator";
+  loadHospitals();
   navigate("overview");
 }
 
@@ -136,6 +137,7 @@ export function initAdminPortal() {
   document.getElementById("admin-sub-search")?.addEventListener("input", () => loadAdminSubs(1));
   document.getElementById("admin-sub-hospital-filter")?.addEventListener("change", () => loadAdminSubs(1));
   document.getElementById("admin-export-btn")?.addEventListener("click", doExportCsv);
+  document.getElementById("admin-sub-table-wrap")?.addEventListener("click", handleSubmissionClick);
 
   // Audit
   document.getElementById("audit-filter-btn")?.addEventListener("click", () => loadAudit(1));
@@ -386,7 +388,7 @@ async function loadAdminSubs(page = subPage) {
 
   wrap.innerHTML = `<table class="admin-table">
     <thead><tr>
-      <th>Study ID</th><th>Patient ID</th><th>Hospital</th><th>Study</th><th>CKD</th><th>Package</th><th>Submitted</th><th>Status</th>
+      <th>Study ID</th><th>Patient ID</th><th>Hospital</th><th>Study</th><th>CKD</th><th>Package</th><th>Submitted</th><th>Status</th><th>Action</th>
     </tr></thead>
     <tbody>
       ${submissions.map((s) => `<tr>
@@ -398,11 +400,118 @@ async function loadAdminSubs(page = subPage) {
         <td>${escapeHTML(subUploadMode(s.uploadMode))}</td>
         <td class="admin-nowrap">${fmtDate(s.receivedAt || s.created_at)}</td>
         <td>${s.reviewedAt ? "Reviewed" : "Awaiting Review"}</td>
+        <td>
+          <button class="admin-btn admin-btn-outline admin-btn-sm"
+            type="button"
+            data-action="review-submission"
+            data-recordid="${escapeHTML(s.recordId || "")}"
+            data-reviewed="${s.reviewedAt ? "yes" : "no"}">
+            ${s.reviewedAt ? "View / Unreview" : "Review"}
+          </button>
+        </td>
       </tr>`).join("")}
     </tbody>
   </table>`;
 
   renderPagination("admin-sub-pagination", page, res.total ?? submissions.length, SUB_PAGE_SIZE, loadAdminSubs);
+}
+
+function handleSubmissionClick(e) {
+  const btn = e.target.closest("[data-action='review-submission']");
+  if (!btn) return;
+  const recordId = btn.dataset.recordid;
+  if (!recordId) {
+    showToast("Record ID is missing for this submission.");
+    return;
+  }
+  openSubmissionReviewModal(recordId);
+}
+
+function yesNoLabel(value) {
+  if (value === true || value === "Yes") return "Yes";
+  if (value === false || value === "No") return "No";
+  if (value === null || value === undefined || value === "") return "—";
+  return String(value);
+}
+
+function buildSubmissionReviewRows(submission) {
+  const rows = [
+    ["Record ID", submission.recordId || "—"],
+    ["Study", (submission.studyFlow || "egfr").toUpperCase()],
+    ["Hospital", submission.hospitalName || submission.hospitalId || "—"],
+    ["Study ID", submission.studyId || "—"],
+    ["Patient UHID", submission.uhid || "—"],
+    ["Sex", submission.sex || "—"],
+    ["Age", submission.age ?? "—"],
+    ["CKD", yesNoLabel(submission.knownCkd)],
+    ["CKD Stage", submission.ckdStage || "—"],
+    ["Upload Mode", subUploadMode(submission.uploadMode)],
+    ["Submitted", fmtDate(submission.receivedAt)],
+    ["Reviewed", submission.reviewedAt ? `Yes (${fmtDate(submission.reviewedAt)})` : "No"],
+    ["Reviewed By", submission.reviewedBy || "—"]
+  ];
+
+  if ((submission.studyFlow || "egfr") === "kfre") {
+    rows.push(["Blood Pressure", submission.kfreForm?.bloodPressure || "—"]);
+    rows.push(["Heart Rate", submission.kfreForm?.heartRate || "—"]);
+    rows.push(["Waist-to-Hip Ratio", submission.kfreForm?.waistHipRatio || "—"]);
+  }
+
+  const qualityWarnings = Array.isArray(submission.dataQualityWarnings) ? submission.dataQualityWarnings : [];
+  rows.push(["Quality Warnings", qualityWarnings.length ? qualityWarnings.join("; ") : "None"]);
+
+  return rows;
+}
+
+function buildFileReviewList(submission) {
+  const files = Array.isArray(submission.files) ? submission.files : [];
+  if (!files.length) return "<p class=\"admin-empty\">No files listed for this record.</p>";
+  return `<ul class="admin-review-list">
+    ${files.map((file) => `<li>
+      <strong>${escapeHTML(file.fieldName || "file")}</strong>: ${escapeHTML(file.originalName || file.fileName || "Unnamed")} (${escapeHTML(file.sizeLabel || "size unknown")})
+    </li>`).join("")}
+  </ul>`;
+}
+
+function buildSubmissionReviewModalBody(submission) {
+  const rows = buildSubmissionReviewRows(submission);
+  return `<div class="admin-review-wrap">
+    <table class="admin-table">
+      <tbody>
+        ${rows.map(([label, value]) => `<tr><th>${escapeHTML(label)}</th><td>${escapeHTML(String(value))}</td></tr>`).join("")}
+      </tbody>
+    </table>
+    <h4>Uploaded Files</h4>
+    ${buildFileReviewList(submission)}
+  </div>`;
+}
+
+async function openSubmissionReviewModal(recordId) {
+  const result = await apiGet(`/api/submissions/${encodeURIComponent(recordId)}`);
+  if (!result.ok || !result.submission) {
+    showToast(result.error || "Could not load submission details.");
+    return;
+  }
+  const submission = result.submission;
+  const isReviewed = Boolean(submission.reviewedAt);
+  const confirmText = isReviewed ? "Mark Pending" : "Mark Reviewed";
+
+  openModal(
+    `${isReviewed ? "Review Completed" : "Submission Review"} — ${submission.recordId || recordId}`,
+    buildSubmissionReviewModalBody(submission),
+    async () => {
+      const response = await apiReq(`/api/submissions/${encodeURIComponent(recordId)}`, { reviewed: !isReviewed }, "PATCH");
+      if (!response.ok) {
+        showToast(response.error || "Could not update review status.");
+        return;
+      }
+      closeModal();
+      showToast(!isReviewed ? "Submission marked as reviewed." : "Submission moved back to pending.");
+      loadAdminSubs(subPage);
+      if (activeSection === "overview") loadOverview();
+    },
+    { confirmText, cancelText: "Close" }
+  );
 }
 
 async function doExportCsv() {
@@ -623,19 +732,35 @@ function renderPagination(containerId, page, total, pageSize, loadFn) {
 }
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
-function openModal(title, bodyHTML, onConfirm) {
+function openModal(title, bodyHTML, onConfirm, options = {}) {
   const overlay = document.getElementById("admin-modal-overlay");
   const titleEl = document.getElementById("admin-modal-title");
   const bodyEl  = document.getElementById("admin-modal-body");
+  const confirmBtn = document.getElementById("admin-modal-confirm");
+  const cancelBtn = document.getElementById("admin-modal-cancel");
   if (!overlay) return;
   if (titleEl) titleEl.textContent = title;
   if (bodyEl)  bodyEl.innerHTML = bodyHTML;
+  if (confirmBtn) {
+    confirmBtn.textContent = options.confirmText || "Confirm";
+    confirmBtn.classList.toggle("hidden", options.hideConfirm === true);
+  }
+  if (cancelBtn) {
+    cancelBtn.textContent = options.cancelText || "Cancel";
+  }
   overlay.classList.remove("hidden");
   modalConfirmFn = onConfirm;
   setTimeout(() => bodyEl?.querySelector("input")?.focus(), 50);
 }
 
 export function closeModal() {
+  const confirmBtn = document.getElementById("admin-modal-confirm");
+  const cancelBtn = document.getElementById("admin-modal-cancel");
+  if (confirmBtn) {
+    confirmBtn.textContent = "Confirm";
+    confirmBtn.classList.remove("hidden");
+  }
+  if (cancelBtn) cancelBtn.textContent = "Cancel";
   document.getElementById("admin-modal-overlay")?.classList.add("hidden");
   modalConfirmFn = null;
 }
