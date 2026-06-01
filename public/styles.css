@@ -4021,6 +4021,34 @@ textarea::placeholder {
   margin-left: 0;
 }
 
+.navbar-study-switch-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #526376;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.navbar-study-switch {
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  padding: 0.36rem 0.6rem;
+  background: #fff;
+  color: #0a4a4e;
+  font-size: 0.78rem;
+  font-family: inherit;
+  font-weight: 600;
+}
+
+.navbar-study-switch:focus {
+  outline: none;
+  border-color: #14868c;
+  box-shadow: 0 0 0 2px rgba(20, 134, 140, 0.14);
+}
+
 .navbar-user-label {
   font-size: 0.8rem;
   font-weight: 700;
@@ -4079,6 +4107,11 @@ textarea::placeholder {
   .navbar-user-label {
     display: inline-flex;
     max-width: calc(100vw - 124px);
+  }
+  .navbar-study-switch-wrap {
+    order: 2;
+    width: 100%;
+    justify-content: flex-end;
   }
 }
 

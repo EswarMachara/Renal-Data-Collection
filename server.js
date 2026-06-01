@@ -271,10 +271,13 @@ function studyIdComponent(value, fallback, maxLength = 36) {
 }
 
 function buildStudyIdentifier(studyFlow, hospitalId, uhid) {
-  const pathway = String(studyFlow || "egfr").toLowerCase() === "kfre" ? "KFRE" : "EGFR";
   const hospitalCode = studyIdComponent(hospitalId, "HOSP", 24);
   const patientCode = studyIdComponent(uhid, "PATIENT", 40);
-  return `${pathway}-${hospitalCode}-${patientCode}`;
+  return `${hospitalCode}-${patientCode}`;
+}
+
+function buildPatientStorageKey(hospitalId, uhid) {
+  return studyIdComponent(uhid, `${studyIdComponent(hospitalId, "HOSP", 24)}-PATIENT`, 64);
 }
 
 function getStudyFlowFolder(studyFlow) {
@@ -1583,7 +1586,7 @@ function normalizeSubmission(item, options = {}) {
     hospitalName:         hospital.name,
     consentId,
     studyFlow,
-    studyId:              buildStudyIdentifier(studyFlow, hospitalId, uhid),
+    studyId:              null,
     enrollmentDate:       optionalDate(item, "enrollmentDate", "Date of enrollment"),
     siteCenter:           optionalText(item.siteCenter, 140),
     consentObtained:      optionalYesNo(item, "consentObtained", "Consent obtained"),
@@ -1677,10 +1680,10 @@ function getFileCategory(fieldName) {
   return categories[fieldName] || ["documents", "", fieldName || "document"];
 }
 
-function buildStoredFileName(studyId, label, originalName, timestamp, suffix) {
+function buildStoredFileName(recordKey, label, originalName, timestamp, suffix) {
   const extension       = path.extname(originalName).toLowerCase().replace(/[^a-z0-9.]/g, "").slice(0, 12);
   const timestampPart   = timestamp.replace(/[-:TZ.]/g, "").slice(0, 14);
-  return `${sanitizeFileName(studyId, "study")}_${sanitizeFileName(label, "file")}_${timestampPart}_${suffix}${extension}`;
+  return `${sanitizeFileName(recordKey, "record")}_${sanitizeFileName(label, "file")}_${timestampPart}_${suffix}${extension}`;
 }
 
 function getFileContent(file) {
@@ -2560,15 +2563,21 @@ async function finalizeSubmissionBatch({ normalizedSubmissions, session, req }) 
   for (const item of normalizedSubmissions) {
     const participantId = await resolveParticipantId(item);
     const recordId  = buildResearchIdentifier(item.studyFlow, "R");
-    const studyId = buildStudyIdentifier(item.studyFlow, item.hospitalId, item.uhid);
+    const patientKey = buildPatientStorageKey(item.hospitalId, item.uhid);
     const recordDir = path.join(batchDir, recordId);
     fs.mkdirSync(recordDir, { recursive: true });
-    const cloudRecordPrefix = path.posix.join(getStudyFlowFolder(item.studyFlow), sanitizeFileName(item.hospitalId, "hospital"), "records", sanitizeFileName(studyId, "study"));
+    const cloudRecordPrefix = path.posix.join(
+      getStudyFlowFolder(item.studyFlow),
+      sanitizeFileName(item.hospitalId, "hospital"),
+      "records",
+      sanitizeFileName(patientKey, "patient"),
+      sanitizeFileName(recordId, "record")
+    );
 
     const storedFiles = item.files.map((file) => {
       const fieldName                     = sanitizeFileName(file.fieldName || "upload");
       const [topLevelFolder, subFolder, label] = getFileCategory(fieldName);
-      const storedName    = buildStoredFileName(studyId, label, file.name || "upload.bin", now.toISOString(), recordId.slice(-6));
+      const storedName    = buildStoredFileName(patientKey, label, file.name || "upload.bin", now.toISOString(), recordId.slice(-6));
       const relativeFolder = subFolder
         ? path.join(cloudRecordPrefix, topLevelFolder, subFolder)
         : path.join(cloudRecordPrefix, topLevelFolder);
@@ -2603,7 +2612,7 @@ async function finalizeSubmissionBatch({ normalizedSubmissions, session, req }) 
       hospitalName:         item.hospitalName,
       consentId:            item.consentId || null,
       studyFlow:            item.studyFlow,
-      studyId,
+      studyId:              null,
       enrollmentDate:       item.enrollmentDate,
       siteCenter:           item.siteCenter,
       consentObtained:      item.consentObtained,

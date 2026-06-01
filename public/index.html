@@ -151,6 +151,13 @@
         <button class="nav-link" id="submissions-nav" data-tab="submissions" type="button">Submissions</button>
       </nav>
       <div class="navbar-auth" id="navbar-auth">
+        <label class="navbar-study-switch-wrap" for="study-flow-switch">
+          <span>Study</span>
+          <select id="study-flow-switch" class="navbar-study-switch" aria-label="Switch study pathway">
+            <option value="egfr">eGFR</option>
+            <option value="kfre">KFRE</option>
+          </select>
+        </label>
         <span class="navbar-user-label" id="navbar-user-label"></span>
         <button class="btn-ghost navbar-logout" id="logout-btn" type="button">Sign Out</button>
       </div>
@@ -346,7 +353,7 @@
                 <label for="landing-uhid">Patient Unique ID <span class="required-marker">*</span></label>
                 <input id="landing-uhid" type="text" placeholder="Enter anonymized patient ID" required disabled />
               </div>
-              <div class="field-block">
+              <div class="field-block hidden">
                 <label for="landing-study-id">Study ID <span class="required-marker">*</span></label>
                 <input id="landing-study-id" type="text" placeholder="Auto-generated from pathway, hospital, and patient ID" readonly required disabled />
               </div>
@@ -576,7 +583,7 @@
         </div>
       <article class="panel-card flow-card form-card">
         <form id="questionnaire-form" class="form-grid" novalidate>
-          <div class="form-section">
+          <div class="form-section hidden" id="questionnaire-identification-section">
             <div class="section-title"><span class="section-index">1.</span> <span id="questionnaire-section-1-title">Patient Identification &amp; Study Details</span></div>
             <div class="locked-context-note">
               <span>Patient identifiers are carried forward from the intake setup.</span>
@@ -628,7 +635,7 @@
           </div>
 
           <div class="form-section">
-            <div class="section-title"><span class="section-index">2.</span> Demographics</div>
+            <div class="section-title"><span class="section-index">1.</span> Demographics</div>
             <div class="section-grid">
               <div class="field-block">
                 <label for="patient-age">Age <span class="required-marker hidden" data-kfre-only>*</span></label>
@@ -674,7 +681,7 @@
           </div>
 
           <div class="form-section">
-            <div class="section-title"><span class="section-index">3.</span> Clinical History</div>
+            <div class="section-title"><span class="section-index">2.</span> Clinical History</div>
             <div class="section-grid clinical-history-grid">
               <div class="clinical-group">
                 <div class="clinical-group-heading">
@@ -830,7 +837,7 @@
       </div>
       <article class="panel-card flow-card form-card">
         <form id="egfr-form" class="form-grid" novalidate>
-          <div class="linked-record-card">
+          <div class="linked-record-card hidden">
             <div>
               <span>Patient context from Data Collection Form</span>
               <strong id="linked-patient-title">No patient selected yet</strong>
@@ -1566,7 +1573,7 @@
             <thead>
               <tr>
                 <th>#</th>
-                <th>Study ID</th>
+                <th>Record ID</th>
                 <th>Patient ID</th>
                 <th>Hospital</th>
                 <th>Age / Sex</th>
@@ -1694,7 +1701,7 @@
       <!-- Submissions -->
       <section id="admin-section-submissions" class="admin-section hidden" aria-label="Patient Records">
         <div class="admin-section-toolbar">
-          <input type="search" id="admin-sub-search" class="admin-search" placeholder="Search by study or patient ID…" aria-label="Search patient records">
+          <input type="search" id="admin-sub-search" class="admin-search" placeholder="Search by record or patient ID…" aria-label="Search patient records">
           <select id="admin-sub-hospital-filter" class="admin-select" aria-label="Filter by hospital">
             <option value="">All Hospitals</option>
           </select>

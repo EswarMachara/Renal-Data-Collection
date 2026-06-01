@@ -77,6 +77,7 @@ const loginErrorMessage = document.getElementById("login-error-message");
 const loginErrorRetry = document.getElementById("login-error-retry");
 const navbarAuth    = document.getElementById("navbar-auth");
 const navbarUserLabel = document.getElementById("navbar-user-label");
+const studyFlowSwitch = document.getElementById("study-flow-switch");
 const navbarMenuToggle = document.getElementById("navbar-menu-toggle");
 const logoutBtn     = document.getElementById("logout-btn");
 const LOGIN_REQUEST_TIMEOUT_MS = 12000;
@@ -239,6 +240,7 @@ function applyStudyFlowUI() {
     : "Ultrasound findings and clinical record uploads";
   clinicalPageMeta.textContent = isKfre ? "KFRE Study · Clinical document only" : "eGFR Study · Ultrasound and clinical files";
   questionnaireContinueBtn.textContent = isKfre ? "Continue to KFRE Flow" : "Continue to eGFR Flow";
+  if (studyFlowSwitch) studyFlowSwitch.value = state.studyFlow;
   updateKfreQuestionnaireVisibility({ clearHidden: false });
   updateGeneratedStudyId();
   updateStudySpecificUploadVisibility();
@@ -631,7 +633,7 @@ function studyIdComponent(value, maxLength = 36) {
 function generateStudyId(hospitalId, uhid) {
   const hospitalCode = studyIdComponent(hospitalId, 24);
   const patientCode = studyIdComponent(uhid, 40);
-  return hospitalCode && patientCode ? `${getStudyIdPrefix()}-${hospitalCode}-${patientCode}` : "";
+  return hospitalCode && patientCode ? `${hospitalCode}-${patientCode}` : "";
 }
 
 function updateGeneratedStudyId() {
@@ -901,7 +903,7 @@ function updateConsentContext() {
 function syncIntakeToQuestionnaire() {
   updateGeneratedStudyId();
   hospitalNameInput.value = landingHospitalInput.value;
-  studyIdInput.value = landingStudyIdInput.value.trim();
+  studyIdInput.value = "";
   hospitalIdInput.value = landingHospitalIdInput.value;
   uhidInput.value = landingUhidInput.value.trim();
   if (enrollmentDateInput) {
@@ -909,6 +911,37 @@ function syncIntakeToQuestionnaire() {
   }
   updateConsentContext();
   updateLinkedPatientSummary();
+}
+
+function switchStudyFlow(nextFlow, { skipConfirm = false } = {}) {
+  const normalized = nextFlow === "kfre" ? "kfre" : "egfr";
+  if (normalized === state.studyFlow) {
+    if (studyFlowSwitch) studyFlowSwitch.value = normalized;
+    return;
+  }
+
+  const hasInProgressPatient = Boolean(
+    uhidInput?.value.trim() ||
+    ageInput?.value.trim() ||
+    (Array.isArray(state.pendingSubmission?.uploadFiles) && state.pendingSubmission.uploadFiles.length)
+  );
+  if (!skipConfirm && hasInProgressPatient) {
+    const proceed = window.confirm("Switching the study pathway will clear the current in-progress patient entry. Continue?");
+    if (!proceed) {
+      if (studyFlowSwitch) studyFlowSwitch.value = state.studyFlow;
+      return;
+    }
+  }
+
+  state.studyFlow = normalized;
+  saveStudyFlow(normalized);
+  closeReviewSubmission();
+  resetEgfrForm();
+  resetPatientIntakeForNextRecord();
+  applyStudyFlowUI();
+  activateTab("landing");
+  if (studyFlowSwitch) studyFlowSwitch.value = normalized;
+  showToast(`Switched to ${normalized === "kfre" ? "KFRE" : "eGFR"} study flow.`);
 }
 
 function computeDataQualityWarnings(record) {
@@ -1087,11 +1120,11 @@ function getPackageSourceKind(files) {
 }
 
 function packageZipName() {
-  const studyId = (studyIdInput.value || generateStudyId(hospitalIdInput.value, uhidInput.value) || "patient-package")
+  const patientRef = (uhidInput.value || landingUhidInput.value || generateStudyId(hospitalIdInput.value, uhidInput.value) || "patient-package")
     .replace(/[^A-Za-z0-9._-]+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
-  return `${studyId || "patient-package"}.zip`;
+  return `${patientRef || "patient-package"}.zip`;
 }
 
 function renderPatientPackagePreview({ status, files = [], packageFile = null, loading = false }) {
@@ -1545,11 +1578,6 @@ function handlePatientStart() {
   }
 
   updateGeneratedStudyId();
-  if (!landingStudyIdInput.value.trim()) {
-    showToast("Study ID could not be generated. Verify hospital and Patient Unique ID.");
-    landingUhidInput.focus();
-    return false;
-  }
 
   if (!validateDateInput(landingEnrollmentDateInput)) {
     landingEnrollmentDateInput.reportValidity();
@@ -2442,7 +2470,7 @@ function buildSubmissionFromForm() {
   const hospitalId = hospitalIdInput.value.trim();
   const hospitalName = selectedHospital?.name || "";
   const uhid = uhidInput.value.trim();
-  const studyId = generateStudyId(hospitalId, uhid);
+  const studyId = null;
   const enrollmentDate = enrollmentDateInput?.value || landingEnrollmentDateInput?.value || "";
   const siteCenter = siteCenterInput?.value.trim() || "-";  // siteCenterInput may be null (removed from KFRE intake)
   const consentObtained = isKfre ? (getCheckedValue(consentObtainedInputs) || "-") : "";  // consentObtainedInputs may be empty
@@ -2495,12 +2523,7 @@ function buildSubmissionFromForm() {
     return null;
   }
 
-  studyIdInput.value = studyId;
-  if (!studyId) {
-    showToast("Study ID could not be generated. Verify hospital and Patient Unique ID.");
-    activateTab("landing");
-    return null;
-  }
+  studyIdInput.value = "";
 
   if (!validateQuestionnaireForClinicalUpload()) {
     return null;
@@ -2670,7 +2693,6 @@ function renderReviewSubmission(submission) {
     ["Hospital", submission.hospitalName],
     ["Hospital ID", submission.hospitalId],
     ["Patient ID", submission.uhid],
-    ["Study ID", submission.studyId || "-"],
     ["Upload Method", subUploadMode(submission.uploadMode)],
     ["Age", submission.age],
     ["Sex", submission.sex],
@@ -3060,6 +3082,10 @@ logoutBtn?.addEventListener("click", async () => {
   showLoginScreen();
   document.getElementById("login-username") && (document.getElementById("login-username").value = "");
   document.getElementById("login-password") && (document.getElementById("login-password").value = "");
+});
+
+studyFlowSwitch?.addEventListener("change", (event) => {
+  switchStudyFlow(event.target.value);
 });
 
 // Password show/hide toggle

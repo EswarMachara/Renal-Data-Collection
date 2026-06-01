@@ -409,11 +409,11 @@ async function loadAdminSubs(page = subPage) {
 
   wrap.innerHTML = `<table class="admin-table">
     <thead><tr>
-      <th>Study ID</th><th>Patient ID</th><th>Hospital</th><th>Study</th><th>CKD</th><th>Package</th><th>Submitted</th><th>Status</th><th>Action</th>
+      <th>Record ID</th><th>Patient ID</th><th>Hospital</th><th>Study</th><th>CKD</th><th>Package</th><th>Submitted</th><th>Status</th><th>Action</th>
     </tr></thead>
     <tbody>
       ${pageRows.map((s, idx) => `<tr>
-        <td>${escapeHTML(s.studyId || s.participantId || s.recordId || "—")}</td>
+        <td>${escapeHTML(s.recordId || s.participantId || "—")}</td>
         <td>${escapeHTML(s.uhid || "—")}</td>
         <td>${escapeHTML(s.hospitalName || s.hospitalId || "—")}</td>
         <td>${escapeHTML((s.studyFlow || "egfr").toUpperCase())}</td>
@@ -544,7 +544,6 @@ function buildSubmissionReviewRows(submission) {
     ["Record ID", submission.recordId || "—"],
     ["Study", (submission.studyFlow || "egfr").toUpperCase()],
     ["Hospital", submission.hospitalName || submission.hospitalId || "—"],
-    ["Study ID", submission.studyId || "—"],
     ["Patient UHID", submission.uhid || "—"],
     ["Sex", submission.sex || "—"],
     ["Age", submission.age ?? "—"],
