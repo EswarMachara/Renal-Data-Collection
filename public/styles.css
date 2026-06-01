@@ -106,7 +106,7 @@ body {
 .navbar-tabs {
   display: flex;
   flex-wrap: nowrap;
-  gap: 0.22rem;
+  gap: 0.16rem;
   align-items: center;
   justify-content: flex-start;
   flex: 1 1 auto;
@@ -130,10 +130,10 @@ body {
   color: #1f2937;
   font: inherit;
   font-weight: 600;
-  padding: 0.44rem 0.62rem;
+  padding: 0.4rem 0.52rem;
   white-space: nowrap;
   flex: 0 0 auto;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   line-height: 1.15;
   cursor: pointer;
   transition: all 0.25s ease;
@@ -160,7 +160,11 @@ body {
 .workflow-nav {
   display: inline-flex;
   align-items: center;
-  gap: 0.32rem;
+  gap: 0.22rem;
+}
+
+#questionnaire-nav > span {
+  font-size: 0.77rem;
 }
 
 .nav-gate-badge {
