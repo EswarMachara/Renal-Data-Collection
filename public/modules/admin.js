@@ -138,6 +138,7 @@ export function initAdminPortal() {
   document.getElementById("admin-sub-hospital-filter")?.addEventListener("change", () => loadAdminSubs(1));
   document.getElementById("admin-export-btn")?.addEventListener("click", doExportCsv);
   document.getElementById("admin-sub-table-wrap")?.addEventListener("click", handleSubmissionClick);
+  document.getElementById("admin-sub-hospital-cards")?.addEventListener("click", handleSubmissionClick);
 
   // Audit
   document.getElementById("audit-filter-btn")?.addEventListener("click", () => loadAudit(1));
@@ -206,13 +207,17 @@ async function loadOverview() {
   const sysRes = await apiGet("/api/admin/system");
   const sysWrap = document.getElementById("admin-system-quick");
   if (sysWrap && sysRes.ok) {
-    sysWrap.innerHTML = [
+    const rows = [
       ["Database",    sysRes.db_ready       ? "Connected"      : "Disconnected", sysRes.db_ready],
       ["GCS Storage", sysRes.gcs_configured ? "Configured"     : "Not configured", sysRes.gcs_configured],
       ["Node.js",     sysRes.node_version,   true],
       ["Uptime",      fmtUptime(sysRes.uptime_seconds), true],
       ["Memory",      `${sysRes.memory_rss_mb} MB`, true],
-    ].map(([label, val, ok]) => `<div class="admin-system-row">
+    ];
+    if (!sysRes.db_ready && sysRes.db_reason) {
+      rows.push(["DB Note", sysRes.db_reason, false]);
+    }
+    sysWrap.innerHTML = rows.map(([label, val, ok]) => `<div class="admin-system-row">
       <span>${escapeHTML(String(label))}</span>
       <span class="${ok ? "status-ok" : "status-warn"}">${escapeHTML(String(val ?? "—"))}</span>
     </div>`).join("");
@@ -365,33 +370,49 @@ function toggleActive(id, name, currentlyActive) {
 // ── Submissions ───────────────────────────────────────────────────────────────
 let subPage = 1;
 const SUB_PAGE_SIZE = 20;
+let selectedReviewHospitalId = "";
+let selectedReviewHospitalName = "";
+let currentHospitalPendingRows = [];
+let currentReviewIndex = -1;
+let currentReviewDetails = null;
 
 async function loadAdminSubs(page = subPage) {
   subPage = page;
-  const search   = document.getElementById("admin-sub-search")?.value   || "";
-  const hospital = document.getElementById("admin-sub-hospital-filter")?.value || "";
-  const params   = new URLSearchParams({ page, limit: SUB_PAGE_SIZE });
-  if (search)   params.set("search", search);
-  if (hospital) params.set("hospitalId", hospital);
+  const search = document.getElementById("admin-sub-search")?.value?.trim() || "";
+  const select = document.getElementById("admin-sub-hospital-filter");
+  const requestedHospital = select?.value || selectedReviewHospitalId || "";
+  selectedReviewHospitalId = requestedHospital;
+  selectedReviewHospitalName = adminHospitals.find((item) => item.id === selectedReviewHospitalId)?.name || selectedReviewHospitalName;
 
-  const res  = await apiGet(`/api/submissions?${params}`);
+  await renderHospitalReviewCards();
   const wrap = document.getElementById("admin-sub-table-wrap");
   if (!wrap) return;
-  const submissions = res.items || res.submissions || [];
 
-  if (!res.ok || !submissions.length) {
-    wrap.innerHTML = `<p class="admin-empty">No submissions found.</p>`;
-    const pagination = document.getElementById("admin-sub-pagination");
+  const pagination = document.getElementById("admin-sub-pagination");
+  if (!selectedReviewHospitalId) {
+    wrap.innerHTML = `<p class="admin-empty">Select a hospital queue above to start reviewing pending records.</p>`;
     if (pagination) pagination.innerHTML = "";
     return;
   }
+
+  const pendingRows = await fetchAllPendingSubmissions(selectedReviewHospitalId, search);
+  currentHospitalPendingRows = pendingRows;
+
+  if (!pendingRows.length) {
+    wrap.innerHTML = `<p class="admin-empty">No pending submissions found for ${escapeHTML(selectedReviewHospitalName || selectedReviewHospitalId)}.</p>`;
+    if (pagination) pagination.innerHTML = "";
+    return;
+  }
+
+  const total = pendingRows.length;
+  const pageRows = pendingRows.slice((page - 1) * SUB_PAGE_SIZE, page * SUB_PAGE_SIZE);
 
   wrap.innerHTML = `<table class="admin-table">
     <thead><tr>
       <th>Study ID</th><th>Patient ID</th><th>Hospital</th><th>Study</th><th>CKD</th><th>Package</th><th>Submitted</th><th>Status</th><th>Action</th>
     </tr></thead>
     <tbody>
-      ${submissions.map((s) => `<tr>
+      ${pageRows.map((s, idx) => `<tr>
         <td>${escapeHTML(s.studyId || s.participantId || s.recordId || "—")}</td>
         <td>${escapeHTML(s.uhid || "—")}</td>
         <td>${escapeHTML(s.hospitalName || s.hospitalId || "—")}</td>
@@ -405,6 +426,7 @@ async function loadAdminSubs(page = subPage) {
             type="button"
             data-action="review-submission"
             data-recordid="${escapeHTML(s.recordId || "")}"
+            data-index="${(page - 1) * SUB_PAGE_SIZE + idx}"
             data-reviewed="${s.reviewedAt ? "yes" : "no"}">
             ${s.reviewedAt ? "View / Unreview" : "Review"}
           </button>
@@ -413,18 +435,94 @@ async function loadAdminSubs(page = subPage) {
     </tbody>
   </table>`;
 
-  renderPagination("admin-sub-pagination", page, res.total ?? submissions.length, SUB_PAGE_SIZE, loadAdminSubs);
+  renderPagination("admin-sub-pagination", page, total, SUB_PAGE_SIZE, loadAdminSubs);
+}
+
+async function renderHospitalReviewCards() {
+  const cardWrap = document.getElementById("admin-sub-hospital-cards");
+  if (!cardWrap) return;
+
+  const summary = await apiGet("/api/dashboard-summary");
+  const breakdown = summary.ok
+    ? (summary.summary?.pathways?.all?.hospitalBreakdown || summary.summary?.hospitalBreakdown || [])
+    : [];
+
+  const pendingByHospital = new Map();
+  breakdown.forEach((item) => {
+    const pending = Math.max(0, Number(item.patients || 0) - Number(item.reviewed || 0));
+    pendingByHospital.set(item.hospitalId, pending);
+  });
+
+  const sourceHospitals = adminHospitals.length
+    ? adminHospitals
+    : Array.from(pendingByHospital.keys()).map((id) => ({ id, name: id }));
+
+  if (!sourceHospitals.length) {
+    cardWrap.innerHTML = `<p class="admin-empty">No hospitals found.</p>`;
+    return;
+  }
+
+  cardWrap.innerHTML = sourceHospitals.map((hospital) => {
+    const pending = pendingByHospital.get(hospital.id) || 0;
+    const isActive = selectedReviewHospitalId === hospital.id;
+    return `<button type="button" class="admin-hospital-card ${isActive ? "active" : ""}"
+      data-action="select-hospital-queue"
+      data-hospitalid="${escapeHTML(hospital.id)}"
+      data-hospitalname="${escapeHTML(hospital.name)}">
+      <div class="admin-hospital-card-head">
+        <p class="admin-hospital-card-name">${escapeHTML(hospital.name)}</p>
+        <span class="admin-pending-pill">${pending}</span>
+      </div>
+      <p class="admin-hospital-card-meta">${pending === 1 ? "1 pending review" : `${pending} pending reviews`}</p>
+    </button>`;
+  }).join("");
+}
+
+async function fetchAllPendingSubmissions(hospitalId, search = "") {
+  if (!hospitalId) return [];
+  const all = [];
+  let page = 1;
+
+  while (page <= 200) {
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: "50",
+      hospitalId,
+      reviewed: "no"
+    });
+    if (search) params.set("search", search);
+    const res = await apiGet(`/api/submissions?${params}`);
+    if (!res.ok) return page === 1 ? [] : all;
+    const rows = res.items || res.submissions || [];
+    all.push(...rows);
+    if (!rows.length || all.length >= Number(res.total || all.length)) break;
+    page += 1;
+  }
+
+  return all;
 }
 
 function handleSubmissionClick(e) {
+  const queueBtn = e.target.closest("[data-action='select-hospital-queue']");
+  if (queueBtn) {
+    const select = document.getElementById("admin-sub-hospital-filter");
+    selectedReviewHospitalId = queueBtn.dataset.hospitalid || "";
+    selectedReviewHospitalName = queueBtn.dataset.hospitalname || "";
+    if (select) select.value = selectedReviewHospitalId;
+    subPage = 1;
+    loadAdminSubs(1);
+    return;
+  }
+
   const btn = e.target.closest("[data-action='review-submission']");
   if (!btn) return;
   const recordId = btn.dataset.recordid;
+  const index = Number.parseInt(btn.dataset.index || "-1", 10);
   if (!recordId) {
     showToast("Record ID is missing for this submission.");
     return;
   }
-  openSubmissionReviewModal(recordId);
+  openSubmissionReviewModal(recordId, index);
 }
 
 function yesNoLabel(value) {
@@ -435,6 +533,13 @@ function yesNoLabel(value) {
 }
 
 function buildSubmissionReviewRows(submission) {
+  const findings = submission.ultrasoundFindings || {};
+  const kfreForm = submission.kfreForm || {};
+  const examination = kfreForm.clinicalExamination || {};
+  const events = kfreForm.clinicalEvents || {};
+  const outcomes = kfreForm.outcomes || {};
+  const labs = kfreForm.labs || {};
+
   const rows = [
     ["Record ID", submission.recordId || "—"],
     ["Study", (submission.studyFlow || "egfr").toUpperCase()],
@@ -452,9 +557,21 @@ function buildSubmissionReviewRows(submission) {
   ];
 
   if ((submission.studyFlow || "egfr") === "kfre") {
-    rows.push(["Blood Pressure", submission.kfreForm?.bloodPressure || "—"]);
-    rows.push(["Heart Rate", submission.kfreForm?.heartRate || "—"]);
-    rows.push(["Waist-to-Hip Ratio", submission.kfreForm?.waistHipRatio || "—"]);
+    const systolic = examination.systolicBp || submission.kfreForm?.bloodPressure || "";
+    const diastolic = examination.diastolicBp || "";
+    rows.push(["Blood Pressure", systolic && diastolic ? `${systolic}/${diastolic} mmHg` : systolic || "—"]);
+    rows.push(["Heart Rate", examination.heartRate ? `${examination.heartRate} bpm` : (submission.kfreForm?.heartRate || "—")]);
+    rows.push(["Waist-to-Hip Ratio", examination.waistHipRatio || submission.kfreForm?.waistHipRatio || "—"]);
+    rows.push(["Hospitalization", events.hospitalization || "—"]);
+    rows.push(["Dialysis Initiated", events.dialysisInitiated || "—"]);
+    rows.push(["Transplant", events.transplant || "—"]);
+    rows.push(["Rapid Progression", outcomes.rapidProgression || "—"]);
+    rows.push(["Kidney Failure Event", outcomes.kidneyFailureEvent || "—"]);
+    rows.push(["KFRE eGFR", labs.egfr || "—"]);
+    rows.push(["KFRE Urine ACR", labs.acr || "—"]);
+  } else {
+    rows.push(["Image Adequate", findings.imageQuality?.adequateForAnalysis || "—"]);
+    rows.push(["Bounding Points", findings.annotationDetails?.kidneyBoundingPointsDetected || "—"]);
   }
 
   const qualityWarnings = Array.isArray(submission.dataQualityWarnings) ? submission.dataQualityWarnings : [];
@@ -467,15 +584,41 @@ function buildFileReviewList(submission) {
   const files = Array.isArray(submission.files) ? submission.files : [];
   if (!files.length) return "<p class=\"admin-empty\">No files listed for this record.</p>";
   return `<ul class="admin-review-list">
-    ${files.map((file) => `<li>
-      <strong>${escapeHTML(file.fieldName || "file")}</strong>: ${escapeHTML(file.originalName || file.fileName || "Unnamed")} (${escapeHTML(file.sizeLabel || "size unknown")})
-    </li>`).join("")}
+    ${files.map((file) => {
+      if (typeof file === "string") {
+        return `<li><strong>file</strong>: ${escapeHTML(file)}</li>`;
+      }
+      const field = file.fieldName || "file";
+      const name = file.originalName || file.fileName || file.storedName || "Unnamed";
+      const size = file.sizeLabel || (Number.isFinite(Number(file.size)) ? formatFileSize(Number(file.size)) : "size unknown");
+      return `<li><strong>${escapeHTML(field)}</strong>: ${escapeHTML(name)} (${escapeHTML(size)})</li>`;
+    }).join("")}
   </ul>`;
+}
+
+function formatFileSize(bytes) {
+  if (!Number.isFinite(bytes) || bytes < 1) return "size unknown";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function reviewNavigatorHtml() {
+  if (currentReviewIndex < 0 || !currentHospitalPendingRows.length) return "";
+  return `<div class="admin-review-toolbar">
+    <p class="admin-review-index">Record ${currentReviewIndex + 1} of ${currentHospitalPendingRows.length}</p>
+    <div class="admin-review-nav">
+      <button class="admin-btn admin-btn-outline admin-btn-sm" type="button" data-action="review-prev" ${currentReviewIndex <= 0 ? "disabled" : ""}>← Previous</button>
+      <button class="admin-btn admin-btn-outline admin-btn-sm" type="button" data-action="review-next" ${currentReviewIndex >= currentHospitalPendingRows.length - 1 ? "disabled" : ""}>Next →</button>
+    </div>
+  </div>`;
 }
 
 function buildSubmissionReviewModalBody(submission) {
   const rows = buildSubmissionReviewRows(submission);
   return `<div class="admin-review-wrap">
+    ${reviewNavigatorHtml()}
     <table class="admin-table">
       <tbody>
         ${rows.map(([label, value]) => `<tr><th>${escapeHTML(label)}</th><td>${escapeHTML(String(value))}</td></tr>`).join("")}
@@ -486,13 +629,18 @@ function buildSubmissionReviewModalBody(submission) {
   </div>`;
 }
 
-async function openSubmissionReviewModal(recordId) {
+async function openSubmissionReviewModal(recordId, index = -1) {
+  currentReviewIndex = Number.isInteger(index) ? index : -1;
+  if (currentReviewIndex < 0 && currentHospitalPendingRows.length) {
+    currentReviewIndex = currentHospitalPendingRows.findIndex((item) => item.recordId === recordId);
+  }
   const result = await apiGet(`/api/submissions/${encodeURIComponent(recordId)}`);
   if (!result.ok || !result.submission) {
     showToast(result.error || "Could not load submission details.");
     return;
   }
   const submission = result.submission;
+  currentReviewDetails = submission;
   const isReviewed = Boolean(submission.reviewedAt);
   const confirmText = isReviewed ? "Mark Pending" : "Mark Reviewed";
 
@@ -505,13 +653,39 @@ async function openSubmissionReviewModal(recordId) {
         showToast(response.error || "Could not update review status.");
         return;
       }
-      closeModal();
+      if (!isReviewed && currentReviewIndex >= 0) {
+        currentHospitalPendingRows.splice(currentReviewIndex, 1);
+      } else if (isReviewed) {
+        await loadAdminSubs(subPage);
+      }
       showToast(!isReviewed ? "Submission marked as reviewed." : "Submission moved back to pending.");
+      await renderHospitalReviewCards();
+
+      if (!isReviewed && currentHospitalPendingRows.length) {
+        const nextIndex = Math.min(currentReviewIndex, currentHospitalPendingRows.length - 1);
+        const nextRecord = currentHospitalPendingRows[nextIndex];
+        await openSubmissionReviewModal(nextRecord.recordId, nextIndex);
+      } else {
+        closeModal();
+      }
+
       loadAdminSubs(subPage);
       if (activeSection === "overview") loadOverview();
     },
     { confirmText, cancelText: "Close" }
   );
+
+  const modalBody = document.getElementById("admin-modal-body");
+  modalBody?.querySelector("[data-action='review-prev']")?.addEventListener("click", async () => {
+    if (currentReviewIndex <= 0) return;
+    const prev = currentHospitalPendingRows[currentReviewIndex - 1];
+    if (prev?.recordId) await openSubmissionReviewModal(prev.recordId, currentReviewIndex - 1);
+  });
+  modalBody?.querySelector("[data-action='review-next']")?.addEventListener("click", async () => {
+    if (currentReviewIndex >= currentHospitalPendingRows.length - 1) return;
+    const next = currentHospitalPendingRows[currentReviewIndex + 1];
+    if (next?.recordId) await openSubmissionReviewModal(next.recordId, currentReviewIndex + 1);
+  });
 }
 
 async function doExportCsv() {
@@ -666,7 +840,7 @@ async function loadSystem() {
       { label: "Uptime",          value: fmtUptime(sysRes.uptime_seconds) },
       { label: "Node.js",         value: sysRes.node_version  },
       { label: "Memory (RSS)",    value: `${sysRes.memory_rss_mb} MB` },
-      { label: "Database",        value: sysRes.db_ready       ? "✓ Connected"      : "✗ Disconnected"  },
+      { label: "Database",        value: sysRes.db_ready       ? "✓ Connected"      : `✗ Disconnected${sysRes.db_reason ? " — check DB Note in Overview" : ""}`  },
       { label: "GCS Storage",     value: sysRes.gcs_configured ? "✓ Configured"     : "✗ Not configured" },
       { label: "Active Sessions", value: sysRes.active_sessions },
     ];

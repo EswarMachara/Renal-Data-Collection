@@ -4872,6 +4872,67 @@ textarea::placeholder {
   padding: 1.4rem;
 }
 
+.admin-hospital-review-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.8rem;
+}
+
+.admin-hospital-card {
+  background: #fff;
+  border: 1px solid #dbe5ef;
+  border-radius: 12px;
+  padding: 0.9rem 1rem;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.14s, box-shadow 0.14s, transform 0.14s;
+}
+
+.admin-hospital-card:hover {
+  border-color: #7fc8cd;
+  box-shadow: 0 6px 18px rgba(4, 30, 34, 0.08);
+  transform: translateY(-1px);
+}
+
+.admin-hospital-card.active {
+  border-color: #14868c;
+  box-shadow: 0 0 0 3px rgba(20, 134, 140, 0.14);
+}
+
+.admin-hospital-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.admin-hospital-card-name {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: #041e22;
+}
+
+.admin-hospital-card-meta {
+  margin: 0.5rem 0 0;
+  font-size: 0.78rem;
+  color: #526376;
+}
+
+.admin-pending-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.7rem;
+  height: 1.7rem;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
 .admin-card-wide { grid-column: 1 / -1; }
 
 .admin-card-title {
@@ -5093,7 +5154,9 @@ textarea::placeholder {
   border-radius: 14px;
   padding: 1.75rem;
   width: 100%;
-  max-width: 400px;
+  max-width: min(960px, 92vw);
+  max-height: 90vh;
+  overflow: auto;
   box-shadow: 0 20px 60px rgba(0,0,0,0.22);
 }
 
@@ -5113,6 +5176,37 @@ textarea::placeholder {
 
 .admin-modal-body p { margin: 0; font-size: 0.9rem; color: #526376; line-height: 1.6; }
 .admin-modal-body strong { color: #041e22; }
+
+.admin-review-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.55rem;
+}
+
+.admin-review-index {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #526376;
+}
+
+.admin-review-nav {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.admin-review-wrap .admin-table th {
+  width: 14rem;
+}
+
+.admin-review-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
 
 .admin-modal-footer { display: flex; justify-content: flex-end; gap: 0.65rem; }
 

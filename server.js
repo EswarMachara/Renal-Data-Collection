@@ -149,6 +149,7 @@ const dbPool = DATABASE_URL
   : null;
 
 let dbReady = false;
+let dbStatusReason = dbPool ? "Awaiting initialization." : "DATABASE_URL is not configured.";
 
 // ─── MIME types ───────────────────────────────────────────────────────────────
 
@@ -879,9 +880,11 @@ async function initializeDatabase() {
       hospitals.push({ id: hospital.hospital_id, name: hospital.hospital_name });
     });
     dbReady = true;
+    dbStatusReason = "Connected";
   } catch (err) {
     await client.query("ROLLBACK");
     dbReady = false;
+    dbStatusReason = err.message || "Database connection failed.";
     throw err;
   } finally {
     client.release();
@@ -2415,6 +2418,7 @@ async function handleAdminSystem(req, res) {
     node_version: process.version,
     memory_rss_mb: Math.round(process.memoryUsage().rss / 1024 / 1024),
     db_ready: dbReady,
+    db_reason: dbStatusReason,
     gcs_configured: Boolean(GCS_BUCKET),
     active_sessions: activeSessions,
     auth_configured: authConfigured
