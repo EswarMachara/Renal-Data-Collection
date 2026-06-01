@@ -44,6 +44,11 @@ const UPLOAD_CHUNK_BYTES = Math.min(Number(process.env.UPLOAD_CHUNK_BYTES || 5 *
 const UPLOAD_SESSION_DIR = path.join(DATA_DIR, "upload-sessions");
 const PARTICIPANT_MAP_FILE = path.join(DATA_DIR, "private", "participant-mapping.json");
 const RAW_DATABASE_URL = process.env.DATABASE_URL || "";
+const DB_HOST = process.env.DB_HOST || "127.0.0.1";
+const DB_PORT = Number(process.env.DB_PORT || 5432);
+const DB_NAME = process.env.DB_NAME || "";
+const DB_USER = process.env.DB_USER || "";
+const DB_PASSWORD = process.env.DB_PASSWORD || "";
 const DATABASE_URL = /CHANGE_ME|USER:PASSWORD|HOST:5432/.test(RAW_DATABASE_URL) ? "" : RAW_DATABASE_URL;
 const DB_SSL = process.env.DB_SSL || "disable";
 
@@ -144,12 +149,28 @@ function readFileHeader(file) {
 
 // ─── Database pool ────────────────────────────────────────────────────────────
 
-const dbPool = DATABASE_URL
-  ? new Pool({ connectionString: DATABASE_URL, ssl: DB_SSL === "disable" ? false : { rejectUnauthorized: false } })
-  : null;
+const dbPool = (() => {
+  const ssl = DB_SSL === "disable" ? false : { rejectUnauthorized: false };
+  if (DATABASE_URL) {
+    return new Pool({ connectionString: DATABASE_URL, ssl });
+  }
+  if (DB_HOST && DB_PORT && DB_NAME && DB_USER && DB_PASSWORD) {
+    return new Pool({
+      host: DB_HOST,
+      port: DB_PORT,
+      database: DB_NAME,
+      user: DB_USER,
+      password: DB_PASSWORD,
+      ssl
+    });
+  }
+  return null;
+})();
 
 let dbReady = false;
-let dbStatusReason = dbPool ? "Awaiting initialization." : "DATABASE_URL is not configured.";
+let dbStatusReason = dbPool
+  ? "Awaiting initialization."
+  : "DATABASE_URL is not configured. Set DATABASE_URL or DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD.";
 
 // ─── MIME types ───────────────────────────────────────────────────────────────
 
@@ -3107,10 +3128,25 @@ async function handleReviewSubmission(req, res, recordId) {
   try {
     fs.writeFileSync(_metaPath, JSON.stringify(meta, null, 2));
     if (dbPool && dbReady) {
-      await dbPool.query(
+      const updateResult = await dbPool.query(
         "UPDATE submissions SET reviewed_at = $1, reviewed_by = $2 WHERE record_id = $3",
         [meta.reviewedAt, meta.reviewedBy, meta.recordId]
       );
+      if (!updateResult.rowCount) {
+        const batchDir = path.dirname(path.dirname(_metaPath));
+        const dbSyncResult = await persistRecordsToDatabase({
+          batchId: submission.batchId,
+          batchDir,
+          records: [meta],
+          gcsResult: { synced: false, gcsPath: null }
+        });
+        if (dbSyncResult.saved) {
+          await dbPool.query(
+            "UPDATE submissions SET reviewed_at = $1, reviewed_by = $2 WHERE record_id = $3",
+            [meta.reviewedAt, meta.reviewedBy, meta.recordId]
+          );
+        }
+      }
     }
   } catch {
     sendJson(res, 500, { ok: false, error: "Failed to update submission." });
@@ -3426,6 +3462,7 @@ const server = http.createServer((req, res) => {
       gcsConfigured:  Boolean(GCS_BUCKET),
       dbConfigured:   Boolean(dbPool),
       dbReady,
+      dbReason:       dbStatusReason,
       authConfigured
     });
     return;
