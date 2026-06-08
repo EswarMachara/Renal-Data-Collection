@@ -69,10 +69,15 @@ const hospitals = [
   { id: "JSS-MYS-KA",  name: "JSS Medical College, Mysore, Karnataka" },
   { id: "NH-BLR-KA",   name: "Nira Health Care Private Limited, Bangalore, Karnataka" },
   { id: "MIL-NDL-DL",  name: "Mahajan Imaging & Labs, New Delhi" },
+  { id: "GEMS-SKLM",   name: "GEMS-SKLM" },
   { id: "HOSP-DEMO",   name: "HOSP-DEMO" }
 ];
 const adminIntakeSource = { id: "TANUH-ADMIN", name: "Admin" };
 const demoHospitalCredential = { id: "HOSP-DEMO", password: "1234" };
+const seededHospitalCredentials = [
+  demoHospitalCredential,
+  { id: "GEMS-SKLM", password: "GEMS_Sklm@2026" }
+];
 
 function findIntakeSource(sourceId) {
   return hospitals.find((hospital) => hospital.id === sourceId)
@@ -433,10 +438,12 @@ function setupEnvCredentials() {
   if (ADMIN_PASSWORD) {
     envCredentials.set("admin", { password: ADMIN_PASSWORD, hospitalId: null, role: "admin" });
   }
-  envCredentials.set(demoHospitalCredential.id, {
-    password:   demoHospitalCredential.password,
-    hospitalId: demoHospitalCredential.id,
-    role:       "hospital"
+  seededHospitalCredentials.forEach((credential) => {
+    envCredentials.set(credential.id, {
+      password:   credential.password,
+      hospitalId: credential.id,
+      role:       "hospital"
+    });
   });
   if (HOSPITAL_CREDENTIALS_RAW) {
     try {
@@ -882,17 +889,22 @@ async function initializeDatabase() {
        DO UPDATE SET hospital_name = EXCLUDED.hospital_name, active = false`,
       [adminIntakeSource.id, adminIntakeSource.name]
     );
-    const demoPassword = await hashPassword(demoHospitalCredential.password);
-    await client.query(
-      `INSERT INTO users (user_id, username, password_hash, password_salt, hospital_id, role, active)
-       VALUES ($1, $1, $2, $3, $1, 'hospital', true)
-       ON CONFLICT (user_id)
-       DO UPDATE SET
-         password_hash = EXCLUDED.password_hash,
-         password_salt = EXCLUDED.password_salt,
-         active = true`,
-      [demoHospitalCredential.id, demoPassword.hash, demoPassword.salt]
-    );
+    for (const credential of seededHospitalCredentials) {
+      const passwordDetails = await hashPassword(credential.password);
+      await client.query(
+        `INSERT INTO users (user_id, username, password_hash, password_salt, hospital_id, role, active)
+         VALUES ($1, $1, $2, $3, $1, 'hospital', true)
+         ON CONFLICT (user_id)
+         DO UPDATE SET
+           username = EXCLUDED.username,
+           password_hash = EXCLUDED.password_hash,
+           password_salt = EXCLUDED.password_salt,
+           hospital_id = EXCLUDED.hospital_id,
+           role = 'hospital',
+           active = true`,
+        [credential.id, passwordDetails.hash, passwordDetails.salt]
+      );
+    }
 
     await client.query("COMMIT");
     const activeHospitals = await client.query(
