@@ -207,7 +207,12 @@ async function loadPublicDashboard() {
     setPublicText("public-egfr-records", summary.egfrRecords ?? 0);
     setPublicText("public-kfre-records", summary.kfreRecords ?? 0);
     setPublicText("public-status-label", "Live");
-    setPublicText("public-updated-at", `Updated ${formatDisplayDate(summary.updatedAt || new Date().toISOString())}`);
+    const sourceLabel = summary.source === "cloud-storage"
+      ? "Cloud Storage live"
+      : summary.source === "database"
+        ? "Database"
+        : "Local metadata";
+    setPublicText("public-updated-at", `${sourceLabel} · Updated ${formatDisplayDate(summary.updatedAt || new Date().toISOString())}`);
     renderPublicBars("public-study-bars", [
       { label: "eGFR Study", value: summary.egfrRecords || 0 },
       { label: "KFRE Study", value: summary.kfreRecords || 0 }

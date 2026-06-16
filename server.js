@@ -3561,8 +3561,166 @@ async function getFilesystemSummary(scopeHospitalId = null) {
   };
 }
 
+function listGcsPrefix(prefix) {
+  return new Promise((resolve) => {
+    const bucket = GCS_BUCKET.replace(/^gs:\/\//, "").replace(/\/+$/, "");
+    if (!bucket) { resolve({ ok: false, paths: [] }); return; }
+    execFile(
+      "gcloud",
+      ["storage", "ls", "--recursive", `gs://${bucket}/${prefix}`],
+      { timeout: 20000, maxBuffer: 12 * 1024 * 1024 },
+      (error, stdout, stderr) => {
+        if (error) {
+          const message = `${stderr || stdout || error.message}`;
+          if (/matched no objects|not found|No URLs matched/i.test(message)) {
+            resolve({ ok: true, paths: [] });
+            return;
+          }
+          resolve({ ok: false, paths: [], error: message.trim() });
+          return;
+        }
+        resolve({
+          ok: true,
+          paths: stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+        });
+      }
+    );
+  });
+}
+
+async function listGcsSubmissionObjects() {
+  if (!GCS_BUCKET) return null;
+  const [egfr, kfre] = await Promise.all([
+    listGcsPrefix("eGFR"),
+    listGcsPrefix("KFRE")
+  ]);
+  if (!egfr.ok && !kfre.ok) return null;
+  return [...(egfr.paths || []), ...(kfre.paths || [])];
+}
+
+function parseGcsSubmissionObject(gcsPath) {
+  const bucket = GCS_BUCKET.replace(/^gs:\/\//, "").replace(/\/+$/, "");
+  const prefix = `gs://${bucket}/`;
+  if (!gcsPath.startsWith(prefix)) return null;
+  const parts = gcsPath.slice(prefix.length).split("/").filter(Boolean);
+  const studyRoot = parts[0];
+  if (studyRoot !== "eGFR" && studyRoot !== "KFRE") return null;
+  const studyFlow = studyRoot === "KFRE" ? "kfre" : "egfr";
+  const hospitalId = parts[1];
+  if (!hospitalId || publicDashboardExcludedHospitals.has(hospitalId)) return null;
+
+  let recordId = "";
+  let recordPrefix = "";
+  if (parts[2] === "patients" && parts[4] === "records" && parts[5]) {
+    recordId = parts[5];
+    recordPrefix = parts.slice(0, 6).join("/");
+  } else if (parts[2] === "records" && parts[3]) {
+    recordId = parts[3];
+    recordPrefix = parts.slice(0, 4).join("/");
+  }
+  if (!recordId || !recordPrefix) return null;
+
+  return {
+    studyFlow,
+    hospitalId,
+    recordId,
+    recordPrefix,
+    hasVideo: parts.includes("videos")
+  };
+}
+
+function buildPublicStorageSummaryFromGcs(paths) {
+  const recordMap = new Map();
+  for (const gcsPath of paths) {
+    const parsed = parseGcsSubmissionObject(gcsPath);
+    if (!parsed) continue;
+    const current = recordMap.get(parsed.recordPrefix) || {
+      studyFlow: parsed.studyFlow,
+      hospitalId: parsed.hospitalId,
+      recordId: parsed.recordId,
+      hasVideo: false
+    };
+    current.hasVideo = current.hasVideo || parsed.hasVideo;
+    recordMap.set(parsed.recordPrefix, current);
+  }
+
+  const hospitalMap = {};
+  hospitals
+    .filter((hospital) => !publicDashboardExcludedHospitals.has(hospital.id))
+    .forEach((hospital) => {
+      hospitalMap[hospital.id] = {
+        hospitalId: hospital.id,
+        hospitalName: hospital.name,
+        patients: 0,
+        egfrPatients: 0,
+        kfrePatients: 0
+      };
+    });
+
+  let egfrRecords = 0;
+  let kfreRecords = 0;
+  let ultrasoundVideos = 0;
+  for (const record of recordMap.values()) {
+    if (!hospitalMap[record.hospitalId]) {
+      hospitalMap[record.hospitalId] = {
+        hospitalId: record.hospitalId,
+        hospitalName: findIntakeSource(record.hospitalId)?.name || record.hospitalId,
+        patients: 0,
+        egfrPatients: 0,
+        kfrePatients: 0
+      };
+    }
+    hospitalMap[record.hospitalId].patients++;
+    if (record.studyFlow === "kfre") {
+      hospitalMap[record.hospitalId].kfrePatients++;
+      kfreRecords++;
+    } else {
+      hospitalMap[record.hospitalId].egfrPatients++;
+      egfrRecords++;
+    }
+    if (record.hasVideo) ultrasoundVideos++;
+  }
+
+  return {
+    source: "cloud-storage",
+    recordIds: Array.from(recordMap.values()).map((record) => record.recordId),
+    partnerHospitals: Object.values(hospitalMap).length,
+    totalRecords: recordMap.size,
+    egfrRecords,
+    kfreRecords,
+    ultrasoundVideos,
+    hospitalLocations: Object.values(hospitalMap).sort((a, b) => a.hospitalName.localeCompare(b.hospitalName))
+  };
+}
+
+async function getCkdDistributionForPublicRecordIds(recordIds) {
+  if (!dbPool || !dbReady || !recordIds.length) return [];
+  const ckdStatusExpr = "COALESCE(NULLIF(known_ckd, ''), CASE WHEN ckd_stage = 'Normal' THEN 'No' ELSE 'Yes' END)";
+  const result = await dbPool.query(
+    `SELECT ${ckdStatusExpr} AS label, COUNT(*)::int AS value
+     FROM submissions
+     WHERE record_id = ANY($1::text[]) AND NOT (hospital_id = ANY($2::text[]))
+     GROUP BY ${ckdStatusExpr}
+     ORDER BY CASE ${ckdStatusExpr} WHEN 'Yes' THEN 0 WHEN 'No' THEN 1 ELSE 2 END`,
+    [recordIds, Array.from(publicDashboardExcludedHospitals)]
+  );
+  return result.rows;
+}
+
 async function getPublicDashboardSummary() {
   const excludedIds = Array.from(publicDashboardExcludedHospitals);
+
+  const gcsPaths = await listGcsSubmissionObjects();
+  if (gcsPaths) {
+    const storageSummary = buildPublicStorageSummaryFromGcs(gcsPaths);
+    storageSummary.ckdDistribution = await getCkdDistributionForPublicRecordIds(storageSummary.recordIds);
+    delete storageSummary.recordIds;
+    return {
+      ...storageSummary,
+      reviewedRecords: 0,
+      updatedAt: new Date().toISOString()
+    };
+  }
 
   if (dbPool && dbReady) {
     const ckdStatusExpr = "COALESCE(NULLIF(known_ckd, ''), CASE WHEN ckd_stage = 'Normal' THEN 'No' ELSE 'Yes' END)";
@@ -3606,6 +3764,7 @@ async function getPublicDashboardSummary() {
     ]);
     const countRow = counts.rows[0] || {};
     return {
+      source: "database",
       partnerHospitals: partners.rows[0]?.hospitals || 0,
       totalRecords: countRow.total_records || 0,
       egfrRecords: countRow.egfr_records || 0,
@@ -3663,6 +3822,7 @@ async function getPublicDashboardSummary() {
 
   const hospitalLocations = Object.values(hospitalMap).sort((a, b) => a.hospitalName.localeCompare(b.hospitalName));
   return {
+    source: "filesystem",
     partnerHospitals: hospitalLocations.length,
     totalRecords: all.length,
     egfrRecords: all.filter((record) => record.studyFlow !== "kfre").length,
