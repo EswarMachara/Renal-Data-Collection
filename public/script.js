@@ -32,6 +32,7 @@ import {
   applyHospitalAuthContext,
   showApp,
   showLoginScreen,
+  showPublicScreen,
   updateHospitalSessionUI,
   loadHospitalSession,
   saveHospitalSession
@@ -62,6 +63,15 @@ const MAX_UPLOAD_FILE_BYTES = 250 * 1024 * 1024;
 const MAX_UPLOAD_FILE_LABEL = formatBytes(MAX_UPLOAD_FILE_BYTES);
 
 const ADMIN_INTAKE_SOURCE = { id: "TANUH-ADMIN", name: "Admin" };
+const PUBLIC_HOSPITAL_LOCATIONS = {
+  "SCMC-RMN-KA": { city: "Ramanagara, Karnataka", top: 66, left: 42 },
+  "SH-SLM-TN": { city: "Salem, Tamil Nadu", top: 76, left: 47 },
+  "JSS-MYS-KA": { city: "Mysore, Karnataka", top: 70, left: 41 },
+  "NH-BLR-KA": { city: "Bangalore, Karnataka", top: 70, left: 45 },
+  "MIL-NDL-DL": { city: "New Delhi", top: 29, left: 43 },
+  "GEMS-SKLM": { city: "Srikakulam, Andhra Pradesh", top: 62, left: 59 },
+  "AIIMS-NGP": { city: "Nagpur, Maharashtra", top: 51, left: 49 }
+};
 
 function getSelectableIntakeSources() {
   return state.authSession?.role === "admin"
@@ -118,6 +128,104 @@ function loadHospitalsFromApi() {
   return fetchHospitalsFromApi(populateHospitals);
 }
 
+function setPublicText(id, value) {
+  const element = document.getElementById(id);
+  if (element) element.textContent = value;
+}
+
+function renderPublicBars(containerId, rows) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const cleanRows = rows.filter((row) => Number(row.value) > 0 || Number(row.count) > 0);
+  if (!cleanRows.length) {
+    container.innerHTML = '<p class="public-empty">No records yet.</p>';
+    return;
+  }
+  const maxValue = Math.max(...cleanRows.map((row) => Number(row.value ?? row.count ?? 0)), 1);
+  container.innerHTML = "";
+  cleanRows.forEach((row) => {
+    const value = Number(row.value ?? row.count ?? 0);
+    const width = Math.max(Math.round((value / maxValue) * 100), 4);
+    const barRow = document.createElement("div");
+    barRow.className = "public-bar-row";
+    const label = document.createElement("div");
+    label.className = "public-bar-label";
+    const labelText = document.createElement("span");
+    labelText.textContent = row.label || row.bucket || "Unknown";
+    const labelValue = document.createElement("strong");
+    labelValue.textContent = value;
+    label.append(labelText, labelValue);
+    const track = document.createElement("div");
+    track.className = "public-bar-track";
+    const fill = document.createElement("span");
+    fill.style.width = `${width}%`;
+    track.appendChild(fill);
+    barRow.append(label, track);
+    container.appendChild(barRow);
+  });
+}
+
+function renderPublicMap(locations) {
+  const container = document.getElementById("public-map-pins");
+  if (!container) return;
+  container.innerHTML = "";
+  const visibleLocations = locations.filter((location) => PUBLIC_HOSPITAL_LOCATIONS[location.hospitalId]);
+  if (!visibleLocations.length) {
+    const empty = document.createElement("p");
+    empty.className = "public-empty public-map-empty";
+    empty.textContent = "Partner locations will appear here as hospitals are configured.";
+    container.appendChild(empty);
+    return;
+  }
+  visibleLocations.forEach((location) => {
+    const coords = PUBLIC_HOSPITAL_LOCATIONS[location.hospitalId];
+    const pin = document.createElement("button");
+    pin.className = "public-map-pin";
+    pin.type = "button";
+    pin.style.top = `${coords.top}%`;
+    pin.style.left = `${coords.left}%`;
+    pin.setAttribute("aria-label", `${location.hospitalName}, ${coords.city}: ${location.patients || 0} records`);
+    pin.innerHTML = `
+      <span></span>
+      <em>
+        <strong>${escapeHTML(location.hospitalName)}</strong>
+        <small>${escapeHTML(coords.city)} · ${Number(location.patients || 0)} records</small>
+      </em>
+    `;
+    container.appendChild(pin);
+  });
+}
+
+async function loadPublicDashboard() {
+  try {
+    const response = await fetch("/api/public/dashboard", { cache: "no-store" });
+    const result = await response.json();
+    if (!response.ok || !result.ok) throw new Error(result.error || "Unable to load public dashboard");
+    const summary = result.summary || {};
+    setPublicText("public-partner-hospitals", summary.partnerHospitals ?? 0);
+    setPublicText("public-total-records", summary.totalRecords ?? 0);
+    setPublicText("public-egfr-records", summary.egfrRecords ?? 0);
+    setPublicText("public-kfre-records", summary.kfreRecords ?? 0);
+    setPublicText("public-status-label", "Live");
+    setPublicText("public-updated-at", `Updated ${formatDisplayDate(summary.updatedAt || new Date().toISOString())}`);
+    renderPublicBars("public-study-bars", [
+      { label: "eGFR Study", value: summary.egfrRecords || 0 },
+      { label: "KFRE Study", value: summary.kfreRecords || 0 }
+    ]);
+    renderPublicBars("public-ckd-bars", (summary.ckdDistribution || []).map((row) => ({
+      label: row.label === "Yes" ? "CKD: Yes" : row.label === "No" ? "CKD: No" : row.label || "Unknown",
+      value: row.value || row.count || 0
+    })));
+    renderPublicMap(summary.hospitalLocations || []);
+  } catch (err) {
+    setPublicText("public-status-label", "Unavailable");
+    setPublicText("public-updated-at", "Could not load live public metrics.");
+    renderPublicBars("public-study-bars", []);
+    renderPublicBars("public-ckd-bars", []);
+    renderPublicMap([]);
+  }
+}
+
 configureAuthCallbacks({
   setMobileNavigationOpen,
   populateSubHospitalFilter,
@@ -130,7 +238,8 @@ configureAuthCallbacks({
 setAdminLogoutCallback(async () => {
   try { await authedFetch("/api/auth/logout", { method: "POST" }); } catch { /* ignore */ }
   clearAuthSession();
-  showLoginScreen();
+  showPublicScreen();
+  loadPublicDashboard();
 });
 configureSubmissionRenderers({
   getKidneyFindingReviewRows,
@@ -146,6 +255,8 @@ setUnauthorizedHandler(() => {
 // ─── DOM references ───────────────────────────────────────────────────────────
 
 const tabs = document.querySelectorAll(".nav-link[data-tab]");
+const publicLoginOpenBtn = document.getElementById("public-login-open");
+const loginBackPublicBtn = document.getElementById("login-back-public");
 const panels = {
   landing:     document.getElementById("tab-landing"),
   consent:     document.getElementById("tab-consent"),
@@ -465,6 +576,8 @@ const egfrVideoSection = document.getElementById("egfr-video-section");
 const kfreStructuredForm = document.getElementById("kfre-structured-form");
 const kfreDocumentSection = document.getElementById("kfre-document-section");
 const clinicalSubmitButton = document.getElementById("clinical-submit-button");
+const egfrSubmitActions = document.getElementById("egfr-submit-actions");
+const clinicalSubmitActions = document.getElementById("clinical-submit-actions");
 const kfreSystolicBpInput = document.getElementById("kfre-systolic-bp");
 const kfreDiastolicBpInput = document.getElementById("kfre-diastolic-bp");
 const kfreHeartRateInput = document.getElementById("kfre-heart-rate");
@@ -1355,6 +1468,17 @@ document.querySelectorAll("[data-tab-jump]").forEach((button) => {
   });
 });
 
+publicLoginOpenBtn?.addEventListener("click", () => {
+  hideLoginError();
+  showLoginScreen();
+});
+
+loginBackPublicBtn?.addEventListener("click", () => {
+  hideLoginError();
+  showPublicScreen();
+  loadPublicDashboard();
+});
+
 tabs.forEach((tab) => {
   tab.addEventListener("click", () => activateTab(tab.dataset.tab));
 });
@@ -1934,8 +2058,10 @@ function updateStudySpecificUploadVisibility() {
   kfreStructuredForm?.classList.toggle("hidden", !isKfre);
   kfreDocumentSection?.classList.toggle("hidden", !isKfre);
   kfreDocumentSection?.classList.toggle("flow-hidden", !isKfre);
+  egfrSubmitActions?.classList.toggle("hidden", isKfre);
+  clinicalSubmitActions?.classList.toggle("hidden", !isKfre);
   updateKfreDocumentAvailability({ clearHidden: true });
-  clinicalSubmitButton.textContent = isKfre ? "Submit KFRE Record" : "Submit eGFR Record";
+  if (clinicalSubmitButton) clinicalSubmitButton.textContent = "Submit KFRE Record";
   updateKfreConditionalFields();
 
   if (isKfre) {
@@ -3156,6 +3282,7 @@ document.getElementById("ls-pw-toggle")?.addEventListener("click", () => {
 (async function init() {
   initializeLandingReveal();
   initializeMobileNavigation();
+  loadPublicDashboard();
   setLandingEnrollmentDateToday();
   loadStudyFlow();
   const storedStudyChoice = document.querySelector(`input[name='loginStudyFlow'][value='${state.studyFlow}']`);
@@ -3189,7 +3316,8 @@ document.getElementById("ls-pw-toggle")?.addEventListener("click", () => {
         applyHospitalAuthContext();
       } else {
         clearAuthSession();
-        showLoginScreen();
+        showPublicScreen();
+        return;
       }
     } catch {
       // Network error — optimistically show app with cached session
@@ -3198,7 +3326,7 @@ document.getElementById("ls-pw-toggle")?.addEventListener("click", () => {
       applyHospitalAuthContext();
     }
   } else {
-    showLoginScreen();
+    showPublicScreen();
     return; // Don't init the rest of the app yet — will happen after login
   }
 

@@ -12,8 +12,91 @@
 </head>
 <body>
 
+  <!-- Public dashboard — shown before authentication -->
+  <div id="public-screen" class="public-screen" role="main" aria-label="Public renal health dashboard">
+    <header class="public-nav">
+      <a class="public-brand" href="#" aria-label="TANUH Renal Health Data Collection Platform">
+        <img src="assets/tanuh.png" alt="TANUH" />
+        <span>
+          <strong>Renal Health Data Collection Platform</strong>
+          <small>TANUH · AI Centre of Excellence · IISc Bangalore</small>
+        </span>
+      </a>
+      <button class="public-login-btn" id="public-login-open" type="button">Login</button>
+    </header>
+
+    <main class="public-dashboard">
+      <section class="public-hero">
+        <div class="public-hero-copy">
+          <span class="eyebrow">Collaborative renal research data collection</span>
+          <h1>Secure, anonymised kidney health data from partner hospitals.</h1>
+          <p>Track the program footprint, submitted records, and partner hospital participation across eGFR and KFRE study pathways.</p>
+        </div>
+        <div class="public-hero-card" aria-label="Portal summary">
+          <span>Portal Status</span>
+          <strong id="public-status-label">Live</strong>
+          <small id="public-updated-at">Loading latest metrics…</small>
+        </div>
+      </section>
+
+      <section class="public-metrics-grid" aria-label="Program metrics">
+        <article class="public-metric-card">
+          <span>Partner Hospitals</span>
+          <strong id="public-partner-hospitals">—</strong>
+          <small>Configured collaboration sites</small>
+        </article>
+        <article class="public-metric-card">
+          <span>Patient Records</span>
+          <strong id="public-total-records">—</strong>
+          <small>Submitted across all studies</small>
+        </article>
+        <article class="public-metric-card">
+          <span>eGFR Records</span>
+          <strong id="public-egfr-records">—</strong>
+          <small>Ultrasound + clinical packages</small>
+        </article>
+        <article class="public-metric-card">
+          <span>KFRE Records</span>
+          <strong id="public-kfre-records">—</strong>
+          <small>Clinical risk data records</small>
+        </article>
+      </section>
+
+      <section class="public-insights-grid">
+        <article class="public-panel">
+          <div class="public-panel-head">
+            <span class="eyebrow">Study mix</span>
+            <h2>Records by pathway</h2>
+          </div>
+          <div class="public-bars" id="public-study-bars" aria-live="polite"></div>
+        </article>
+        <article class="public-panel">
+          <div class="public-panel-head">
+            <span class="eyebrow">Clinical profile</span>
+            <h2>CKD distribution</h2>
+          </div>
+          <div class="public-bars" id="public-ckd-bars" aria-live="polite"></div>
+        </article>
+      </section>
+
+      <section class="public-map-panel" aria-label="Partner hospital map">
+        <div class="public-panel-head">
+          <span class="eyebrow">India footprint</span>
+          <h2>Partner hospitals by location</h2>
+          <p>Hover over a point to view the collaboration site and current submission count.</p>
+        </div>
+        <div class="public-map-wrap">
+          <svg class="india-map" viewBox="0 0 420 500" role="img" aria-label="Stylised map of India">
+            <path d="M200 20C235 38 256 71 278 101C300 130 342 147 350 187C358 226 330 250 319 281C309 311 335 343 316 371C297 399 257 390 234 416C211 441 208 484 176 491C145 498 126 456 115 427C103 398 78 383 72 353C66 323 90 301 85 271C80 241 47 223 50 191C53 159 87 144 112 127C137 110 141 79 158 54C171 35 181 18 200 20Z" />
+          </svg>
+          <div class="public-map-pins" id="public-map-pins" aria-live="polite"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
   <!-- Login screen — shown when not authenticated -->
-  <div id="login-screen" class="login-screen" role="main" aria-label="Sign in">
+  <div id="login-screen" class="login-screen hidden" role="main" aria-label="Sign in">
 
     <!-- Left: branded panel -->
     <div class="ls-left" aria-hidden="true">
@@ -48,6 +131,7 @@
     <!-- Right: form panel -->
     <div class="ls-right">
       <div class="ls-form-wrap">
+        <button class="ls-back-public" id="login-back-public" type="button">← Public dashboard</button>
         <div class="ls-form-top">
           <img src="assets/tanuh.png" alt="TANUH" class="ls-form-logo" />
           <span class="ls-portal-badge">Hospital Portal</span>
@@ -1110,6 +1194,10 @@
             </div>
           </div>
 
+          <div class="actions" id="egfr-submit-actions">
+            <button class="btn-premium" id="egfr-submit-button" type="submit">Submit eGFR Record</button>
+          </div>
+
           <div class="form-section hidden" id="kfre-document-section">
             <div class="section-title"><span class="section-index">1.</span> Kidney Function Clinical Document <span class="required-marker">*</span> <span class="section-note">(Required)</span></div>
             <p class="section-description">Upload the laboratory or clinical report used for the KFRE research record. Ultrasound images and videos are not required in this pathway.</p>
@@ -1150,12 +1238,12 @@
                   <input id="kfre-egfr" name="kfreEgfr" type="number" min="0" step="0.1" placeholder="mL/min/1.73 m²" />
                 </div>
                 <div class="field-block">
-                  <label for="kfre-pcr">Urine Protein-to-Creatinine Ratio (PCR) <span class="required-marker">*</span></label>
-                  <input id="kfre-pcr" name="kfrePcr" type="number" min="0" step="0.1" placeholder="mg/g" />
-                </div>
-                <div class="field-block">
                   <label for="kfre-acr">Urine Albumin-to-Creatinine Ratio (ACR)</label>
                   <input id="kfre-acr" name="kfreAcr" type="number" min="0" step="0.1" placeholder="mg/g" />
+                </div>
+                <div class="field-block">
+                  <label for="kfre-pcr">Urine Protein-to-Creatinine Ratio (PCR) <span class="required-marker">*</span></label>
+                  <input id="kfre-pcr" name="kfrePcr" type="number" min="0" step="0.1" placeholder="mg/g" />
                 </div>
                 <div class="field-block">
                   <label for="kfre-serum-calcium">Serum Calcium</label>
@@ -1327,8 +1415,8 @@
             </div>
           </div>
 
-          <div class="actions">
-            <button class="btn-premium" id="clinical-submit-button" type="submit">Submit eGFR Record</button>
+          <div class="actions" id="clinical-submit-actions">
+            <button class="btn-premium" id="clinical-submit-button" type="submit">Submit KFRE Record</button>
           </div>
         </form>
       </article>

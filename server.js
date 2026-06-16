@@ -77,6 +77,7 @@ const hospitals = [
   { id: "HOSP-DEMO",   name: "HOSP-DEMO" }
 ];
 const adminIntakeSource = { id: "TANUH-ADMIN", name: "Admin" };
+const publicDashboardExcludedHospitals = new Set(["HOSP-DEMO", adminIntakeSource.id]);
 const demoHospitalCredential = { id: "HOSP-DEMO", password: "1234" };
 const seededHospitalCredentials = [
   demoHospitalCredential,
@@ -3560,6 +3561,130 @@ async function getFilesystemSummary(scopeHospitalId = null) {
   };
 }
 
+async function getPublicDashboardSummary() {
+  const excludedIds = Array.from(publicDashboardExcludedHospitals);
+
+  if (dbPool && dbReady) {
+    const ckdStatusExpr = "COALESCE(NULLIF(known_ckd, ''), CASE WHEN ckd_stage = 'Normal' THEN 'No' ELSE 'Yes' END)";
+    const [partners, counts, ckd, breakdown] = await Promise.all([
+      dbPool.query(
+        "SELECT COUNT(*)::int AS hospitals FROM hospitals WHERE active = true AND NOT (hospital_id = ANY($1::text[]))",
+        [excludedIds]
+      ),
+      dbPool.query(
+        `SELECT
+           COUNT(DISTINCT s.record_id)::int AS total_records,
+           COUNT(DISTINCT CASE WHEN s.study_flow = 'egfr' THEN s.record_id END)::int AS egfr_records,
+           COUNT(DISTINCT CASE WHEN s.study_flow = 'kfre' THEN s.record_id END)::int AS kfre_records,
+           COUNT(DISTINCT CASE WHEN sf.field_name = 'ultrasoundVideo' THEN s.record_id END)::int AS videos,
+           COUNT(DISTINCT CASE WHEN s.reviewed_at IS NOT NULL THEN s.record_id END)::int AS reviewed
+         FROM submissions s
+         LEFT JOIN submission_files sf ON sf.record_id = s.record_id
+         WHERE NOT (s.hospital_id = ANY($1::text[]))`,
+        [excludedIds]
+      ),
+      dbPool.query(
+        `SELECT ${ckdStatusExpr} AS label, COUNT(*)::int AS value
+         FROM submissions
+         WHERE NOT (hospital_id = ANY($1::text[]))
+         GROUP BY ${ckdStatusExpr}
+         ORDER BY CASE ${ckdStatusExpr} WHEN 'Yes' THEN 0 WHEN 'No' THEN 1 ELSE 2 END`,
+        [excludedIds]
+      ),
+      dbPool.query(
+        `SELECT h.hospital_id, h.hospital_name,
+                COUNT(DISTINCT s.record_id)::int AS patients,
+                COUNT(DISTINCT CASE WHEN s.study_flow = 'egfr' THEN s.record_id END)::int AS egfr_patients,
+                COUNT(DISTINCT CASE WHEN s.study_flow = 'kfre' THEN s.record_id END)::int AS kfre_patients
+         FROM hospitals h
+         LEFT JOIN submissions s ON s.hospital_id = h.hospital_id
+         WHERE h.active = true AND NOT (h.hospital_id = ANY($1::text[]))
+         GROUP BY h.hospital_id, h.hospital_name
+         ORDER BY h.hospital_name ASC`,
+        [excludedIds]
+      )
+    ]);
+    const countRow = counts.rows[0] || {};
+    return {
+      partnerHospitals: partners.rows[0]?.hospitals || 0,
+      totalRecords: countRow.total_records || 0,
+      egfrRecords: countRow.egfr_records || 0,
+      kfreRecords: countRow.kfre_records || 0,
+      ultrasoundVideos: countRow.videos || 0,
+      reviewedRecords: countRow.reviewed || 0,
+      ckdDistribution: ckd.rows,
+      hospitalLocations: breakdown.rows.map((row) => ({
+        hospitalId: row.hospital_id,
+        hospitalName: row.hospital_name,
+        patients: row.patients,
+        egfrPatients: row.egfr_patients,
+        kfrePatients: row.kfre_patients
+      })),
+      updatedAt: new Date().toISOString()
+    };
+  }
+
+  const all = (await readAllSubmissions()).filter((record) => !publicDashboardExcludedHospitals.has(record.hospitalId));
+  const hospitalMap = {};
+  hospitals
+    .filter((hospital) => !publicDashboardExcludedHospitals.has(hospital.id))
+    .forEach((hospital) => {
+      hospitalMap[hospital.id] = {
+        hospitalId: hospital.id,
+        hospitalName: hospital.name,
+        patients: 0,
+        egfrPatients: 0,
+        kfrePatients: 0
+      };
+    });
+
+  const ckdCounts = {};
+  let ultrasoundVideos = 0;
+  let reviewedRecords = 0;
+  for (const record of all) {
+    const hospitalId = record.hospitalId;
+    if (!hospitalMap[hospitalId]) {
+      hospitalMap[hospitalId] = {
+        hospitalId,
+        hospitalName: record.hospitalName || hospitalId,
+        patients: 0,
+        egfrPatients: 0,
+        kfrePatients: 0
+      };
+    }
+    hospitalMap[hospitalId].patients++;
+    if (record.studyFlow === "kfre") hospitalMap[hospitalId].kfrePatients++;
+    else hospitalMap[hospitalId].egfrPatients++;
+    if ((record.files || []).some((file) => file.fieldName === "ultrasoundVideo")) ultrasoundVideos++;
+    if (record.reviewedAt) reviewedRecords++;
+    const ckdStatus = record.knownCkd === "No" || record.ckdStage === "Normal" ? "No" : "Yes";
+    ckdCounts[ckdStatus] = (ckdCounts[ckdStatus] || 0) + 1;
+  }
+
+  const hospitalLocations = Object.values(hospitalMap).sort((a, b) => a.hospitalName.localeCompare(b.hospitalName));
+  return {
+    partnerHospitals: hospitalLocations.length,
+    totalRecords: all.length,
+    egfrRecords: all.filter((record) => record.studyFlow !== "kfre").length,
+    kfreRecords: all.filter((record) => record.studyFlow === "kfre").length,
+    ultrasoundVideos,
+    reviewedRecords,
+    ckdDistribution: Object.entries(ckdCounts).map(([label, value]) => ({ label, value })),
+    hospitalLocations,
+    updatedAt: new Date().toISOString()
+  };
+}
+
+// GET /api/public/dashboard — aggregate-only metrics for unauthenticated landing page
+async function handlePublicDashboard(req, res) {
+  try {
+    const summary = await getPublicDashboardSummary();
+    sendJson(res, 200, { ok: true, summary });
+  } catch (err) {
+    sendJson(res, 500, { ok: false, error: err.message });
+  }
+}
+
 // GET /api/dashboard-summary
 async function handleDashboardSummary(req, res) {
   const session = await requireAuth(req, res);
@@ -3593,6 +3718,11 @@ const server = http.createServer((req, res) => {
       dbReason:       dbStatusReason,
       authConfigured
     });
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/api/public/dashboard") {
+    handlePublicDashboard(req, res);
     return;
   }
 

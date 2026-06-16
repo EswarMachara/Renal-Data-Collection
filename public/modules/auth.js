@@ -119,11 +119,13 @@ export function applyHospitalAuthContext() {
 }
 
 export function showApp() {
+  const publicScreen = document.getElementById("public-screen");
   const loginScreen = document.getElementById("login-screen");
   const appNavbar = document.getElementById("app-navbar");
   const navbarAuth = document.getElementById("navbar-auth");
   const navbarUserLabel = document.getElementById("navbar-user-label");
   authCallbacks.setMobileNavigationOpen(false);
+  if (publicScreen) publicScreen.classList.add("hidden");
   if (loginScreen) loginScreen.classList.add("hidden");
 
   const session = state.authSession;
@@ -152,10 +154,24 @@ export function showApp() {
 }
 
 export function showLoginScreen() {
+  const publicScreen = document.getElementById("public-screen");
   const loginScreen = document.getElementById("login-screen");
   const appNavbar = document.getElementById("app-navbar");
   authCallbacks.setMobileNavigationOpen(false);
+  if (publicScreen) publicScreen.classList.add("hidden");
   if (loginScreen) loginScreen.classList.remove("hidden");
+  if (appNavbar) appNavbar.classList.add("hidden");
+  document.querySelector(".app-container")?.classList.add("hidden");
+  authCallbacks.hideAdminPortal();
+}
+
+export function showPublicScreen() {
+  const publicScreen = document.getElementById("public-screen");
+  const loginScreen = document.getElementById("login-screen");
+  const appNavbar = document.getElementById("app-navbar");
+  authCallbacks.setMobileNavigationOpen(false);
+  if (publicScreen) publicScreen.classList.remove("hidden");
+  if (loginScreen) loginScreen.classList.add("hidden");
   if (appNavbar) appNavbar.classList.add("hidden");
   document.querySelector(".app-container")?.classList.add("hidden");
   authCallbacks.hideAdminPortal();
