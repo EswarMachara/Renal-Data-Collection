@@ -8,6 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet" />
+  <link rel="preload" href="/maps/india_states_paths.json" as="fetch" type="application/json" crossorigin />
+  <link rel="preload" href="/maps/partner_hospitals.json" as="fetch" type="application/json" crossorigin />
   <link rel="stylesheet" href="./styles.css?v=old-kidney-animation-20260528" />
 </head>
 <body>
@@ -80,7 +82,7 @@
           <h2>Partner hospitals by location</h2>
           <p>Hover, tap, or focus a point to view the collaboration site and current submission count.</p>
         </div>
-        <div class="public-map-status" id="public-map-status" role="status" aria-live="polite">Loading India map…</div>
+        <div class="public-map-status hidden" id="public-map-status" role="status" aria-live="polite"></div>
         <div class="public-map-wrap" id="public-map-wrap">
           <svg class="india-map" id="india-map" viewBox="0 0 640 720" role="img" aria-label="India map showing partner hospital locations">
             <g id="india-map-states" class="india-map-states"></g>

@@ -63,10 +63,9 @@ const MAX_UPLOAD_FILE_BYTES = 250 * 1024 * 1024;
 const MAX_UPLOAD_FILE_LABEL = formatBytes(MAX_UPLOAD_FILE_BYTES);
 
 const ADMIN_INTAKE_SOURCE = { id: "TANUH-ADMIN", name: "Admin" };
-const INDIA_MAP_VIEWBOX = { width: 640, height: 720, padding: 34 };
 const INDIA_COORDINATE_LIMITS = { minLat: 6, maxLat: 38, minLng: 68, maxLng: 98 };
 let publicMapState = {
-  geojson: null,
+  mapData: null,
   hospitals: null,
   projection: null,
   loadPromise: null
@@ -171,62 +170,6 @@ function setPublicMapStatus(message, state = "") {
   status.className = `public-map-status${state ? ` ${state}` : ""}${message ? "" : " hidden"}`;
 }
 
-function extractCoordinatePairs(coordinates, pairs = []) {
-  if (!Array.isArray(coordinates)) return pairs;
-  if (typeof coordinates[0] === "number" && typeof coordinates[1] === "number") {
-    pairs.push(coordinates);
-    return pairs;
-  }
-  coordinates.forEach((item) => extractCoordinatePairs(item, pairs));
-  return pairs;
-}
-
-function buildIndiaProjection(geojson) {
-  const pairs = [];
-  (geojson.features || []).forEach((feature) => extractCoordinatePairs(feature.geometry?.coordinates, pairs));
-  const validPairs = pairs.filter(([lng, lat]) => Number.isFinite(lng) && Number.isFinite(lat));
-  if (!validPairs.length) throw new Error("India map coordinates are empty.");
-  const lngs = validPairs.map(([lng]) => lng);
-  const lats = validPairs.map(([, lat]) => lat);
-  const minLng = Math.min(...lngs);
-  const maxLng = Math.max(...lngs);
-  const minLat = Math.min(...lats);
-  const maxLat = Math.max(...lats);
-  const usableWidth = INDIA_MAP_VIEWBOX.width - INDIA_MAP_VIEWBOX.padding * 2;
-  const usableHeight = INDIA_MAP_VIEWBOX.height - INDIA_MAP_VIEWBOX.padding * 2;
-  const scale = Math.min(usableWidth / (maxLng - minLng), usableHeight / (maxLat - minLat));
-  const mapWidth = (maxLng - minLng) * scale;
-  const mapHeight = (maxLat - minLat) * scale;
-  const offsetX = (INDIA_MAP_VIEWBOX.width - mapWidth) / 2;
-  const offsetY = (INDIA_MAP_VIEWBOX.height - mapHeight) / 2;
-  return function project(lng, lat) {
-    return [
-      offsetX + (lng - minLng) * scale,
-      offsetY + (maxLat - lat) * scale
-    ];
-  };
-}
-
-function ringToPath(ring, project) {
-  return ring
-    .map(([lng, lat], index) => {
-      const [x, y] = project(lng, lat);
-      return `${index === 0 ? "M" : "L"}${x.toFixed(2)} ${y.toFixed(2)}`;
-    })
-    .join(" ") + " Z";
-}
-
-function geometryToPath(geometry, project) {
-  if (!geometry) return "";
-  if (geometry.type === "Polygon") {
-    return geometry.coordinates.map((ring) => ringToPath(ring, project)).join(" ");
-  }
-  if (geometry.type === "MultiPolygon") {
-    return geometry.coordinates.flatMap((polygon) => polygon.map((ring) => ringToPath(ring, project))).join(" ");
-  }
-  return "";
-}
-
 function isValidIndiaCoordinate(hospital) {
   const lat = Number(hospital.latitude);
   const lng = Number(hospital.longitude);
@@ -241,38 +184,45 @@ function isValidIndiaCoordinate(hospital) {
 async function loadPublicMapAssets() {
   if (!publicMapState.loadPromise) {
     publicMapState.loadPromise = Promise.all([
-      fetch("/maps/india_states.geojson", { cache: "force-cache" }).then((res) => {
+      fetch("/maps/india_states_paths.json", { cache: "force-cache" }).then((res) => {
         if (!res.ok) throw new Error("India map dataset could not be loaded.");
         return res.json();
       }),
-      fetch("/maps/partner_hospitals.json", { cache: "no-store" }).then((res) => {
+      fetch("/maps/partner_hospitals.json", { cache: "force-cache" }).then((res) => {
         if (!res.ok) throw new Error("Partner hospital location data could not be loaded.");
         return res.json();
       })
-    ]).then(([geojson, hospitalsData]) => {
-      publicMapState.geojson = geojson;
+    ]).then(([mapData, hospitalsData]) => {
+      publicMapState.mapData = mapData;
       publicMapState.hospitals = Array.isArray(hospitalsData) ? hospitalsData : [];
-      publicMapState.projection = buildIndiaProjection(geojson);
+      publicMapState.projection = mapData.projection;
       return publicMapState;
     });
   }
   return publicMapState.loadPromise;
 }
 
-function renderIndiaStates(geojson, project) {
+function renderIndiaStates(mapData) {
   const statesLayer = document.getElementById("india-map-states");
   if (!statesLayer || statesLayer.dataset.rendered === "true") return;
   statesLayer.innerHTML = "";
-  (geojson.features || []).forEach((feature) => {
-    const pathData = geometryToPath(feature.geometry, project);
-    if (!pathData) return;
+  (mapData.states || []).forEach((statePath) => {
+    if (!statePath.path) return;
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    path.setAttribute("d", pathData);
+    path.setAttribute("d", statePath.path);
     path.setAttribute("class", "india-state");
-    path.setAttribute("aria-label", feature.properties?.NAME_1 || "Indian state or union territory");
+    path.setAttribute("aria-label", statePath.name || "Indian state or union territory");
     statesLayer.appendChild(path);
   });
   statesLayer.dataset.rendered = "true";
+}
+
+function projectIndiaCoordinate(projection, lng, lat) {
+  if (!projection || !Number.isFinite(Number(lng)) || !Number.isFinite(Number(lat))) return null;
+  return [
+    projection.offsetX + (Number(lng) - projection.minLng) * projection.scale,
+    projection.offsetY + (projection.maxLat - Number(lat)) * projection.scale
+  ];
 }
 
 function getMapTooltipHtml(group) {
@@ -330,18 +280,23 @@ async function renderPublicMap(locations) {
   const svg = document.getElementById("india-map");
   const markerLayer = document.getElementById("india-map-markers");
   if (!svg || !markerLayer) return;
-  setPublicMapStatus("Loading India map…");
+  const statusTimer = window.setTimeout(() => {
+    setPublicMapStatus("Loading India map…");
+  }, 180);
   markerLayer.innerHTML = "";
   try {
-    const { geojson, hospitals, projection } = await loadPublicMapAssets();
-    renderIndiaStates(geojson, projection);
+    const { mapData, hospitals, projection } = await loadPublicMapAssets();
+    window.clearTimeout(statusTimer);
+    renderIndiaStates(mapData);
     const groups = buildHospitalLocationGroups(locations, hospitals);
     if (!groups.length) {
       setPublicMapStatus("Partner locations will appear here after verified coordinates are added.", "empty");
       return;
     }
     groups.forEach((group) => {
-      const [x, y] = projection(group.longitude, group.latitude);
+      const point = projectIndiaCoordinate(projection, group.longitude, group.latitude);
+      if (!point) return;
+      const [x, y] = point;
       const marker = document.createElementNS("http://www.w3.org/2000/svg", "g");
       marker.setAttribute("class", "india-hospital-marker");
       marker.setAttribute("tabindex", "0");
@@ -369,6 +324,7 @@ async function renderPublicMap(locations) {
     });
     setPublicMapStatus("");
   } catch (err) {
+    window.clearTimeout(statusTimer);
     setPublicMapStatus("Map data could not be loaded. Please refresh or contact the portal administrator.", "error");
   }
 }
