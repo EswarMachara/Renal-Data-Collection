@@ -3609,23 +3609,23 @@ function parseGcsSubmissionObject(gcsPath) {
   const hospitalId = parts[1];
   if (!hospitalId || publicDashboardExcludedHospitals.has(hospitalId)) return null;
 
-  let recordId = "";
-  let recordPrefix = "";
-  if (parts[2] === "patients" && parts[4] === "records" && parts[5]) {
-    recordId = parts[5];
-    recordPrefix = parts.slice(0, 6).join("/");
-  } else if (parts[2] === "records" && parts[3]) {
-    recordId = parts[3];
-    recordPrefix = parts.slice(0, 4).join("/");
+  if (
+    parts[2] !== "patients" ||
+    !parts[3] ||
+    parts[4] !== "records" ||
+    !parts[5] ||
+    parts[6] !== "metadata" ||
+    parts[7] !== "record-metadata.json"
+  ) {
+    return null;
   }
-  if (!recordId || !recordPrefix) return null;
 
   return {
     studyFlow,
     hospitalId,
-    recordId,
-    recordPrefix,
-    hasVideo: parts.includes("videos")
+    patientKey: parts[3],
+    recordId: parts[5],
+    recordPrefix: parts.slice(0, 6).join("/")
   };
 }
 
@@ -3638,9 +3638,8 @@ function buildPublicStorageSummaryFromGcs(paths) {
       studyFlow: parsed.studyFlow,
       hospitalId: parsed.hospitalId,
       recordId: parsed.recordId,
-      hasVideo: false
+      patientKey: parsed.patientKey
     };
-    current.hasVideo = current.hasVideo || parsed.hasVideo;
     recordMap.set(parsed.recordPrefix, current);
   }
 
@@ -3659,7 +3658,6 @@ function buildPublicStorageSummaryFromGcs(paths) {
 
   let egfrRecords = 0;
   let kfreRecords = 0;
-  let ultrasoundVideos = 0;
   for (const record of recordMap.values()) {
     if (!hospitalMap[record.hospitalId]) {
       hospitalMap[record.hospitalId] = {
@@ -3678,7 +3676,6 @@ function buildPublicStorageSummaryFromGcs(paths) {
       hospitalMap[record.hospitalId].egfrPatients++;
       egfrRecords++;
     }
-    if (record.hasVideo) ultrasoundVideos++;
   }
 
   return {
@@ -3688,7 +3685,7 @@ function buildPublicStorageSummaryFromGcs(paths) {
     totalRecords: recordMap.size,
     egfrRecords,
     kfreRecords,
-    ultrasoundVideos,
+    ultrasoundVideos: 0,
     hospitalLocations: Object.values(hospitalMap).sort((a, b) => a.hospitalName.localeCompare(b.hospitalName))
   };
 }

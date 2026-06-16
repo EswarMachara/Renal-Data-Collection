@@ -63,14 +63,13 @@ const MAX_UPLOAD_FILE_BYTES = 250 * 1024 * 1024;
 const MAX_UPLOAD_FILE_LABEL = formatBytes(MAX_UPLOAD_FILE_BYTES);
 
 const ADMIN_INTAKE_SOURCE = { id: "TANUH-ADMIN", name: "Admin" };
-const PUBLIC_HOSPITAL_LOCATIONS = {
-  "SCMC-RMN-KA": { city: "Ramanagara, Karnataka", top: 66, left: 42 },
-  "SH-SLM-TN": { city: "Salem, Tamil Nadu", top: 76, left: 47 },
-  "JSS-MYS-KA": { city: "Mysore, Karnataka", top: 70, left: 41 },
-  "NH-BLR-KA": { city: "Bangalore, Karnataka", top: 70, left: 45 },
-  "MIL-NDL-DL": { city: "New Delhi", top: 29, left: 43 },
-  "GEMS-SKLM": { city: "Srikakulam, Andhra Pradesh", top: 62, left: 59 },
-  "AIIMS-NGP": { city: "Nagpur, Maharashtra", top: 51, left: 49 }
+const INDIA_MAP_VIEWBOX = { width: 640, height: 720, padding: 34 };
+const INDIA_COORDINATE_LIMITS = { minLat: 6, maxLat: 38, minLng: 68, maxLng: 98 };
+let publicMapState = {
+  geojson: null,
+  hospitals: null,
+  projection: null,
+  loadPromise: null
 };
 
 function getSelectableIntakeSources() {
@@ -165,35 +164,213 @@ function renderPublicBars(containerId, rows) {
   });
 }
 
-function renderPublicMap(locations) {
-  const container = document.getElementById("public-map-pins");
-  if (!container) return;
-  container.innerHTML = "";
-  const visibleLocations = locations.filter((location) => PUBLIC_HOSPITAL_LOCATIONS[location.hospitalId]);
-  if (!visibleLocations.length) {
-    const empty = document.createElement("p");
-    empty.className = "public-empty public-map-empty";
-    empty.textContent = "Partner locations will appear here as hospitals are configured.";
-    container.appendChild(empty);
-    return;
+function setPublicMapStatus(message, state = "") {
+  const status = document.getElementById("public-map-status");
+  if (!status) return;
+  status.textContent = message || "";
+  status.className = `public-map-status${state ? ` ${state}` : ""}${message ? "" : " hidden"}`;
+}
+
+function extractCoordinatePairs(coordinates, pairs = []) {
+  if (!Array.isArray(coordinates)) return pairs;
+  if (typeof coordinates[0] === "number" && typeof coordinates[1] === "number") {
+    pairs.push(coordinates);
+    return pairs;
   }
-  visibleLocations.forEach((location) => {
-    const coords = PUBLIC_HOSPITAL_LOCATIONS[location.hospitalId];
-    const pin = document.createElement("button");
-    pin.className = "public-map-pin";
-    pin.type = "button";
-    pin.style.top = `${coords.top}%`;
-    pin.style.left = `${coords.left}%`;
-    pin.setAttribute("aria-label", `${location.hospitalName}, ${coords.city}: ${location.patients || 0} records`);
-    pin.innerHTML = `
-      <span></span>
-      <em>
-        <strong>${escapeHTML(location.hospitalName)}</strong>
-        <small>${escapeHTML(coords.city)} · ${Number(location.patients || 0)} records</small>
-      </em>
-    `;
-    container.appendChild(pin);
+  coordinates.forEach((item) => extractCoordinatePairs(item, pairs));
+  return pairs;
+}
+
+function buildIndiaProjection(geojson) {
+  const pairs = [];
+  (geojson.features || []).forEach((feature) => extractCoordinatePairs(feature.geometry?.coordinates, pairs));
+  const validPairs = pairs.filter(([lng, lat]) => Number.isFinite(lng) && Number.isFinite(lat));
+  if (!validPairs.length) throw new Error("India map coordinates are empty.");
+  const lngs = validPairs.map(([lng]) => lng);
+  const lats = validPairs.map(([, lat]) => lat);
+  const minLng = Math.min(...lngs);
+  const maxLng = Math.max(...lngs);
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const usableWidth = INDIA_MAP_VIEWBOX.width - INDIA_MAP_VIEWBOX.padding * 2;
+  const usableHeight = INDIA_MAP_VIEWBOX.height - INDIA_MAP_VIEWBOX.padding * 2;
+  const scale = Math.min(usableWidth / (maxLng - minLng), usableHeight / (maxLat - minLat));
+  const mapWidth = (maxLng - minLng) * scale;
+  const mapHeight = (maxLat - minLat) * scale;
+  const offsetX = (INDIA_MAP_VIEWBOX.width - mapWidth) / 2;
+  const offsetY = (INDIA_MAP_VIEWBOX.height - mapHeight) / 2;
+  return function project(lng, lat) {
+    return [
+      offsetX + (lng - minLng) * scale,
+      offsetY + (maxLat - lat) * scale
+    ];
+  };
+}
+
+function ringToPath(ring, project) {
+  return ring
+    .map(([lng, lat], index) => {
+      const [x, y] = project(lng, lat);
+      return `${index === 0 ? "M" : "L"}${x.toFixed(2)} ${y.toFixed(2)}`;
+    })
+    .join(" ") + " Z";
+}
+
+function geometryToPath(geometry, project) {
+  if (!geometry) return "";
+  if (geometry.type === "Polygon") {
+    return geometry.coordinates.map((ring) => ringToPath(ring, project)).join(" ");
+  }
+  if (geometry.type === "MultiPolygon") {
+    return geometry.coordinates.flatMap((polygon) => polygon.map((ring) => ringToPath(ring, project))).join(" ");
+  }
+  return "";
+}
+
+function isValidIndiaCoordinate(hospital) {
+  const lat = Number(hospital.latitude);
+  const lng = Number(hospital.longitude);
+  return Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= INDIA_COORDINATE_LIMITS.minLat &&
+    lat <= INDIA_COORDINATE_LIMITS.maxLat &&
+    lng >= INDIA_COORDINATE_LIMITS.minLng &&
+    lng <= INDIA_COORDINATE_LIMITS.maxLng;
+}
+
+async function loadPublicMapAssets() {
+  if (!publicMapState.loadPromise) {
+    publicMapState.loadPromise = Promise.all([
+      fetch("/maps/india_states.geojson", { cache: "force-cache" }).then((res) => {
+        if (!res.ok) throw new Error("India map dataset could not be loaded.");
+        return res.json();
+      }),
+      fetch("/maps/partner_hospitals.json", { cache: "no-store" }).then((res) => {
+        if (!res.ok) throw new Error("Partner hospital location data could not be loaded.");
+        return res.json();
+      })
+    ]).then(([geojson, hospitalsData]) => {
+      publicMapState.geojson = geojson;
+      publicMapState.hospitals = Array.isArray(hospitalsData) ? hospitalsData : [];
+      publicMapState.projection = buildIndiaProjection(geojson);
+      return publicMapState;
+    });
+  }
+  return publicMapState.loadPromise;
+}
+
+function renderIndiaStates(geojson, project) {
+  const statesLayer = document.getElementById("india-map-states");
+  if (!statesLayer || statesLayer.dataset.rendered === "true") return;
+  statesLayer.innerHTML = "";
+  (geojson.features || []).forEach((feature) => {
+    const pathData = geometryToPath(feature.geometry, project);
+    if (!pathData) return;
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", pathData);
+    path.setAttribute("class", "india-state");
+    path.setAttribute("aria-label", feature.properties?.NAME_1 || "Indian state or union territory");
+    statesLayer.appendChild(path);
   });
+  statesLayer.dataset.rendered = "true";
+}
+
+function getMapTooltipHtml(group) {
+  const cityState = [group.city, group.state].filter(Boolean).join(", ");
+  const hospitalsList = group.hospitals.map((hospital) =>
+    `<li><strong>${escapeHTML(hospital.name)}</strong><span>${Number(hospital.patients || 0)} records</span></li>`
+  ).join("");
+  return `
+    <div class="map-tip-title">${escapeHTML(cityState || "Partner location")}</div>
+    <ul>${hospitalsList}</ul>
+  `;
+}
+
+function showPublicMapTooltip(group, marker) {
+  const tooltip = document.getElementById("public-map-tooltip");
+  const wrap = document.getElementById("public-map-wrap");
+  if (!tooltip || !wrap || !marker) return;
+  tooltip.innerHTML = getMapTooltipHtml(group);
+  const markerRect = marker.getBoundingClientRect();
+  const wrapRect = wrap.getBoundingClientRect();
+  tooltip.style.left = `${markerRect.left - wrapRect.left + markerRect.width / 2}px`;
+  tooltip.style.top = `${markerRect.top - wrapRect.top}px`;
+  tooltip.classList.remove("hidden");
+}
+
+function hidePublicMapTooltip() {
+  document.getElementById("public-map-tooltip")?.classList.add("hidden");
+}
+
+function buildHospitalLocationGroups(apiLocations, configuredHospitals) {
+  const countsByHospital = new Map((apiLocations || []).map((location) => [location.hospitalId, Number(location.patients || 0)]));
+  const groups = new Map();
+  for (const hospital of configuredHospitals || []) {
+    if (!isValidIndiaCoordinate(hospital)) continue;
+    const key = `${Number(hospital.latitude).toFixed(4)},${Number(hospital.longitude).toFixed(4)}`;
+    const group = groups.get(key) || {
+      latitude: Number(hospital.latitude),
+      longitude: Number(hospital.longitude),
+      city: hospital.city,
+      state: hospital.state,
+      hospitals: []
+    };
+    group.hospitals.push({
+      id: hospital.id,
+      name: hospital.name,
+      patients: countsByHospital.get(hospital.id) || 0,
+      coordinateStatus: hospital.coordinateStatus || "unverified"
+    });
+    groups.set(key, group);
+  }
+  return Array.from(groups.values());
+}
+
+async function renderPublicMap(locations) {
+  const svg = document.getElementById("india-map");
+  const markerLayer = document.getElementById("india-map-markers");
+  if (!svg || !markerLayer) return;
+  setPublicMapStatus("Loading India map…");
+  markerLayer.innerHTML = "";
+  try {
+    const { geojson, hospitals, projection } = await loadPublicMapAssets();
+    renderIndiaStates(geojson, projection);
+    const groups = buildHospitalLocationGroups(locations, hospitals);
+    if (!groups.length) {
+      setPublicMapStatus("Partner locations will appear here after verified coordinates are added.", "empty");
+      return;
+    }
+    groups.forEach((group) => {
+      const [x, y] = projection(group.longitude, group.latitude);
+      const marker = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      marker.setAttribute("class", "india-hospital-marker");
+      marker.setAttribute("tabindex", "0");
+      marker.setAttribute("role", "button");
+      marker.setAttribute("aria-label", `${group.city}, ${group.state}: ${group.hospitals.length} partner hospital${group.hospitals.length === 1 ? "" : "s"}`);
+      marker.setAttribute("transform", `translate(${x.toFixed(2)} ${y.toFixed(2)})`);
+      marker.innerHTML = `
+        <circle class="marker-pulse" r="15"></circle>
+        <circle class="marker-dot" r="${group.hospitals.length > 1 ? 8 : 6}"></circle>
+        ${group.hospitals.length > 1 ? `<text class="marker-count" y="3">${group.hospitals.length}</text>` : ""}
+      `;
+      marker.addEventListener("mouseenter", () => showPublicMapTooltip(group, marker));
+      marker.addEventListener("mouseleave", hidePublicMapTooltip);
+      marker.addEventListener("focus", () => showPublicMapTooltip(group, marker));
+      marker.addEventListener("blur", hidePublicMapTooltip);
+      marker.addEventListener("click", () => showPublicMapTooltip(group, marker));
+      marker.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          showPublicMapTooltip(group, marker);
+        }
+        if (event.key === "Escape") hidePublicMapTooltip();
+      });
+      markerLayer.appendChild(marker);
+    });
+    setPublicMapStatus("");
+  } catch (err) {
+    setPublicMapStatus("Map data could not be loaded. Please refresh or contact the portal administrator.", "error");
+  }
 }
 
 async function loadPublicDashboard() {
@@ -206,25 +383,16 @@ async function loadPublicDashboard() {
     setPublicText("public-total-records", summary.totalRecords ?? 0);
     setPublicText("public-egfr-records", summary.egfrRecords ?? 0);
     setPublicText("public-kfre-records", summary.kfreRecords ?? 0);
-    setPublicText("public-status-label", "Live");
-    const sourceLabel = summary.source === "cloud-storage"
-      ? "Cloud Storage live"
-      : summary.source === "database"
-        ? "Database"
-        : "Local metadata";
-    setPublicText("public-updated-at", `${sourceLabel} · Updated ${formatDisplayDate(summary.updatedAt || new Date().toISOString())}`);
     renderPublicBars("public-study-bars", [
-      { label: "eGFR Study", value: summary.egfrRecords || 0 },
-      { label: "KFRE Study", value: summary.kfreRecords || 0 }
+      { label: "Ultrasound-based records", value: summary.egfrRecords || 0 },
+      { label: "Clinical risk records", value: summary.kfreRecords || 0 }
     ]);
     renderPublicBars("public-ckd-bars", (summary.ckdDistribution || []).map((row) => ({
-      label: row.label === "Yes" ? "CKD: Yes" : row.label === "No" ? "CKD: No" : row.label || "Unknown",
+      label: row.label === "Yes" ? "Patients with CKD" : row.label === "No" ? "Normal kidney status" : row.label || "Unknown status",
       value: row.value || row.count || 0
     })));
     renderPublicMap(summary.hospitalLocations || []);
   } catch (err) {
-    setPublicText("public-status-label", "Unavailable");
-    setPublicText("public-updated-at", "Could not load live public metrics.");
     renderPublicBars("public-study-bars", []);
     renderPublicBars("public-ckd-bars", []);
     renderPublicMap([]);

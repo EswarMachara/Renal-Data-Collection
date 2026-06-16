@@ -29,13 +29,8 @@
       <section class="public-hero">
         <div class="public-hero-copy">
           <span class="eyebrow">Collaborative renal research data collection</span>
-          <h1>Secure, anonymised kidney health data from partner hospitals.</h1>
+          <h1>Secure, Anonymized Kidney Health Data from Partner Hospitals</h1>
           <p>Track the program footprint, submitted records, and partner hospital participation across eGFR and KFRE study pathways.</p>
-        </div>
-        <div class="public-hero-card" aria-label="Portal summary">
-          <span>Portal Status</span>
-          <strong id="public-status-label">Live</strong>
-          <small id="public-updated-at">Loading latest metrics…</small>
         </div>
       </section>
 
@@ -43,37 +38,37 @@
         <article class="public-metric-card">
           <span>Partner Hospitals</span>
           <strong id="public-partner-hospitals">—</strong>
-          <small>Configured collaboration sites</small>
+          <small>Configured Collaboration sites</small>
         </article>
         <article class="public-metric-card">
           <span>Patient Records</span>
           <strong id="public-total-records">—</strong>
-          <small>Submitted across all studies</small>
+          <small>Submitted across all Studies</small>
         </article>
         <article class="public-metric-card">
           <span>eGFR Records</span>
           <strong id="public-egfr-records">—</strong>
-          <small>Ultrasound + clinical packages</small>
+          <small>Ultrasound + Clinical packages</small>
         </article>
         <article class="public-metric-card">
           <span>KFRE Records</span>
           <strong id="public-kfre-records">—</strong>
-          <small>Clinical risk data records</small>
+          <small>Clinical Risk Data Records</small>
         </article>
       </section>
 
       <section class="public-insights-grid">
         <article class="public-panel">
           <div class="public-panel-head">
-            <span class="eyebrow">Study mix</span>
-            <h2>Records by pathway</h2>
+            <span class="eyebrow">Study Overview</span>
+            <h2>Records collected</h2>
           </div>
           <div class="public-bars" id="public-study-bars" aria-live="polite"></div>
         </article>
         <article class="public-panel">
           <div class="public-panel-head">
-            <span class="eyebrow">Clinical profile</span>
-            <h2>CKD distribution</h2>
+            <span class="eyebrow">Kidney Health Profile</span>
+            <h2>Patient kidney status</h2>
           </div>
           <div class="public-bars" id="public-ckd-bars" aria-live="polite"></div>
         </article>
@@ -83,13 +78,15 @@
         <div class="public-panel-head">
           <span class="eyebrow">India footprint</span>
           <h2>Partner hospitals by location</h2>
-          <p>Hover over a point to view the collaboration site and current submission count.</p>
+          <p>Hover, tap, or focus a point to view the collaboration site and current submission count.</p>
         </div>
-        <div class="public-map-wrap">
-          <svg class="india-map" viewBox="0 0 420 500" role="img" aria-label="Stylised map of India">
-            <path d="M200 20C235 38 256 71 278 101C300 130 342 147 350 187C358 226 330 250 319 281C309 311 335 343 316 371C297 399 257 390 234 416C211 441 208 484 176 491C145 498 126 456 115 427C103 398 78 383 72 353C66 323 90 301 85 271C80 241 47 223 50 191C53 159 87 144 112 127C137 110 141 79 158 54C171 35 181 18 200 20Z" />
+        <div class="public-map-status" id="public-map-status" role="status" aria-live="polite">Loading India map…</div>
+        <div class="public-map-wrap" id="public-map-wrap">
+          <svg class="india-map" id="india-map" viewBox="0 0 640 720" role="img" aria-label="India map showing partner hospital locations">
+            <g id="india-map-states" class="india-map-states"></g>
+            <g id="india-map-markers" class="india-map-markers"></g>
           </svg>
-          <div class="public-map-pins" id="public-map-pins" aria-live="polite"></div>
+          <div class="public-map-tooltip hidden" id="public-map-tooltip" role="tooltip"></div>
         </div>
       </section>
     </main>
@@ -115,7 +112,7 @@
         <ul class="ls-features">
           <li><span class="ls-check">✓</span>Patient-linked intake</li>
           <li><span class="ls-check">✓</span>Structured clinical intake</li>
-          <li><span class="ls-check">✓</span>Anonymised ultrasound image uploads</li>
+          <li><span class="ls-check">✓</span>Anonymized ultrasound image uploads</li>
         </ul>
         <div class="ls-partners">
           <span class="ls-partners-label">Supported by</span>
@@ -536,7 +533,7 @@
           <li>
             <h3>What will happen to the results of the research study?</h3>
             <p>The findings of the study may be published or discussed in conferences or at scientific meetings. Only a collection of findings will be described in these results. Your private medical information will not be disclosed, and no specific participant will be identified. The results of the research study are used to improve early detection of chronic kidney disease.</p>
-            <p>About 20% of the total data, collected in an irreversible anonymised manner, will be part of benchmarking and open data initiative of TANUH for evaluation of AI algorithms.</p>
+            <p>About 20% of the total data, collected in an irreversible anonymized manner, will be part of benchmarking and open data initiative of TANUH for evaluation of AI algorithms.</p>
           </li>
           <li>
             <h3>Who is organising and funding the research?</h3>
@@ -609,7 +606,7 @@
             </li>
             <li>
               <h3>What will happen to the results of the research study?</h3>
-              <p>The study results will be used for research and academic purposes to improve prediction of kidney failure risk in Indian CKD patients. Results may be published or presented in summary form, without revealing any personal identity. About 20% of the total data, collected in an irreversible anonymised manner, will be part of benchmarking and open data initiative of TANUH for evaluation of AI algorithms.</p>
+              <p>The study results will be used for research and academic purposes to improve prediction of kidney failure risk in Indian CKD patients. Results may be published or presented in summary form, without revealing any personal identity. About 20% of the total data, collected in an irreversible anonymized manner, will be part of benchmarking and open data initiative of TANUH for evaluation of AI algorithms.</p>
             </li>
             <li>
               <h3>Who is organising and funding the research?</h3>
@@ -1163,7 +1160,7 @@
 
           <div class="form-section" id="package-upload-section">
             <div class="section-title"><span class="section-index">1.</span> Patient File Package <span class="required-marker">*</span> <span class="section-note">Upload a ZIP file or Select files, or choose a Folder</span></div>
-            <p class="section-description">Add all available anonymised ultrasound images and the clinical PDF together. If you select files or a folder, the portal will automatically create one ZIP package before submission. Maximum upload size: 250 MB per package or video.</p>
+            <p class="section-description">Add all available anonymized ultrasound images and the clinical PDF together. If you select files or a folder, the portal will automatically create one ZIP package before submission. Maximum upload size: 250 MB per package or video.</p>
             <div class="upload-grid">
               <div class="upload-tile wide package-upload-tile" id="patient-package-tile">
                 <span class="upload-title">UPLOAD PATIENT PACKAGE</span>

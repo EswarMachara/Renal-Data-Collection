@@ -3401,7 +3401,7 @@ th {
     min-height: 360px;
   }
 
-  .public-map-pin em {
+  .public-map-tooltip {
     max-width: 220px;
   }
 
@@ -3648,15 +3648,11 @@ th {
 }
 
 .public-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 0.36fr);
-  gap: clamp(1.4rem, 4vw, 2.4rem);
-  align-items: stretch;
+  display: block;
   margin-top: 1.35rem;
 }
 
 .public-hero-copy,
-.public-hero-card,
 .public-metric-card,
 .public-panel,
 .public-map-panel {
@@ -3671,7 +3667,7 @@ th {
 }
 
 .public-hero-copy h1 {
-  max-width: 820px;
+  max-width: 980px;
   margin: 1rem 0 1.15rem;
   color: #063f45;
   font-size: clamp(2.25rem, 4.8vw, 4.15rem);
@@ -3680,39 +3676,13 @@ th {
 }
 
 .public-hero-copy p {
-  max-width: 690px;
+  max-width: 900px;
   margin: 0;
   color: #526376;
   font-size: 1.08rem;
   line-height: 1.82;
 }
 
-.public-hero-card {
-  position: relative;
-  border-radius: 28px;
-  padding: 1.9rem;
-  display: grid;
-  align-content: end;
-  gap: 0.7rem;
-  overflow: hidden;
-}
-
-.public-hero-card::before {
-  content: "";
-  position: absolute;
-  inset: 1.2rem;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(15, 154, 135, 0.18), transparent 66%);
-}
-
-.public-hero-card span,
-.public-hero-card strong,
-.public-hero-card small {
-  position: relative;
-  z-index: 1;
-}
-
-.public-hero-card span,
 .public-metric-card span {
   color: #0a6b6f;
   font-size: 0.78rem;
@@ -3721,13 +3691,6 @@ th {
   text-transform: uppercase;
 }
 
-.public-hero-card strong {
-  color: #083f45;
-  font-size: 2.35rem;
-  line-height: 1;
-}
-
-.public-hero-card small,
 .public-metric-card small,
 .public-panel-head p {
   color: #526376;
@@ -3824,6 +3787,27 @@ th {
   margin-top: clamp(1rem, 2.4vw, 1.5rem);
 }
 
+.public-map-status {
+  border: 1px solid rgba(14, 106, 111, 0.14);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.78);
+  color: #0a6b6f;
+  font-size: 0.88rem;
+  font-weight: 700;
+  margin-top: 1rem;
+  padding: 0.72rem 0.9rem;
+}
+
+.public-map-status.empty {
+  color: #526376;
+}
+
+.public-map-status.error {
+  border-color: rgba(185, 28, 28, 0.22);
+  background: #fff7f7;
+  color: #b91c1c;
+}
+
 .public-map-wrap {
   position: relative;
   min-height: 560px;
@@ -3837,75 +3821,105 @@ th {
 
 .india-map {
   position: absolute;
-  inset: 8% 0 5%;
-  width: min(430px, 86%);
-  height: auto;
+  inset: 4% 0;
+  width: min(620px, 95%);
+  height: 92%;
   margin: auto;
-  fill: rgba(15, 154, 135, 0.1);
-  stroke: rgba(14, 106, 111, 0.38);
-  stroke-width: 2;
   filter: drop-shadow(0 28px 42px rgba(15, 23, 42, 0.12));
 }
 
-.public-map-pins {
-  position: absolute;
-  inset: 0;
+.india-state {
+  fill: rgba(15, 154, 135, 0.12);
+  stroke: rgba(14, 106, 111, 0.42);
+  stroke-linejoin: round;
+  stroke-width: 0.9;
+  vector-effect: non-scaling-stroke;
 }
 
-.public-map-pin {
-  position: absolute;
-  border: 0;
-  background: transparent;
+.india-state:hover {
+  fill: rgba(15, 154, 135, 0.18);
+}
+
+.india-hospital-marker {
   cursor: pointer;
-  padding: 0;
-  transform: translate(-50%, -50%);
+  outline: none;
 }
 
-.public-map-pin > span {
-  display: block;
-  width: 16px;
-  height: 16px;
-  border: 3px solid #ffffff;
-  border-radius: 50%;
-  background: #0f9a87;
-  box-shadow: 0 0 0 8px rgba(15, 154, 135, 0.18), 0 10px 24px rgba(15, 23, 42, 0.18);
+.india-hospital-marker .marker-pulse {
+  fill: rgba(15, 154, 135, 0.18);
+  stroke: rgba(15, 154, 135, 0.26);
+  stroke-width: 1.2;
+  transform-origin: center;
 }
 
-.public-map-pin em {
+.india-hospital-marker .marker-dot {
+  fill: #0f9a87;
+  stroke: #ffffff;
+  stroke-width: 3;
+  filter: drop-shadow(0 6px 10px rgba(15, 23, 42, 0.22));
+}
+
+.india-hospital-marker .marker-count {
+  fill: #ffffff;
+  font-size: 8px;
+  font-weight: 800;
+  pointer-events: none;
+  text-anchor: middle;
+}
+
+.india-hospital-marker:hover .marker-dot,
+.india-hospital-marker:focus-visible .marker-dot {
+  fill: #0a6b6f;
+}
+
+.india-hospital-marker:focus-visible .marker-pulse {
+  stroke: #083f45;
+  stroke-width: 2;
+}
+
+.public-map-tooltip {
   position: absolute;
-  left: 50%;
-  bottom: calc(100% + 14px);
-  width: max-content;
-  max-width: 260px;
+  z-index: 5;
+  min-width: 220px;
+  max-width: min(320px, calc(100% - 2rem));
   border: 1px solid rgba(14, 106, 111, 0.16);
   border-radius: 16px;
   background: #ffffff;
   box-shadow: 0 18px 36px rgba(15, 23, 42, 0.16);
   color: #102a43;
-  display: grid;
-  gap: 0.15rem;
-  font-style: normal;
-  opacity: 0;
-  padding: 0.8rem 0.9rem;
+  padding: 0.9rem;
   pointer-events: none;
-  transform: translate(-50%, 10px);
-  transition: opacity 0.18s ease, transform 0.18s ease;
+  transform: translate(-50%, calc(-100% - 18px));
 }
 
-.public-map-pin:hover em,
-.public-map-pin:focus-visible em {
-  opacity: 1;
-  transform: translate(-50%, 0);
-}
-
-.public-map-pin em strong {
+.map-tip-title {
   color: #083f45;
-  font-size: 0.88rem;
+  font-size: 0.9rem;
+  font-weight: 800;
+  margin-bottom: 0.55rem;
 }
 
-.public-map-pin em small {
+.public-map-tooltip ul {
+  display: grid;
+  gap: 0.52rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.public-map-tooltip li {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.public-map-tooltip strong {
+  color: #102a43;
+  font-size: 0.84rem;
+}
+
+.public-map-tooltip span {
   color: #526376;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
 }
 
 .public-map-empty {

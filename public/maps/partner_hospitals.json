@@ -1,0 +1,65 @@
+[
+  {
+    "id": "SCMC-RMN-KA",
+    "name": "Sri Chamundeshwari Medical College, Ramanagara Dist, Karnataka",
+    "city": "Ramanagara",
+    "state": "Karnataka",
+    "latitude": 12.7208,
+    "longitude": 77.2806,
+    "coordinateStatus": "city-level; verify exact hospital coordinates before production"
+  },
+  {
+    "id": "SH-SLM-TN",
+    "name": "Shanmuga Hospital, Salem, Tamil Nadu",
+    "city": "Salem",
+    "state": "Tamil Nadu",
+    "latitude": 11.6643,
+    "longitude": 78.1460,
+    "coordinateStatus": "city-level; verify exact hospital coordinates before production"
+  },
+  {
+    "id": "JSS-MYS-KA",
+    "name": "JSS Medical College, Mysore, Karnataka",
+    "city": "Mysore",
+    "state": "Karnataka",
+    "latitude": 12.2958,
+    "longitude": 76.6394,
+    "coordinateStatus": "city-level; verify exact hospital coordinates before production"
+  },
+  {
+    "id": "NH-BLR-KA",
+    "name": "Nira Health Care Private Limited, Bangalore, Karnataka",
+    "city": "Bangalore",
+    "state": "Karnataka",
+    "latitude": 12.9716,
+    "longitude": 77.5946,
+    "coordinateStatus": "city-level; verify exact hospital coordinates before production"
+  },
+  {
+    "id": "MIL-NDL-DL",
+    "name": "Mahajan Imaging & Labs, New Delhi",
+    "city": "New Delhi",
+    "state": "Delhi",
+    "latitude": 28.6139,
+    "longitude": 77.2090,
+    "coordinateStatus": "city-level; verify exact hospital coordinates before production"
+  },
+  {
+    "id": "GEMS-SKLM",
+    "name": "GEMS-SKLM",
+    "city": "Srikakulam",
+    "state": "Andhra Pradesh",
+    "latitude": 18.2949,
+    "longitude": 83.8938,
+    "coordinateStatus": "city-level; verify exact hospital coordinates before production"
+  },
+  {
+    "id": "AIIMS-NGP",
+    "name": "AIIMS, Nagpur",
+    "city": "Nagpur",
+    "state": "Maharashtra",
+    "latitude": 21.1458,
+    "longitude": 79.0882,
+    "coordinateStatus": "city-level; verify exact hospital coordinates before production"
+  }
+]
