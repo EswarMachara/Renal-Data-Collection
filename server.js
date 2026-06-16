@@ -41,6 +41,7 @@ const GCS_BUCKET = process.env.GCS_BUCKET || "";
 const MAX_BODY_BYTES = Number(process.env.MAX_BODY_BYTES || 300 * 1024 * 1024);
 const MAX_CHUNK_BYTES = Number(process.env.MAX_CHUNK_BYTES || 8 * 1024 * 1024);
 const UPLOAD_CHUNK_BYTES = Math.min(Number(process.env.UPLOAD_CHUNK_BYTES || 5 * 1024 * 1024), MAX_CHUNK_BYTES);
+const MAX_UPLOAD_FILE_BYTES = Number(process.env.MAX_UPLOAD_FILE_BYTES || 250 * 1024 * 1024);
 const UPLOAD_SESSION_DIR = path.join(DATA_DIR, "upload-sessions");
 const PARTICIPANT_MAP_FILE = path.join(DATA_DIR, "private", "participant-mapping.json");
 const RAW_DATABASE_URL = process.env.DATABASE_URL || "";
@@ -70,13 +71,15 @@ const hospitals = [
   { id: "NH-BLR-KA",   name: "Nira Health Care Private Limited, Bangalore, Karnataka" },
   { id: "MIL-NDL-DL",  name: "Mahajan Imaging & Labs, New Delhi" },
   { id: "GEMS-SKLM",   name: "GEMS-SKLM" },
+  { id: "AIIMS-NGP",   name: "AIIMS, Nagpur" },
   { id: "HOSP-DEMO",   name: "HOSP-DEMO" }
 ];
 const adminIntakeSource = { id: "TANUH-ADMIN", name: "Admin" };
 const demoHospitalCredential = { id: "HOSP-DEMO", password: "1234" };
 const seededHospitalCredentials = [
   demoHospitalCredential,
-  { id: "GEMS-SKLM", password: "GEMS_Sklm@2026" }
+  { id: "GEMS-SKLM", password: "GEMS_Sklm@2026" },
+  { id: "AIIMS-NGP", password: "AIIMS_NagpuR@2026" }
 ];
 
 function findIntakeSource(sourceId) {
@@ -471,14 +474,28 @@ function verifyEnvPassword(username, password) {
 
 // ─── Rate limiter ─────────────────────────────────────────────────────────────
 
-const loginAttempts = new Map(); // ip → { count, resetAt }
+const loginAttempts = new Map(); // key → { count, resetAt }
 const memoryConsents = new Map(); // consentId → { uhid, hospitalId, userId, consentVersion, createdAt }
 
-function checkRateLimit(ip) {
+function getClientIp(req) {
+  const forwardedFor = req.headers["x-forwarded-for"];
+  if (typeof forwardedFor === "string" && forwardedFor.trim()) {
+    return forwardedFor.split(",")[0].trim();
+  }
+  const realIp = req.headers["x-real-ip"];
+  if (typeof realIp === "string" && realIp.trim()) return realIp.trim();
+  return req.socket?.remoteAddress || "unknown";
+}
+
+function getLoginRateLimitKey(req, username = "") {
+  return `${getClientIp(req)}:${String(username || "").trim().toLowerCase() || "unknown"}`;
+}
+
+function checkRateLimit(key) {
   const now   = Date.now();
-  const entry = loginAttempts.get(ip);
+  const entry = loginAttempts.get(key);
   if (!entry || now > entry.resetAt) {
-    loginAttempts.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    loginAttempts.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
     return true;
   }
   if (entry.count >= RATE_LIMIT_MAX) return false;
@@ -486,8 +503,8 @@ function checkRateLimit(ip) {
   return true;
 }
 
-function resetRateLimit(ip) {
-  loginAttempts.delete(ip);
+function resetRateLimit(key) {
+  loginAttempts.delete(key);
 }
 
 const actionAttempts = new Map(); // key: `${userId}:${action}` → { count, resetAt }
@@ -1402,9 +1419,13 @@ function normalizeFiles(files, { requireContent = true } = {}) {
       try { contentSize = fs.statSync(file.sourcePath).size; } catch { contentSize = 0; }
     }
     if (!Number.isFinite(size) || size < 0) throw new Error(`${name} has an invalid file size.`);
+    const effectiveSize = size || contentSize;
+    if (effectiveSize > MAX_UPLOAD_FILE_BYTES) {
+      throw new Error(`${name} exceeds the maximum upload size of ${Math.round(MAX_UPLOAD_FILE_BYTES / 1024 / 1024)} MB.`);
+    }
     if (requireContent && contentSize <= 0) throw new Error(`${name} is empty or invalid.`);
     if (!requireContent && size <= 0) throw new Error(`${name} is empty or invalid.`);
-    return { ...file, fieldName, name, type: cleanText(file.type, 120) || "application/octet-stream", size: size || contentSize };
+    return { ...file, fieldName, name, type: cleanText(file.type, 120) || "application/octet-stream", size: effectiveSize };
   });
 }
 
@@ -1754,12 +1775,7 @@ function handleGetHospitals(req, res) {
 
 // POST /api/auth/login
 async function handleLogin(req, res) {
-  const ip = req.socket?.remoteAddress || "unknown";
-
-  if (!checkRateLimit(ip)) {
-    sendJson(res, 429, { ok: false, error: "Too many login attempts. Please wait 15 minutes and try again." });
-    return;
-  }
+  const ip = getClientIp(req);
 
   let body;
   try {
@@ -1771,6 +1787,12 @@ async function handleLogin(req, res) {
 
   const username = cleanText(body.username, 80);
   const password = cleanText(body.password, 200);
+  const loginRateLimitKey = getLoginRateLimitKey(req, username);
+
+  if (!checkRateLimit(loginRateLimitKey)) {
+    sendJson(res, 429, { ok: false, error: "Too many login attempts. Please wait 15 minutes and try again." });
+    return;
+  }
 
   if (!username || !password) {
     sendJson(res, 400, { ok: false, error: "Username and password are required." });
@@ -1814,7 +1836,7 @@ async function handleLogin(req, res) {
     return;
   }
 
-  resetRateLimit(ip);
+  resetRateLimit(loginRateLimitKey);
 
   let sessionResult;
   try {

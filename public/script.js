@@ -58,6 +58,8 @@ import {
 } from "./modules/admin.js";
 
 const RESUMABLE_UPLOAD_RETRIES = 3;
+const MAX_UPLOAD_FILE_BYTES = 250 * 1024 * 1024;
+const MAX_UPLOAD_FILE_LABEL = formatBytes(MAX_UPLOAD_FILE_BYTES);
 
 const ADMIN_INTAKE_SOURCE = { id: "TANUH-ADMIN", name: "Admin" };
 
@@ -214,7 +216,7 @@ function applyStudyFlowUI() {
   consentFlowPanels.forEach((panel) => {
     panel.classList.toggle("hidden", panel.dataset.consentFlow !== state.studyFlow);
   });
-  landingStudyEyebrow.textContent = isKfre ? "Kidney Failure Risk Equation Study" : "AI-Based eGFR Research Registry";
+  landingStudyEyebrow.textContent = isKfre ? "Kidney Failure Risk Equation Study" : "AI-Based eGFR Research Study";
   landingStudyDescription.textContent = isKfre
     ? "Collect patient-linked kidney-related clinical reports for KFRE recalibration and validation in a guided workflow."
     : "Collect patient-linked kidney ultrasound data, clinical reports, and intake details in one guided workflow.";
@@ -1127,6 +1129,18 @@ function packageZipName() {
   return `${patientRef || "patient-package"}.zip`;
 }
 
+function getTotalFileSize(files) {
+  return Array.from(files || []).reduce((sum, file) => sum + Number(file.size || 0), 0);
+}
+
+function isOversizedUpload(file) {
+  return file && Number(file.size || 0) > MAX_UPLOAD_FILE_BYTES;
+}
+
+function getOversizedUploadMessage(file, label = "Selected upload") {
+  return `${label} is ${formatBytes(file.size)}. Maximum allowed size is ${MAX_UPLOAD_FILE_LABEL}.`;
+}
+
 function renderPatientPackagePreview({ status, files = [], packageFile = null, loading = false }) {
   if (!patientPackagePreview || !patientPackageTile) return;
   patientPackagePreview.innerHTML = "";
@@ -1135,7 +1149,7 @@ function renderPatientPackagePreview({ status, files = [], packageFile = null, l
   patientPackageTile.classList.toggle("tile-has-file", Boolean(packageFile));
 
   if (!packageFile && !files.length) {
-    patientPackagePreview.textContent = "No file selected";
+    patientPackagePreview.textContent = status || "No file selected";
     return;
   }
 
@@ -1162,6 +1176,7 @@ function renderPatientPackagePreview({ status, files = [], packageFile = null, l
 
 async function preparePatientPackage(files) {
   const selectedFiles = Array.from(files || []).filter((file) => file.size >= 0);
+  const totalSelectedBytes = getTotalFileSize(selectedFiles);
   preparedPatientPackageFile = null;
   patientPackageSourceFiles = selectedFiles;
   patientPackageSourceKind = getPackageSourceKind(selectedFiles);
@@ -1169,6 +1184,17 @@ async function preparePatientPackage(files) {
 
   if (!selectedFiles.length) {
     renderPatientPackagePreview({ status: "", files: [] });
+    return;
+  }
+
+  if (totalSelectedBytes > MAX_UPLOAD_FILE_BYTES) {
+    const message = `Selected patient package is ${formatBytes(totalSelectedBytes)}. Maximum allowed size is ${MAX_UPLOAD_FILE_LABEL}.`;
+    patientPackageSourceFiles = [];
+    patientPackageSourceKind = null;
+    if (patientPackageFileInput) patientPackageFileInput.value = "";
+    if (patientPackageFolderInput) patientPackageFolderInput.value = "";
+    renderPatientPackagePreview({ status: message, files: [] });
+    showToast(message);
     return;
   }
 
@@ -1185,11 +1211,14 @@ async function preparePatientPackage(files) {
     preparedPatientPackageFile = patientPackageSourceKind === "zip"
       ? (selectedFiles[0].type ? selectedFiles[0] : new File([selectedFiles[0]], selectedFiles[0].name, { type: "application/zip", lastModified: selectedFiles[0].lastModified }))
       : await createZipPackage(selectedFiles, packageZipName());
+    if (isOversizedUpload(preparedPatientPackageFile)) {
+      throw new Error(getOversizedUploadMessage(preparedPatientPackageFile, "Prepared patient package"));
+    }
     renderPatientPackagePreview({ status, files: selectedFiles, packageFile: preparedPatientPackageFile });
     showToast(`✓ ${status}`);
   } catch (err) {
     preparedPatientPackageFile = null;
-    renderPatientPackagePreview({ status: "Could not prepare ZIP package. Please try again.", files: selectedFiles });
+    renderPatientPackagePreview({ status: err.message || "Could not prepare ZIP package. Please try again.", files: selectedFiles });
     showToast(err.message || "Could not prepare ZIP package. Please try again.");
   } finally {
     patientPackageIsPreparing = false;
@@ -1208,6 +1237,14 @@ function renderFilePreview(input, fieldName) {
 
   if (!file) {
     preview.textContent = "No file selected";
+    return;
+  }
+
+  if (isOversizedUpload(file)) {
+    const message = getOversizedUploadMessage(file, file.name || "Selected file");
+    input.value = "";
+    preview.textContent = message;
+    showToast(message);
     return;
   }
 
@@ -2633,6 +2670,12 @@ function buildSubmissionFromForm() {
 
   if (!isKfre && ultrasoundVideoFile) {
     uploadFiles.push({ fieldName: "ultrasoundVideo", file: ultrasoundVideoFile });
+  }
+
+  const oversizedUpload = uploadFiles.find((upload) => isOversizedUpload(upload.file));
+  if (oversizedUpload) {
+    showToast(getOversizedUploadMessage(oversizedUpload.file, getUploadLabel(oversizedUpload.fieldName)));
+    return null;
   }
 
   const totalBytes = uploadFiles.reduce((sum, upload) => sum + upload.file.size, 0);
