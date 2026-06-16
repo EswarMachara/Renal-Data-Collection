@@ -61,6 +61,7 @@ import {
 const RESUMABLE_UPLOAD_RETRIES = 3;
 const MAX_UPLOAD_FILE_BYTES = 250 * 1024 * 1024;
 const MAX_UPLOAD_FILE_LABEL = formatBytes(MAX_UPLOAD_FILE_BYTES);
+const PUBLIC_DASHBOARD_CACHE_KEY = "tanuh-public-dashboard-summary-v1";
 
 const ADMIN_INTAKE_SOURCE = { id: "TANUH-ADMIN", name: "Admin" };
 const INDIA_COORDINATE_LIMITS = { minLat: 6, maxLat: 38, minLng: 68, maxLng: 98 };
@@ -329,29 +330,69 @@ async function renderPublicMap(locations) {
   }
 }
 
+function getCachedPublicDashboardSummary() {
+  try {
+    const cached = JSON.parse(localStorage.getItem(PUBLIC_DASHBOARD_CACHE_KEY) || "null");
+    return cached && cached.summary ? cached.summary : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveCachedPublicDashboardSummary(summary) {
+  try {
+    localStorage.setItem(PUBLIC_DASHBOARD_CACHE_KEY, JSON.stringify({
+      cachedAt: new Date().toISOString(),
+      summary
+    }));
+  } catch { /* localStorage can be unavailable in private browsing */ }
+}
+
+function applyPublicDashboardSummary(summary) {
+  setPublicText("public-partner-hospitals", summary.partnerHospitals ?? 0);
+  setPublicText("public-total-records", summary.totalRecords ?? 0);
+  setPublicText("public-egfr-records", summary.egfrRecords ?? 0);
+  setPublicText("public-kfre-records", summary.kfreRecords ?? 0);
+  renderPublicBars("public-study-bars", [
+    { label: "Ultrasound-based records", value: summary.egfrRecords || 0 },
+    { label: "Clinical risk records", value: summary.kfreRecords || 0 }
+  ]);
+  renderPublicBars("public-ckd-bars", (summary.ckdDistribution || []).map((row) => ({
+    label: row.label === "Yes" ? "Patients with CKD" : row.label === "No" ? "Normal kidney status" : row.label || "Unknown status",
+    value: row.value || row.count || 0
+  })));
+  renderPublicMap(summary.hospitalLocations || []);
+}
+
 async function loadPublicDashboard() {
+  const cachedSummary = getCachedPublicDashboardSummary();
+  if (cachedSummary) {
+    applyPublicDashboardSummary(cachedSummary);
+  } else {
+    renderPublicMap([]);
+  }
+
   try {
     const response = await fetch("/api/public/dashboard", { cache: "no-store" });
     const result = await response.json();
     if (!response.ok || !result.ok) throw new Error(result.error || "Unable to load public dashboard");
     const summary = result.summary || {};
-    setPublicText("public-partner-hospitals", summary.partnerHospitals ?? 0);
-    setPublicText("public-total-records", summary.totalRecords ?? 0);
-    setPublicText("public-egfr-records", summary.egfrRecords ?? 0);
-    setPublicText("public-kfre-records", summary.kfreRecords ?? 0);
-    renderPublicBars("public-study-bars", [
-      { label: "Ultrasound-based records", value: summary.egfrRecords || 0 },
-      { label: "Clinical risk records", value: summary.kfreRecords || 0 }
-    ]);
-    renderPublicBars("public-ckd-bars", (summary.ckdDistribution || []).map((row) => ({
-      label: row.label === "Yes" ? "Patients with CKD" : row.label === "No" ? "Normal kidney status" : row.label || "Unknown status",
-      value: row.value || row.count || 0
-    })));
-    renderPublicMap(summary.hospitalLocations || []);
+    const isStaticFallback = summary.source === "static" && result.cache?.refreshing;
+    if (!isStaticFallback || !cachedSummary) {
+      applyPublicDashboardSummary(summary);
+    }
+    if (!isStaticFallback) {
+      saveCachedPublicDashboardSummary(summary);
+    }
+    if (result.cache?.refreshing) {
+      window.setTimeout(loadPublicDashboard, 2500);
+    }
   } catch (err) {
-    renderPublicBars("public-study-bars", []);
-    renderPublicBars("public-ckd-bars", []);
-    renderPublicMap([]);
+    if (!cachedSummary) {
+      renderPublicBars("public-study-bars", []);
+      renderPublicBars("public-ckd-bars", []);
+      renderPublicMap([]);
+    }
   }
 }
 

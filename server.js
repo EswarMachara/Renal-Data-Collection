@@ -46,6 +46,9 @@ const SUBMISSION_SCHEMA_VERSION = 2;
 const STORAGE_SCHEMA_VERSION = 2;
 const UPLOAD_SESSION_DIR = path.join(DATA_DIR, "upload-sessions");
 const PARTICIPANT_MAP_FILE = path.join(DATA_DIR, "private", "participant-mapping.json");
+const PUBLIC_DASHBOARD_CACHE_FILE = path.join(DATA_DIR, "private", "public-dashboard-cache.json");
+const PUBLIC_DASHBOARD_CACHE_TTL_MS = Number(process.env.PUBLIC_DASHBOARD_CACHE_TTL_MS || 2 * 60 * 1000);
+const PUBLIC_DASHBOARD_CACHE_STALE_MS = Number(process.env.PUBLIC_DASHBOARD_CACHE_STALE_MS || 24 * 60 * 60 * 1000);
 const RAW_DATABASE_URL = process.env.DATABASE_URL || "";
 const DB_HOST = process.env.DB_HOST || "127.0.0.1";
 const DB_PORT = Number(process.env.DB_PORT || 5432);
@@ -2795,6 +2798,7 @@ async function handleSubmission(req, res) {
 
     const normalizedSubmissions = submissions.map((item) => normalizeSubmission(item));
     const result = await finalizeSubmissionBatch({ normalizedSubmissions, session, req });
+    refreshPublicDashboardCache().catch(() => {});
     sendJson(res, 200, result);
   } catch (err) {
     await logAudit({
@@ -3690,6 +3694,123 @@ function buildPublicStorageSummaryFromGcs(paths) {
   };
 }
 
+const publicDashboardCache = {
+  loaded: false,
+  summary: null,
+  cachedAt: 0,
+  expiresAt: 0,
+  refreshPromise: null,
+  lastError: ""
+};
+
+function getPublicDashboardFallbackSummary() {
+  const hospitalLocations = hospitals
+    .filter((hospital) => !publicDashboardExcludedHospitals.has(hospital.id))
+    .map((hospital) => ({
+      hospitalId: hospital.id,
+      hospitalName: hospital.name,
+      patients: 0,
+      egfrPatients: 0,
+      kfrePatients: 0
+    }))
+    .sort((a, b) => a.hospitalName.localeCompare(b.hospitalName));
+
+  return {
+    source: "static",
+    partnerHospitals: hospitalLocations.length,
+    totalRecords: 0,
+    egfrRecords: 0,
+    kfreRecords: 0,
+    ultrasoundVideos: 0,
+    reviewedRecords: 0,
+    ckdDistribution: [],
+    hospitalLocations,
+    updatedAt: new Date().toISOString()
+  };
+}
+
+function loadPublicDashboardCacheFromDisk() {
+  if (publicDashboardCache.loaded) return;
+  publicDashboardCache.loaded = true;
+  try {
+    const payload = JSON.parse(fs.readFileSync(PUBLIC_DASHBOARD_CACHE_FILE, "utf8"));
+    if (!payload || !payload.summary || !payload.cachedAt) return;
+    const cachedAt = Number(payload.cachedAt);
+    if (!Number.isFinite(cachedAt) || Date.now() - cachedAt > PUBLIC_DASHBOARD_CACHE_STALE_MS) return;
+    publicDashboardCache.summary = payload.summary;
+    publicDashboardCache.cachedAt = cachedAt;
+    publicDashboardCache.expiresAt = cachedAt + PUBLIC_DASHBOARD_CACHE_TTL_MS;
+  } catch { /* cache file may not exist yet */ }
+}
+
+function savePublicDashboardCacheToDisk() {
+  if (!publicDashboardCache.summary) return;
+  fs.promises.mkdir(path.dirname(PUBLIC_DASHBOARD_CACHE_FILE), { recursive: true, mode: 0o700 })
+    .then(() => fs.promises.writeFile(
+      PUBLIC_DASHBOARD_CACHE_FILE,
+      JSON.stringify({
+        cachedAt: publicDashboardCache.cachedAt,
+        summary: publicDashboardCache.summary
+      }, null, 2)
+    ))
+    .catch((err) => {
+      publicDashboardCache.lastError = err.message;
+    });
+}
+
+function setPublicDashboardCache(summary) {
+  const now = Date.now();
+  publicDashboardCache.summary = summary;
+  publicDashboardCache.cachedAt = now;
+  publicDashboardCache.expiresAt = now + PUBLIC_DASHBOARD_CACHE_TTL_MS;
+  publicDashboardCache.lastError = "";
+  savePublicDashboardCacheToDisk();
+}
+
+function refreshPublicDashboardCache() {
+  loadPublicDashboardCacheFromDisk();
+  if (publicDashboardCache.refreshPromise) return publicDashboardCache.refreshPromise;
+  publicDashboardCache.refreshPromise = getPublicDashboardSummary()
+    .then((summary) => {
+      setPublicDashboardCache(summary);
+      return summary;
+    })
+    .catch((err) => {
+      publicDashboardCache.lastError = err.message;
+      if (!publicDashboardCache.summary) throw err;
+      return publicDashboardCache.summary;
+    })
+    .finally(() => {
+      publicDashboardCache.refreshPromise = null;
+    });
+  return publicDashboardCache.refreshPromise;
+}
+
+async function getFastPublicDashboardSummary() {
+  loadPublicDashboardCacheFromDisk();
+  const now = Date.now();
+
+  if (publicDashboardCache.summary && now <= publicDashboardCache.expiresAt) {
+    return { summary: publicDashboardCache.summary, stale: false, refreshing: false };
+  }
+
+  const refreshPromise = refreshPublicDashboardCache();
+  if (publicDashboardCache.summary) {
+    return { summary: publicDashboardCache.summary, stale: true, refreshing: true };
+  }
+
+  await Promise.race([
+    refreshPromise.catch(() => null),
+    new Promise((resolve) => setTimeout(resolve, 75))
+  ]);
+
+  if (publicDashboardCache.summary) {
+    return { summary: publicDashboardCache.summary, stale: false, refreshing: false };
+  }
+
+  return { summary: getPublicDashboardFallbackSummary(), stale: true, refreshing: true };
+}
+
 async function getCkdDistributionForPublicRecordIds(recordIds) {
   if (!dbPool || !dbReady || !recordIds.length) return [];
   const ckdStatusExpr = "COALESCE(NULLIF(known_ckd, ''), CASE WHEN ckd_stage = 'Normal' THEN 'No' ELSE 'Yes' END)";
@@ -3835,8 +3956,8 @@ async function getPublicDashboardSummary() {
 // GET /api/public/dashboard — aggregate-only metrics for unauthenticated landing page
 async function handlePublicDashboard(req, res) {
   try {
-    const summary = await getPublicDashboardSummary();
-    sendJson(res, 200, { ok: true, summary });
+    const { summary, stale, refreshing } = await getFastPublicDashboardSummary();
+    sendJson(res, 200, { ok: true, summary, cache: { stale, refreshing } });
   } catch (err) {
     sendJson(res, 500, { ok: false, error: err.message });
   }
@@ -4034,8 +4155,13 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
+setInterval(() => {
+  refreshPublicDashboardCache().catch(() => {});
+}, PUBLIC_DASHBOARD_CACHE_TTL_MS);
+
 initializeDatabase()
   .then(() => {
+    loadPublicDashboardCacheFromDisk();
     server.listen(PORT, HOST, () => {
       console.log(`TANUH Renal Screening Portal running at http://${HOST}:${PORT}`);
       console.log(`PostgreSQL metadata storage: ${dbReady ? "enabled" : "disabled"}`);
@@ -4043,6 +4169,7 @@ initializeDatabase()
       if (authConfigured && envCredentials.size > 0) {
         console.log(`Env-var credentials active for: ${[...envCredentials.keys()].join(", ")}`);
       }
+      refreshPublicDashboardCache().catch(() => {});
     });
   })
   .catch((err) => {
