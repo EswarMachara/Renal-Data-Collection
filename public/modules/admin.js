@@ -568,6 +568,7 @@ function buildSubmissionReviewRows(submission) {
     rows.push(["Kidney Failure Event", outcomes.kidneyFailureEvent || "—"]);
     rows.push(["KFRE eGFR", labs.egfr || "—"]);
     rows.push(["KFRE Urine ACR", labs.acr || "—"]);
+    rows.push(["KFRE Urine PCR", labs.pcr || "—"]);
   } else {
     rows.push(["Image Adequate", findings.imageQuality?.adequateForAnalysis || "—"]);
     rows.push(["Bounding Points", findings.annotationDetails?.kidneyBoundingPointsDetected || "—"]);

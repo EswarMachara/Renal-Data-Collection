@@ -454,6 +454,7 @@ const kfreLabAgeInput = document.getElementById("kfre-lab-age");
 const kfreLabSexInput = document.getElementById("kfre-lab-sex");
 const kfreEgfrInput = document.getElementById("kfre-egfr");
 const kfreAcrInput = document.getElementById("kfre-acr");
+const kfrePcrInput = document.getElementById("kfre-pcr");
 const kfreSerumCalciumInput = document.getElementById("kfre-serum-calcium");
 const kfreSerumPhosphateInput = document.getElementById("kfre-serum-phosphate");
 const kfreSerumBicarbonateInput = document.getElementById("kfre-serum-bicarbonate");
@@ -1990,7 +1991,8 @@ function updateKfreDocumentAvailability({ clearHidden = false } = {}) {
   if (kfreLabAgeInput) kfreLabAgeInput.required = requireLabs;
   if (kfreLabSexInput) kfreLabSexInput.required = requireLabs;
   if (kfreEgfrInput) kfreEgfrInput.required = requireLabs;
-  if (kfreAcrInput) kfreAcrInput.required = requireLabs;
+  if (kfreAcrInput) kfreAcrInput.required = false;
+  if (kfrePcrInput) kfrePcrInput.required = requireLabs;
   [kfreSerumCalciumInput, kfreSerumPhosphateInput, kfreSerumBicarbonateInput, kfreSerumAlbuminInput]
     .filter(Boolean)
     .forEach((input) => { input.required = false; });
@@ -2417,6 +2419,7 @@ function collectKfreLabValues() {
     sex: kfreLabSexInput?.value || "",
     egfr: kfreEgfrInput?.value.trim() || "",
     acr: kfreAcrInput?.value.trim() || "",
+    pcr: kfrePcrInput?.value.trim() || "",
     serumCalcium: kfreSerumCalciumInput?.value.trim() || "",
     serumPhosphate: kfreSerumPhosphateInput?.value.trim() || "",
     serumBicarbonate: kfreSerumBicarbonateInput?.value.trim() || "",
@@ -2488,6 +2491,7 @@ function getKfreReviewRows(kfreForm) {
   const labRows = [
     ["eGFR", labs.egfr ? `${labs.egfr} mL/min/1.73 m²` : "-"],
     ["Urine ACR", labs.acr ? `${labs.acr} mg/g` : "-"],
+    ["Urine PCR", labs.pcr ? `${labs.pcr} mg/g` : "-"],
     ["Serum Calcium", labs.serumCalcium ? `${labs.serumCalcium} mg/dL` : "-"],
     ["Serum Phosphate", labs.serumPhosphate ? `${labs.serumPhosphate} mg/dL` : "-"],
     ["Serum Bicarbonate", labs.serumBicarbonate ? `${labs.serumBicarbonate} mmol/L` : "-"],
@@ -2589,8 +2593,12 @@ function buildSubmissionFromForm() {
       showToast("Enter eGFR value for the KFRE lab entry.");
       return null;
     }
-    if (!kfreAcrInput?.value.trim() || !validateNumericInput(kfreAcrInput)) {
-      showToast("Enter Urine ACR value for the KFRE lab entry.");
+    if (kfreAcrInput?.value.trim() && !validateNumericInput(kfreAcrInput)) {
+      showToast("Enter a valid Urine ACR value for the KFRE lab entry.");
+      return null;
+    }
+    if (!kfrePcrInput?.value.trim() || !validateNumericInput(kfrePcrInput)) {
+      showToast("Enter Urine PCR value for the KFRE lab entry.");
       return null;
     }
   }

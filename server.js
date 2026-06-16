@@ -42,6 +42,8 @@ const MAX_BODY_BYTES = Number(process.env.MAX_BODY_BYTES || 300 * 1024 * 1024);
 const MAX_CHUNK_BYTES = Number(process.env.MAX_CHUNK_BYTES || 8 * 1024 * 1024);
 const UPLOAD_CHUNK_BYTES = Math.min(Number(process.env.UPLOAD_CHUNK_BYTES || 5 * 1024 * 1024), MAX_CHUNK_BYTES);
 const MAX_UPLOAD_FILE_BYTES = Number(process.env.MAX_UPLOAD_FILE_BYTES || 250 * 1024 * 1024);
+const SUBMISSION_SCHEMA_VERSION = 2;
+const STORAGE_SCHEMA_VERSION = 2;
 const UPLOAD_SESSION_DIR = path.join(DATA_DIR, "upload-sessions");
 const PARTICIPANT_MAP_FILE = path.join(DATA_DIR, "private", "participant-mapping.json");
 const RAW_DATABASE_URL = process.env.DATABASE_URL || "";
@@ -841,6 +843,12 @@ async function initializeDatabase() {
         local_path           text,
         gcs_synced           boolean NOT NULL DEFAULT false,
         gcs_path             text,
+        schema_version       integer NOT NULL DEFAULT 2,
+        patient_key          text,
+        storage_prefix       text,
+        bmi_is_derived       boolean NOT NULL DEFAULT false,
+        file_count           integer NOT NULL DEFAULT 0,
+        total_file_size_bytes bigint NOT NULL DEFAULT 0,
         metadata             jsonb NOT NULL,
         created_at           timestamptz NOT NULL DEFAULT now()
       )
@@ -854,6 +862,12 @@ async function initializeDatabase() {
     await client.query("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS kfre_data jsonb");
     await client.query("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS study_id text");
     await client.query("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS reviewed_by text");
+    await client.query("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS schema_version integer NOT NULL DEFAULT 2");
+    await client.query("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS patient_key text");
+    await client.query("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS storage_prefix text");
+    await client.query("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS bmi_is_derived boolean NOT NULL DEFAULT false");
+    await client.query("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS file_count integer NOT NULL DEFAULT 0");
+    await client.query("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS total_file_size_bytes bigint NOT NULL DEFAULT 0");
     await client.query(`
       DO $$
       BEGIN
@@ -878,16 +892,23 @@ async function initializeDatabase() {
         original_name text NOT NULL,
         stored_name   text NOT NULL,
         bucket_path   text NOT NULL,
+        storage_category text,
+        storage_subfolder text,
         mime_type     text NOT NULL,
         size_bytes    bigint NOT NULL,
         created_at    timestamptz NOT NULL DEFAULT now()
       )
     `);
+    await client.query("ALTER TABLE submission_files ADD COLUMN IF NOT EXISTS storage_category text");
+    await client.query("ALTER TABLE submission_files ADD COLUMN IF NOT EXISTS storage_subfolder text");
 
     await client.query("CREATE INDEX IF NOT EXISTS idx_submissions_hospital_received ON submissions(hospital_id, received_at DESC)");
     await client.query("CREATE INDEX IF NOT EXISTS idx_submissions_uhid ON submissions(uhid)");
     await client.query("CREATE INDEX IF NOT EXISTS idx_submissions_study_id ON submissions(study_id)");
+    await client.query("CREATE INDEX IF NOT EXISTS idx_submissions_patient_key ON submissions(patient_key)");
+    await client.query("CREATE INDEX IF NOT EXISTS idx_submissions_storage_prefix ON submissions(storage_prefix)");
     await client.query("CREATE INDEX IF NOT EXISTS idx_submission_files_record ON submission_files(record_id)");
+    await client.query("CREATE INDEX IF NOT EXISTS idx_submission_files_category ON submission_files(storage_category)");
 
     // Seed hospital reference data
     for (const hospital of hospitals) {
@@ -1029,7 +1050,9 @@ async function persistRecordsToDatabase({ batchId, batchDir, records, gcsResult 
            bmi, ethnicity, occupation, known_ckd, ckd_duration, ckd_stage, ckd_stage_remarks,
            dialysis, dialysis_frequency, diabetic, diabetic_stage, diabetes_duration,
            hypertension, hypertension_duration, cardiovascular_disease,
-           family_kidney_history, reviewed_at, local_path, gcs_synced, gcs_path, metadata
+           family_kidney_history, reviewed_at, local_path, gcs_synced, gcs_path,
+           schema_version, patient_key, storage_prefix, bmi_is_derived, file_count, total_file_size_bytes,
+           metadata
          )
          VALUES (
            $1,  $2,  $3,
@@ -1044,11 +1067,19 @@ async function persistRecordsToDatabase({ batchId, batchDir, records, gcsResult 
            $22, $23, $24, $25, $26, $27, $28,
            $29, $30, $31, $32, $33,
            $34, $35, $36,
-           $37, $38, $39, $40, $41, $42
+           $37, $38, $39, $40, $41,
+           $42, $43, $44, $45, $46, $47,
+           $48
          )
          ON CONFLICT (record_id) DO UPDATE SET
            gcs_synced = EXCLUDED.gcs_synced,
            gcs_path   = EXCLUDED.gcs_path,
+           schema_version = EXCLUDED.schema_version,
+           patient_key = EXCLUDED.patient_key,
+           storage_prefix = EXCLUDED.storage_prefix,
+           bmi_is_derived = EXCLUDED.bmi_is_derived,
+           file_count = EXCLUDED.file_count,
+           total_file_size_bytes = EXCLUDED.total_file_size_bytes,
            metadata   = EXCLUDED.metadata`,
         [
           record.recordId, batchId, record.receivedAt,
@@ -1071,15 +1102,25 @@ async function persistRecordsToDatabase({ batchId, batchDir, records, gcsResult 
           toNumberOrNull(record.hypertensionDuration), toNullable(record.cardiovascularDisease),
           toNullable(record.familyKidneyHistory), toTimestampOrNull(record.reviewedAt),
           batchDir, Boolean(gcsResult.synced), gcsResult.gcsPath || null,
+          Number(record.schemaVersion || SUBMISSION_SCHEMA_VERSION),
+          toNullable(record.patientKey),
+          toNullable(record.storagePrefix),
+          Boolean(record.bmiIsDerived),
+          Array.isArray(record.files) ? record.files.length : 0,
+          Array.isArray(record.files) ? record.files.reduce((sum, file) => sum + Number(file.size || 0), 0) : 0,
           JSON.stringify(record)
         ]
       );
 
       for (const file of record.files) {
         await client.query(
-          `INSERT INTO submission_files (record_id, field_name, original_name, stored_name, bucket_path, mime_type, size_bytes)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          [record.recordId, file.fieldName, file.originalName, file.storedName, file.bucketPath, file.type, Number(file.size || 0)]
+          `INSERT INTO submission_files (record_id, field_name, original_name, stored_name, bucket_path, storage_category, storage_subfolder, mime_type, size_bytes)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [
+            record.recordId, file.fieldName, file.originalName, file.storedName, file.bucketPath,
+            file.storageCategory || null, file.storageSubfolder || null,
+            file.type, Number(file.size || 0)
+          ]
         );
       }
     }
@@ -1385,7 +1426,6 @@ function applySubmissionFilters(records, { reviewed = "", search = "", dateFrom 
     const normalizedSearch = search.toLowerCase().trim();
     filtered = filtered.filter((record) =>
       (record.uhid       || "").toLowerCase().includes(normalizedSearch) ||
-      (record.studyId    || "").toLowerCase().includes(normalizedSearch) ||
       (record.participantId || "").toLowerCase().includes(normalizedSearch) ||
       (record.recordId   || "").toLowerCase().includes(normalizedSearch) ||
       (record.hospitalId || "").toLowerCase().includes(normalizedSearch)
@@ -1511,6 +1551,7 @@ function normalizeKfreForm(rawForm, studyFlow) {
     labs: {
       egfr:            optionalNumber(labs, "egfr", "eGFR", { min: 0, max: 300 }),
       acr:             optionalNumber(labs, "acr", "Urine ACR", { min: 0, max: 10000 }),
+      pcr:             optionalNumber(labs, "pcr", "Urine PCR", { min: 0, max: 10000 }),
       serumCalcium:    optionalNumber(labs, "serumCalcium", "Serum calcium", { min: 0, max: 20 }),
       serumPhosphate:  optionalNumber(labs, "serumPhosphate", "Serum phosphate", { min: 0, max: 20 }),
       serumBicarbonate: optionalNumber(labs, "serumBicarbonate", "Serum bicarbonate", { min: 0, max: 60 }),
@@ -1555,7 +1596,7 @@ function normalizeKfreForm(rawForm, studyFlow) {
 
   if (documentAvailable === "No") {
     normalized.labs.egfr = requiredNumber(labs, "egfr", "eGFR", { min: 0, max: 300 });
-    normalized.labs.acr = requiredNumber(labs, "acr", "Urine ACR", { min: 0, max: 10000 });
+    normalized.labs.pcr = requiredNumber(labs, "pcr", "Urine PCR", { min: 0, max: 10000 });
   }
 
   return normalized;
@@ -1601,12 +1642,14 @@ function normalizeSubmission(item, options = {}) {
   const heightCm   = optionalNumber(item, "heightCm", "Height", { min: 50, max: 250 });
   const weight     = optionalNumber(item, "weight", "Weight", { min: 10, max: 400 });
   let bmi          = optionalNumber(item, "bmi", "BMI", { min: 5, max: 100 });
+  let bmiIsDerived = false;
   if (heightCm !== "-" && weight !== "-") {
     const bmiValue = Number((Number(weight) / ((Number(heightCm) / 100) ** 2)).toFixed(2));
     if (bmiValue < 5 || bmiValue > 100) {
       throw new Error("Height and weight produce an implausible BMI; verify both measurements.");
     }
     bmi = String(bmiValue);
+    bmiIsDerived = true;
   }
   const knownCkd   = requiredChoice(item, "knownCkd", "Chronic Kidney Disease (CKD)", allowedYesNoValues);
   const ckdStage   = optionalChoice(item, "ckdStage", "CKD stage", allowedCkdStages);
@@ -1630,6 +1673,7 @@ function normalizeSubmission(item, options = {}) {
     heightCm,
     weight,
     bmi,
+    bmiIsDerived,
     ethnicity:            optionalText(item.ethnicity, 100),
     occupation:           optionalText(item.occupation, 120),
     knownCkd,
@@ -1701,16 +1745,27 @@ function normalizeSubmission(item, options = {}) {
 
 function getFileCategory(fieldName) {
   const categories = {
-    leftKidney:      ["images",    "Left Kidney", "left-kidney"],
-    rightKidney:     ["images",    "Right Kidney", "right-kidney"],
-    mixed:           ["ZIP files", "", "mixed"],
-    mixedKidney:     ["ZIP files", "", "mixed"],
-    patientPackage:  ["ZIP files", "", "source-package"],
-    ultrasoundVideo: ["videos",    "", "ultrasound-video"],
-    egfrReport:      ["documents", "", "egfr-report"],
-    clinicalDocument:["documents", "", "kfre-clinical-document"]
+    leftKidney:      ["images",    "left-kidney", "left-kidney"],
+    rightKidney:     ["images",    "right-kidney", "right-kidney"],
+    mixed:           ["packages",  "mixed", "mixed"],
+    mixedKidney:     ["packages",  "mixed", "mixed"],
+    patientPackage:  ["packages",  "patient", "patient-package"],
+    ultrasoundVideo: ["videos",    "ultrasound", "ultrasound-video"],
+    egfrReport:      ["documents", "egfr-report", "egfr-report"],
+    clinicalDocument:["documents", "clinical", "kfre-clinical-document"]
   };
   return categories[fieldName] || ["documents", "", fieldName || "document"];
+}
+
+function buildCloudRecordPrefix(item, patientKey, recordId) {
+  return path.posix.join(
+    getStudyFlowFolder(item.studyFlow),
+    sanitizeFileName(item.hospitalId, "hospital"),
+    "patients",
+    sanitizeFileName(patientKey, "patient"),
+    "records",
+    sanitizeFileName(recordId, "record")
+  );
 }
 
 function buildStoredFileName(recordKey, label, originalName, timestamp, suffix) {
@@ -2600,21 +2655,15 @@ async function finalizeSubmissionBatch({ normalizedSubmissions, session, req }) 
     const patientKey = buildPatientStorageKey(item.hospitalId, item.uhid);
     const recordDir = path.join(batchDir, recordId);
     fs.mkdirSync(recordDir, { recursive: true });
-    const cloudRecordPrefix = path.posix.join(
-      getStudyFlowFolder(item.studyFlow),
-      sanitizeFileName(item.hospitalId, "hospital"),
-      "records",
-      sanitizeFileName(patientKey, "patient"),
-      sanitizeFileName(recordId, "record")
-    );
+    const cloudRecordPrefix = buildCloudRecordPrefix(item, patientKey, recordId);
 
     const storedFiles = item.files.map((file) => {
       const fieldName                     = sanitizeFileName(file.fieldName || "upload");
       const [topLevelFolder, subFolder, label] = getFileCategory(fieldName);
       const storedName    = buildStoredFileName(patientKey, label, file.name || "upload.bin", now.toISOString(), recordId.slice(-6));
       const relativeFolder = subFolder
-        ? path.join(cloudRecordPrefix, topLevelFolder, subFolder)
-        : path.join(cloudRecordPrefix, topLevelFolder);
+        ? path.posix.join(cloudRecordPrefix, topLevelFolder, subFolder)
+        : path.posix.join(cloudRecordPrefix, topLevelFolder);
       const localFolder = path.join(recordDir, relativeFolder);
       const syncFolder  = path.join(gcsSyncDir, relativeFolder);
       fs.mkdirSync(localFolder, { recursive: true });
@@ -2631,15 +2680,22 @@ async function finalizeSubmissionBatch({ normalizedSubmissions, session, req }) 
         originalName: file.name,
         storedName,
         bucketPath: path.posix.join(cloudRecordPrefix, topLevelFolder, subFolder, storedName).replace(/\/+/g, "/"),
+        storageCategory: topLevelFolder,
+        storageSubfolder: subFolder || null,
         type:        file.type || "application/octet-stream",
         size:        Number(file.size || storedSize || 0)
       };
     });
+    const totalFileSizeBytes = storedFiles.reduce((sum, file) => sum + Number(file.size || 0), 0);
 
     const metadata = {
+      schemaVersion:       SUBMISSION_SCHEMA_VERSION,
+      storageSchemaVersion: STORAGE_SCHEMA_VERSION,
       recordId,
       participantId,
       receivedAt:           now.toISOString(),
+      patientKey,
+      storagePrefix:        cloudRecordPrefix,
       hospitalSessionId:    item.hospitalSessionId,
       hospitalSessionName:  item.hospitalSessionName,
       hospitalId:           item.hospitalId,
@@ -2657,6 +2713,7 @@ async function finalizeSubmissionBatch({ normalizedSubmissions, session, req }) 
       heightCm:             item.heightCm,
       weight:               item.weight,
       bmi:                  item.bmi,
+      bmiIsDerived:         item.bmiIsDerived,
       ethnicity:            item.ethnicity,
       occupation:           item.occupation,
       knownCkd:             item.knownCkd,
@@ -2676,10 +2733,15 @@ async function finalizeSubmissionBatch({ normalizedSubmissions, session, req }) 
       kfreForm:              item.kfreForm,
       dataQualityWarnings:  item.dataQualityWarnings || [],
       reviewedAt:           item.reviewedAt || null,
+      fileCount:            storedFiles.length,
+      totalFileSizeBytes,
       files:                storedFiles
     };
 
     fs.writeFileSync(path.join(recordDir, "metadata.json"), JSON.stringify(metadata, null, 2));
+    const metadataSyncPath = path.join(gcsSyncDir, cloudRecordPrefix, "metadata");
+    fs.mkdirSync(metadataSyncPath, { recursive: true });
+    fs.writeFileSync(path.join(metadataSyncPath, "record-metadata.json"), JSON.stringify(metadata, null, 2));
     records.push(metadata);
   }
 
@@ -3022,6 +3084,28 @@ async function handleUploadComplete(req, res, uploadId) {
 
 // ─── Submission filesystem helpers ───────────────────────────────────────────
 
+function hydrateSubmissionMetadata(meta, batchId, metaPath) {
+  const files = Array.isArray(meta.files) ? meta.files : [];
+  const fallbackPatientKey = meta.patientKey || buildPatientStorageKey(meta.hospitalId || "hospital", meta.uhid || "patient");
+  const storagePrefix = meta.storagePrefix
+    || files.find((file) => file.bucketPath)?.bucketPath?.split("/").slice(0, -2).join("/")
+    || "";
+  return {
+    schemaVersion: meta.schemaVersion || 1,
+    storageSchemaVersion: meta.storageSchemaVersion || 1,
+    patientKey: fallbackPatientKey,
+    storagePrefix,
+    fileCount: Number.isFinite(Number(meta.fileCount)) ? Number(meta.fileCount) : files.length,
+    totalFileSizeBytes: Number.isFinite(Number(meta.totalFileSizeBytes))
+      ? Number(meta.totalFileSizeBytes)
+      : files.reduce((sum, file) => sum + Number(file.size || 0), 0),
+    bmiIsDerived: Boolean(meta.bmiIsDerived),
+    ...meta,
+    batchId,
+    _metaPath: metaPath
+  };
+}
+
 async function readAllSubmissions(scopeHospitalId = null) {
   const submissionsDir = path.join(DATA_DIR, "submissions");
   const results = [];
@@ -3043,7 +3127,7 @@ async function readAllSubmissions(scopeHospitalId = null) {
       let meta;
       try { meta = JSON.parse(await fs.promises.readFile(metaPath, "utf8")); } catch { continue; }
       if (scopeHospitalId && meta.hospitalId !== scopeHospitalId) continue;
-      results.push({ ...meta, batchId, _metaPath: metaPath });
+      results.push(hydrateSubmissionMetadata(meta, batchId, metaPath));
     }
   }
 
@@ -3060,7 +3144,7 @@ async function findSubmissionById(recordId) {
     const metaPath = path.join(submissionsDir, batchId, recordId, "metadata.json");
     try {
       const meta = JSON.parse(await fs.promises.readFile(metaPath, "utf8"));
-      return { ...meta, batchId, _metaPath: metaPath };
+      return hydrateSubmissionMetadata(meta, batchId, metaPath);
     } catch { continue; }
   }
   return null;
@@ -3235,23 +3319,23 @@ async function handleExportSubmissions(req, res) {
     all = applySubmissionFilters(all, { reviewed, search, dateFrom, dateTo });
 
     const cols = [
-      "recordId", "studyId", "participantId", "batchId", "studyFlow", "hospitalId", "hospitalName", "uhid",
-      "age", "sex", "heightCm", "weight", "bmi", "ethnicity", "occupation",
+      "recordId", "participantId", "patientKey", "batchId", "studyFlow", "hospitalId", "hospitalName", "uhid",
+      "age", "sex", "heightCm", "weight", "bmi", "bmiIsDerived",
       "ckdStage", "ckdStageRemarks", "knownCkd", "ckdDuration", "dialysis", "dialysisFrequency",
       "diabetic", "diabeticStage", "diabetesDuration",
       "hypertension", "hypertensionDuration", "cardiovascularDisease", "familyKidneyHistory",
-      "uploadMode", "fileCount", "consentId", "enrollmentDate", "receivedAt",
-      "reviewedAt", "reviewedBy", "dataQualityWarnings"
+      "uploadMode", "fileCount", "totalFileSizeBytes", "storagePrefix", "receivedAt",
+      "reviewedAt", "reviewedBy", "schemaVersion", "storageSchemaVersion", "dataQualityWarnings"
     ];
 
     const headers = [
-      "Record ID", "Study ID", "Participant ID", "Batch ID", "Study Pathway", "Hospital ID", "Hospital Name", "Patient ID (UHID)",
-      "Age", "Sex", "Height (cm)", "Weight (kg)", "BMI", "Ethnicity", "Occupation",
+      "Record ID", "Participant ID", "Patient Storage Key", "Batch ID", "Study Pathway", "Hospital ID", "Hospital Name", "Patient ID (UHID)",
+      "Age", "Sex", "Height (cm)", "Weight (kg)", "BMI", "BMI Derived",
       "Kidney Status / CKD Stage", "CKD Stage Remarks", "Known CKD", "CKD Duration", "Dialysis", "Dialysis Frequency",
       "Diabetic", "Diabetic Stage", "Diabetes Duration",
       "Hypertension", "Hypertension Duration", "Cardiovascular Disease", "Family Kidney History",
-      "Upload Mode", "File Count", "Consent ID", "Enrollment Date", "Received At",
-      "Reviewed At", "Reviewed By", "Data Quality Warnings"
+      "Upload Mode", "File Count", "Total File Size Bytes", "Storage Prefix", "Received At",
+      "Reviewed At", "Reviewed By", "Schema Version", "Storage Schema Version", "Data Quality Warnings"
     ];
 
     function csvCell(v) {
@@ -3262,9 +3346,10 @@ async function handleExportSubmissions(req, res) {
 
     const rows = [headers.join(",")];
     for (const r of all) {
-      const fileCount = Array.isArray(r.files) ? r.files.length : 0;
+      const fileCount = Number.isFinite(Number(r.fileCount)) ? Number(r.fileCount) : (Array.isArray(r.files) ? r.files.length : 0);
       const row = cols.map((c) => {
         if (c === "fileCount") return fileCount;
+        if (c === "totalFileSizeBytes") return r.totalFileSizeBytes || (Array.isArray(r.files) ? r.files.reduce((sum, file) => sum + Number(file.size || 0), 0) : 0);
         if (c === "dataQualityWarnings") return csvCell((r.dataQualityWarnings || []).join(" | "));
         return csvCell(r[c]);
       });
