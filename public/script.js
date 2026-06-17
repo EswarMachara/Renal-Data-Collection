@@ -62,6 +62,7 @@ const RESUMABLE_UPLOAD_RETRIES = 3;
 const MAX_UPLOAD_FILE_BYTES = 250 * 1024 * 1024;
 const MAX_UPLOAD_FILE_LABEL = formatBytes(MAX_UPLOAD_FILE_BYTES);
 const PUBLIC_DASHBOARD_CACHE_KEY = "tanuh-public-dashboard-summary-v1";
+const publicMetricAnimations = new Map();
 
 const ADMIN_INTAKE_SOURCE = { id: "TANUH-ADMIN", name: "Admin" };
 const INDIA_COORDINATE_LIMITS = { minLat: 6, maxLat: 38, minLng: 68, maxLng: 98 };
@@ -129,7 +130,41 @@ function loadHospitalsFromApi() {
 
 function setPublicText(id, value) {
   const element = document.getElementById(id);
-  if (element) element.textContent = value;
+  if (!element) return;
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    element.textContent = value;
+    return;
+  }
+
+  const target = Math.max(0, Math.round(numericValue));
+  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const current = Number(String(element.textContent || "").replace(/[^\d.-]/g, ""));
+  const start = Number.isFinite(current) ? current : 0;
+  if (prefersReducedMotion || start === target) {
+    element.textContent = target.toLocaleString("en-IN");
+    return;
+  }
+
+  if (publicMetricAnimations.has(id)) {
+    cancelAnimationFrame(publicMetricAnimations.get(id));
+  }
+
+  const duration = 850;
+  const startTime = performance.now();
+  const animate = (timestamp) => {
+    const progress = Math.min((timestamp - startTime) / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const nextValue = Math.round(start + (target - start) * eased);
+    element.textContent = nextValue.toLocaleString("en-IN");
+    if (progress < 1) {
+      publicMetricAnimations.set(id, requestAnimationFrame(animate));
+      return;
+    }
+    publicMetricAnimations.delete(id);
+    element.textContent = target.toLocaleString("en-IN");
+  };
+  publicMetricAnimations.set(id, requestAnimationFrame(animate));
 }
 
 function renderPublicBars(containerId, rows) {

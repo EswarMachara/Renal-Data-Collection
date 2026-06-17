@@ -4150,18 +4150,31 @@ th {
 }
 
 .ls-back-public {
-  justify-self: flex-start;
-  margin-bottom: 0.35rem;
-  padding: 0.55rem 0.9rem;
-  font-size: 0.82rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.36rem;
+  flex-shrink: 0;
+  padding: 0.54rem 0.82rem;
+  border-color: rgba(14, 106, 111, 0.2);
+  background: #f8fcfb;
+  color: #0a6b6f;
+  font-size: 0.76rem;
+  box-shadow: none;
 }
 
 /* Form top — logo + badge */
 .ls-form-top {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.ls-form-brand {
+  display: inline-flex;
+  align-items: center;
   gap: 0.8rem;
-  margin-bottom: 2.2rem;
 }
 
 .ls-form-logo {
