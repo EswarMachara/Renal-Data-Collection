@@ -24,7 +24,10 @@
           <small>TANUH · AI Centre of Excellence · IISc Bangalore</small>
         </span>
       </a>
-      <button class="public-login-btn" id="public-login-open" type="button">Login</button>
+      <div class="public-nav-actions">
+        <a class="public-about-btn" href="https://www.tanuh.ai/solutions/renal-health">About Us</a>
+        <button class="public-login-btn" id="public-login-open" type="button">Login</button>
+      </div>
     </header>
 
     <main class="public-dashboard">
@@ -109,7 +112,7 @@
         </div>
         <div class="ls-headline">
           <h2>Renal Health Data<br />Collection Platform</h2>
-          <p>Secure, patient-linked kidney data collection for partner hospitals across India.</p>
+          <p>Secure, patient-linked kidney data collection from partner hospitals across India.</p>
         </div>
         <ul class="ls-features">
           <li><span class="ls-check">✓</span>Patient-linked intake</li>
@@ -1168,6 +1171,7 @@
           <div class="form-section" id="package-upload-section">
             <div class="section-title"><span class="section-index">1.</span> Patient File Package <span class="required-marker">*</span> <span class="section-note">Upload a ZIP file or Select files, or choose a Folder</span></div>
             <p class="section-description">Add all available anonymized ultrasound images and the clinical PDF together. If you select files or a folder, the portal will automatically create one ZIP package before submission. Maximum upload size: 250 MB per package or video.</p>
+            <p class="section-description"><strong>Note:</strong> Ultrasound videos are not part of the ZIP or folder package. Please upload videos only in the Ultrasound Video section below.</p>
             <div class="upload-grid">
               <div class="upload-tile wide package-upload-tile" id="patient-package-tile">
                 <span class="upload-title">UPLOAD PATIENT PACKAGE</span>
@@ -1189,6 +1193,7 @@
 
           <div class="form-section" id="egfr-video-section">
             <div class="section-title"><span class="section-index">3.</span> Ultrasound Video <span class="section-note">(Optional)</span></div>
+            <p class="section-description"><strong>Important:</strong> Upload ultrasound videos here separately. Do not include video files inside the patient ZIP or selected folder package.</p>
             <div class="upload-grid">
               <label class="upload-tile wide">
                 <input id="ultrasound-video-file" name="ultrasoundVideoFile" type="file" accept="video/*" />
@@ -1196,10 +1201,9 @@
                 <span class="upload-subtitle">Patient Ultrasound Video file</span>
               </label>
             </div>
-          </div>
-
-          <div class="actions" id="egfr-submit-actions">
-            <button class="btn-premium" id="egfr-submit-button" type="submit">Submit eGFR Record</button>
+            <div class="actions" id="egfr-submit-actions">
+              <button class="btn-premium" id="egfr-submit-button" type="submit">Submit eGFR Record</button>
+            </div>
           </div>
 
           <div class="form-section hidden" id="kfre-document-section">
@@ -1422,6 +1426,7 @@
           <div class="actions" id="clinical-submit-actions">
             <button class="btn-premium" id="clinical-submit-button" type="submit">Submit KFRE Record</button>
           </div>
+
         </form>
       </article>
     </section>

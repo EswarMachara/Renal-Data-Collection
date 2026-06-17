@@ -77,6 +77,7 @@ const hospitals = [
   { id: "MIL-NDL-DL",  name: "Mahajan Imaging & Labs, New Delhi" },
   { id: "GEMS-SKLM",   name: "GEMS-SKLM" },
   { id: "AIIMS-NGP",   name: "AIIMS, Nagpur" },
+  { id: "NIMS-HYD-TG", name: "NIMS Hospital, Hyderabad, Telangana" },
   { id: "HOSP-DEMO",   name: "HOSP-DEMO" }
 ];
 const adminIntakeSource = { id: "TANUH-ADMIN", name: "Admin" };
@@ -85,7 +86,8 @@ const demoHospitalCredential = { id: "HOSP-DEMO", password: "1234" };
 const seededHospitalCredentials = [
   demoHospitalCredential,
   { id: "GEMS-SKLM", password: "GEMS_Sklm@2026" },
-  { id: "AIIMS-NGP", password: "AIIMS_NagpuR@2026" }
+  { id: "AIIMS-NGP", password: "AIIMS_NagpuR@2026" },
+  { id: "NIMS-HYD-TG", password: "qazplm@234W" }
 ];
 
 function findIntakeSource(sourceId) {

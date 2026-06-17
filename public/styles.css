@@ -3376,10 +3376,6 @@ th {
     height: 38px;
   }
 
-  .public-login-btn {
-    padding: 0.62rem 0.82rem;
-  }
-
   .public-dashboard {
     padding-inline: 0.85rem;
   }
@@ -3621,6 +3617,25 @@ th {
   font-size: 0.76rem;
 }
 
+.public-nav-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex-shrink: 0;
+}
+
+.public-about-btn {
+  border: 1px solid rgba(14, 106, 111, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.52);
+  color: #0a6b6f;
+  font-size: 0.9rem;
+  font-weight: 800;
+  padding: 0.72rem 1.05rem;
+  text-decoration: none;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
 .public-login-btn,
 .ls-back-public {
   border: 1px solid rgba(14, 106, 111, 0.26);
@@ -3635,6 +3650,7 @@ th {
 }
 
 .public-login-btn:hover,
+.public-about-btn:hover,
 .ls-back-public:hover {
   background: #ffffff;
   box-shadow: 0 12px 26px rgba(15, 23, 42, 0.1);
@@ -3645,6 +3661,18 @@ th {
   max-width: 1240px;
   margin: 0 auto;
   padding: clamp(1.4rem, 3vw, 2.6rem) clamp(1rem, 4vw, 2rem) 5rem;
+}
+
+@media (max-width: 560px) {
+  .public-nav-actions {
+    gap: 0.45rem;
+  }
+
+  .public-login-btn,
+  .public-about-btn {
+    padding: 0.62rem 0.82rem;
+    font-size: 0.82rem;
+  }
 }
 
 .public-hero {
