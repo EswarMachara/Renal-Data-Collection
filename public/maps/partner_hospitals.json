@@ -61,5 +61,23 @@
     "latitude": 21.1458,
     "longitude": 79.0882,
     "coordinateStatus": "city-level; verify exact hospital coordinates before production"
+  },
+  {
+    "id": "NIMS-HYD-TG",
+    "name": "NIMS Hospital, Hyderabad, Telangana",
+    "city": "Hyderabad",
+    "state": "Telangana",
+    "latitude": 17.3850,
+    "longitude": 78.4867,
+    "coordinateStatus": "city-level; verify exact hospital coordinates before production"
+  },
+  {
+    "id": "ISHA-MLM-KA",
+    "name": "ISHA Diagnostics and Research Private Limited",
+    "city": "Malleshwaram, Bengaluru",
+    "state": "Karnataka",
+    "latitude": 13.0031,
+    "longitude": 77.5643,
+    "coordinateStatus": "Malleshwaram/Sampige Road area-level; verify exact #311 Sampige Road coordinates before production"
   }
 ]

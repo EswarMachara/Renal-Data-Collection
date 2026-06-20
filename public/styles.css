@@ -3161,11 +3161,12 @@ th {
   }
 
   .public-map-wrap {
-    min-height: 470px;
+    min-height: 520px;
   }
 
   .india-map {
-    width: min(430px, 100%);
+    inset: 0.7rem 0 0;
+    width: min(620px, 98%);
   }
 
   .navbar-content {
@@ -3394,7 +3395,7 @@ th {
   }
 
   .public-map-wrap {
-    min-height: 390px;
+    min-height: 430px;
   }
 
   .public-map-tooltip {
@@ -3838,34 +3839,45 @@ th {
 
 .public-map-wrap {
   position: relative;
-  min-height: 590px;
-  margin-top: 0.85rem;
+  min-height: clamp(600px, 58vw, 760px);
+  margin-top: 1.15rem;
   border-radius: 30px;
   background:
-    radial-gradient(circle at 50% 43%, rgba(20, 134, 140, 0.14), transparent 44%),
-    linear-gradient(140deg, #f7fffd, #e6f7f4);
+    radial-gradient(circle at 45% 38%, rgba(20, 134, 140, 0.16), transparent 36%),
+    radial-gradient(circle at 62% 62%, rgba(45, 212, 191, 0.10), transparent 42%),
+    linear-gradient(145deg, #ffffff 0%, #f0fafb 50%, #e7f6f3 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
   overflow: hidden;
+}
+
+.public-map-wrap::before {
+  content: "";
+  position: absolute;
+  inset: 1.25rem;
+  border: 1px solid rgba(14, 106, 111, 0.12);
+  border-radius: 24px;
+  pointer-events: none;
 }
 
 .india-map {
   position: absolute;
-  inset: 0;
-  width: min(700px, 100%);
-  height: 100%;
+  inset: 1rem 0 0;
+  width: min(940px, 96%);
+  height: calc(100% - 1rem);
   margin: auto;
-  filter: drop-shadow(0 28px 42px rgba(15, 23, 42, 0.12));
+  filter: drop-shadow(0 24px 36px rgba(14, 106, 111, 0.14));
 }
 
 .india-state {
-  fill: rgba(15, 154, 135, 0.12);
-  stroke: rgba(14, 106, 111, 0.42);
+  fill: rgba(240, 250, 251, 0.92);
+  stroke: rgba(14, 106, 111, 0.48);
   stroke-linejoin: round;
-  stroke-width: 0.9;
+  stroke-width: 0.62;
   vector-effect: non-scaling-stroke;
 }
 
 .india-state:hover {
-  fill: rgba(15, 154, 135, 0.18);
+  fill: rgba(209, 244, 241, 0.96);
 }
 
 .india-hospital-marker {
@@ -3874,17 +3886,17 @@ th {
 }
 
 .india-hospital-marker .marker-pulse {
-  fill: rgba(15, 154, 135, 0.18);
-  stroke: rgba(15, 154, 135, 0.26);
+  fill: rgba(20, 134, 140, 0.18);
+  stroke: rgba(14, 106, 111, 0.28);
   stroke-width: 1.2;
   transform-origin: center;
 }
 
 .india-hospital-marker .marker-dot {
-  fill: #0f9a87;
+  fill: var(--teal-dark);
   stroke: #ffffff;
   stroke-width: 3;
-  filter: drop-shadow(0 6px 10px rgba(15, 23, 42, 0.22));
+  filter: drop-shadow(0 7px 12px rgba(14, 106, 111, 0.28));
 }
 
 .india-hospital-marker .marker-count {
@@ -3897,7 +3909,7 @@ th {
 
 .india-hospital-marker:hover .marker-dot,
 .india-hospital-marker:focus-visible .marker-dot {
-  fill: #0a6b6f;
+  fill: var(--teal-primary);
 }
 
 .india-hospital-marker:focus-visible .marker-pulse {
@@ -3925,6 +3937,14 @@ th {
   font-size: 0.9rem;
   font-weight: 800;
   margin-bottom: 0.55rem;
+}
+
+.map-tip-location {
+  border-top: 1px solid rgba(71, 85, 105, 0.14);
+  color: #526376;
+  font-size: 0.76rem;
+  margin-top: 0.65rem;
+  padding-top: 0.55rem;
 }
 
 .public-map-tooltip ul {

@@ -78,6 +78,7 @@ const hospitals = [
   { id: "GEMS-SKLM",   name: "GEMS-SKLM" },
   { id: "AIIMS-NGP",   name: "AIIMS, Nagpur" },
   { id: "NIMS-HYD-TG", name: "NIMS Hospital, Hyderabad, Telangana" },
+  { id: "ISHA-MLM-KA", name: "ISHA Diagnostics and Research Private Limited, Malleshwaram, Bengaluru, Karnataka" },
   { id: "HOSP-DEMO",   name: "HOSP-DEMO" }
 ];
 const adminIntakeSource = { id: "TANUH-ADMIN", name: "Admin" };
@@ -87,7 +88,8 @@ const seededHospitalCredentials = [
   demoHospitalCredential,
   { id: "GEMS-SKLM", password: "GEMS_Sklm@2026" },
   { id: "AIIMS-NGP", password: "AIIMS_NagpuR@2026" },
-  { id: "NIMS-HYD-TG", password: "qazplm@234W" }
+  { id: "NIMS-HYD-TG", password: "qazplm@234W" },
+  { id: "ISHA-MLM-KA", password: "Isha_Malleswaram@2026#" }
 ];
 
 function findIntakeSource(sourceId) {
@@ -3731,6 +3733,10 @@ function getPublicDashboardFallbackSummary() {
   };
 }
 
+function getConfiguredPublicPartnerHospitalCount() {
+  return hospitals.filter((hospital) => !publicDashboardExcludedHospitals.has(hospital.id)).length;
+}
+
 function loadPublicDashboardCacheFromDisk() {
   if (publicDashboardCache.loaded) return;
   publicDashboardCache.loaded = true;
@@ -3739,6 +3745,8 @@ function loadPublicDashboardCacheFromDisk() {
     if (!payload || !payload.summary || !payload.cachedAt) return;
     const cachedAt = Number(payload.cachedAt);
     if (!Number.isFinite(cachedAt) || Date.now() - cachedAt > PUBLIC_DASHBOARD_CACHE_STALE_MS) return;
+    const configuredPartnerCount = getConfiguredPublicPartnerHospitalCount();
+    if (Number(payload.summary.partnerHospitals || 0) < configuredPartnerCount) return;
     publicDashboardCache.summary = payload.summary;
     publicDashboardCache.cachedAt = cachedAt;
     publicDashboardCache.expiresAt = cachedAt + PUBLIC_DASHBOARD_CACHE_TTL_MS;

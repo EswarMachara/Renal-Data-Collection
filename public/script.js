@@ -247,7 +247,7 @@ function renderIndiaStates(mapData) {
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
     path.setAttribute("d", statePath.path);
     path.setAttribute("class", "india-state");
-    path.setAttribute("aria-label", statePath.name || "Indian state or union territory");
+    path.setAttribute("aria-label", [statePath.name, statePath.state].filter(Boolean).join(", ") || "Indian administrative region");
     statesLayer.appendChild(path);
   });
   statesLayer.dataset.rendered = "true";
@@ -267,8 +267,8 @@ function getMapTooltipHtml(group) {
     `<li><strong>${escapeHTML(hospital.name)}</strong><span>${Number(hospital.patients || 0)} records</span></li>`
   ).join("");
   return `
-    <div class="map-tip-title">${escapeHTML(cityState || "Partner location")}</div>
     <ul>${hospitalsList}</ul>
+    <div class="map-tip-location">${escapeHTML(cityState || "Partner location")}</div>
   `;
 }
 
