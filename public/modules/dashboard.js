@@ -161,7 +161,7 @@ export function updateDashboards() {
     const kfreFollowUpCount = (pathway.followUp || []).find((item) => item.label === "Recorded")?.value || 0;
     set("study-summary-files", isKfre ? kfreFollowUpCount : pathway.summary?.videos ?? 0);
     set("study-summary-files-label", isKfre ? "FOLLOW-UP RECORDS" : "ULTRASOUND VIDEOS");
-    set("study-summary-pending", pathway.summary?.pending ?? 0);
+    set("study-summary-pending", pathway.summary?.patients ?? 0);
     set("admin-stage-title", isKfre ? "KFRE CKD Status" : "Chronic Kidney Disease Status");
     set("admin-secondary-title", isKfre ? "Prospective Follow-up" : "Age Distribution");
     set("admin-secondary-note", isKfre ? "Follow-up information recorded" : "Adults 18+, with 80+ grouped");
@@ -207,11 +207,11 @@ export function updateDashboards() {
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
     set("hosp-summary-patients", d.summary?.patients ?? 0);
     set("hosp-summary-videos", d.summary?.videos ?? 0);
-    set("hosp-summary-pending", d.summary?.pending ?? 0);
+    set("hosp-summary-pending", d.summary?.patients ?? 0);
 
     const subtitleEl = document.getElementById("dash-hospital-subtitle");
     const hospName = state.authSession?.hospitalName || state.authSession?.hospitalId || "";
-    if (subtitleEl && hospName) subtitleEl.textContent = `Submitted patient records and review progress for ${hospName}`;
+    if (subtitleEl && hospName) subtitleEl.textContent = `Submitted patient records and cloud storage activity for ${hospName}`;
 
     const updEl = document.getElementById("dash-hospital-updated");
     if (updEl) updEl.textContent = nowStr;
@@ -247,7 +247,6 @@ export function renderHospitalBreakdown(breakdown, grandTotal) {
     const kfrePatients = hospital.kfrePatients ?? 0;
     const egfrWidth = egfrPatients ? Math.max(Math.round((egfrPatients / maxPatients) * 100), 2) : 0;
     const kfreWidth = kfrePatients ? Math.max(Math.round((kfrePatients / maxPatients) * 100), 2) : 0;
-    const reviewed = hospital.patients > 0 ? Math.round((hospital.reviewed / hospital.patients) * 100) : 0;
     return `
       <div class="hosp-breakdown-card ${hospital.patients === 0 ? "hosp-card-empty" : ""}">
         <div class="hosp-card-header">
@@ -269,7 +268,7 @@ export function renderHospitalBreakdown(breakdown, grandTotal) {
         </div>
         <div class="hosp-card-meta">
           <span class="hosp-meta-chip hosp-meta-pct">${pct}% of total</span>
-          <span class="hosp-meta-chip hosp-meta-review">${hospital.reviewed}/${hospital.patients} reviewed (${reviewed}%)</span>
+          <span class="hosp-meta-chip hosp-meta-review">${hospital.patients} stored</span>
         </div>
       </div>`;
   }).join("");
@@ -285,9 +284,7 @@ export function renderRecentRecordsTable(tbodyId, records, cols) {
   tbody.innerHTML = records.map((record) => {
     const cells = cols.map((column) => {
       if (column === "receivedAt") return `<td class="sub-date">${subFormatDate(record.receivedAt)}</td>`;
-      if (column === "reviewedAt") return record.reviewedAt
-        ? `<td><span class="sub-badge sub-badge-reviewed">Reviewed</span></td>`
-        : `<td><span class="sub-badge sub-badge-pending">Awaiting Review</span></td>`;
+      if (column === "reviewedAt") return `<td><span class="sub-badge sub-badge-reviewed">Stored</span></td>`;
       if (column === "uploadMode") return `<td>${escapeHTML(subUploadMode(record.uploadMode))}</td>`;
       return `<td>${escapeHTML(String(record[column] || "—"))}</td>`;
     }).join("");

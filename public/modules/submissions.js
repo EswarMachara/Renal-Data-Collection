@@ -28,10 +28,8 @@ function subFormatDate(iso) {
   return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
-function subBadge(reviewed) {
-  return reviewed
-    ? `<span class="sub-badge sub-badge-reviewed">Reviewed</span>`
-    : `<span class="sub-badge sub-badge-pending">Awaiting Review</span>`;
+function subBadge() {
+  return `<span class="sub-badge sub-badge-reviewed">Stored</span>`;
 }
 
 export function subUploadMode(mode) {
@@ -42,21 +40,18 @@ export function subUploadMode(mode) {
 export async function loadSubmissions(page = 1) {
   const subTbody = document.getElementById("sub-tbody");
   const subHospitalFilter = document.getElementById("sub-hospital-filter");
-  const subReviewedFilter = document.getElementById("sub-reviewed-filter");
   const subSearchInput = document.getElementById("sub-search-input");
   const subDateFromInput = document.getElementById("sub-date-from");
   const subDateToInput = document.getElementById("sub-date-to");
   if (!subTbody) return;
-  subTbody.innerHTML = '<tr><td colspan="9" class="empty">Loading…</td></tr>';
+  subTbody.innerHTML = '<tr><td colspan="10" class="empty">Loading…</td></tr>';
 
   const params = new URLSearchParams({ page, limit: subState.limit });
   const hospital = subHospitalFilter?.value || "";
-  const reviewed = subReviewedFilter?.value || "";
   const search = subSearchInput?.value.trim() || "";
   const dateFrom = subDateFromInput?.value || "";
   const dateTo = subDateToInput?.value || "";
   if (hospital) params.set("hospitalId", hospital);
-  if (reviewed) params.set("reviewed", reviewed);
   if (search) params.set("search", search);
   if (dateFrom) params.set("dateFrom", dateFrom);
   if (dateTo) params.set("dateTo", dateTo);
@@ -66,7 +61,7 @@ export async function loadSubmissions(page = 1) {
     if (res.status === 401) { handle401(); return; }
     const result = await res.json();
     if (!res.ok || !result.ok) {
-      subTbody.innerHTML = `<tr><td colspan="9" class="empty">${escapeHTML(result.error || "Failed to load.")}</td></tr>`;
+      subTbody.innerHTML = `<tr><td colspan="10" class="empty">${escapeHTML(result.error || "Failed to load.")}</td></tr>`;
       return;
     }
 
@@ -75,7 +70,7 @@ export async function loadSubmissions(page = 1) {
     renderSubmissionsTable(result.items);
     updateSubPagination();
   } catch {
-    subTbody.innerHTML = '<tr><td colspan="9" class="empty">Network error. Please try again.</td></tr>';
+    subTbody.innerHTML = '<tr><td colspan="10" class="empty">Network error. Please try again.</td></tr>';
   }
 }
 
@@ -103,7 +98,7 @@ export function renderSubmissionsTable(items) {
       <td>${escapeHTML(item.studyFlow === "kfre" ? "KFRE · Clinical Document" : subUploadMode(item.uploadMode))}</td>
       <td>${item.fileCount}</td>
       <td class="sub-date">${subFormatDate(item.receivedAt)}</td>
-      <td>${subBadge(item.reviewedAt)}</td>
+      <td>${subBadge()}</td>
     `;
     row.addEventListener("click", () => openSubmissionDetail(item.recordId));
     subTbody.appendChild(row);
@@ -217,40 +212,9 @@ export function renderSubmissionDetail(submission) {
     </section>
     ${qualitySection}
     ${fileList ? `<section class="sub-detail-section"><h3 class="sub-detail-section-title">Files</h3><ul class="sub-file-list">${fileList}</ul></section>` : ""}
-    ${submission.reviewedAt ? `<section class="sub-detail-section"><h3 class="sub-detail-section-title">Review</h3>${field("Reviewed At", subFormatDate(submission.reviewedAt))}${field("Reviewed By", submission.reviewedBy)}</section>` : ""}
   `;
 
-  if (subDetailFooter && state.authSession?.role === "admin") {
-    const isReviewed = Boolean(submission.reviewedAt);
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = isReviewed ? "btn-ghost sub-review-btn" : "btn-primary sub-review-btn";
-    button.textContent = isReviewed ? "Clear Review" : "Mark as Reviewed";
-    button.addEventListener("click", async () => {
-      button.disabled = true;
-      button.textContent = "Saving…";
-      try {
-        const res = await authedFetch(`/api/submissions/${encodeURIComponent(submission.recordId)}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ reviewed: !isReviewed })
-        });
-        const result = await res.json();
-        if (res.ok && result.ok) {
-          openSubmissionDetail(submission.recordId);
-          loadSubmissions(subState.page);
-        } else {
-          button.disabled = false;
-          button.textContent = isReviewed ? "Clear Review" : "Mark as Reviewed";
-        }
-      } catch {
-        button.disabled = false;
-        button.textContent = isReviewed ? "Clear Review" : "Mark as Reviewed";
-      }
-    });
-    subDetailFooter.innerHTML = "";
-    subDetailFooter.appendChild(button);
-  }
+  if (subDetailFooter) subDetailFooter.innerHTML = "";
 }
 
 export function closeSubmissionDetail() {
@@ -276,7 +240,6 @@ export function populateSubHospitalFilter() {
 export async function exportSubmissionsCsv() {
   const subExportBtn = document.getElementById("sub-export-csv");
   const subHospitalFilter = document.getElementById("sub-hospital-filter");
-  const subReviewedFilter = document.getElementById("sub-reviewed-filter");
   const subSearchInput = document.getElementById("sub-search-input");
   const subDateFromInput = document.getElementById("sub-date-from");
   const subDateToInput = document.getElementById("sub-date-to");
@@ -287,12 +250,10 @@ export async function exportSubmissionsCsv() {
   try {
     const params = new URLSearchParams();
     const hospital = subHospitalFilter?.value || "";
-    const reviewed = subReviewedFilter?.value || "";
     const search = subSearchInput?.value.trim() || "";
     const dateFrom = subDateFromInput?.value || "";
     const dateTo = subDateToInput?.value || "";
     if (hospital) params.set("hospitalId", hospital);
-    if (reviewed) params.set("reviewed", reviewed);
     if (search) params.set("search", search);
     if (dateFrom) params.set("dateFrom", dateFrom);
     if (dateTo) params.set("dateTo", dateTo);

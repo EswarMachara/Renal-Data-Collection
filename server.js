@@ -3334,7 +3334,7 @@ async function handleExportSubmissions(req, res) {
       "diabetic", "diabeticStage", "diabetesDuration",
       "hypertension", "hypertensionDuration", "cardiovascularDisease", "familyKidneyHistory",
       "uploadMode", "fileCount", "totalFileSizeBytes", "storagePrefix", "receivedAt",
-      "reviewedAt", "reviewedBy", "schemaVersion", "storageSchemaVersion", "dataQualityWarnings"
+      "schemaVersion", "storageSchemaVersion", "dataQualityWarnings"
     ];
 
     const headers = [
@@ -3344,7 +3344,7 @@ async function handleExportSubmissions(req, res) {
       "Diabetic", "Diabetic Stage", "Diabetes Duration",
       "Hypertension", "Hypertension Duration", "Cardiovascular Disease", "Family Kidney History",
       "Upload Mode", "File Count", "Total File Size Bytes", "Storage Prefix", "Received At",
-      "Reviewed At", "Reviewed By", "Schema Version", "Storage Schema Version", "Data Quality Warnings"
+      "Schema Version", "Storage Schema Version", "Data Quality Warnings"
     ];
 
     function csvCell(v) {

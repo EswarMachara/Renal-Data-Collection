@@ -72,6 +72,7 @@ let publicMapState = {
   projection: null,
   loadPromise: null
 };
+let pendingAnonymizationOpen = false;
 
 function getSelectableIntakeSources() {
   return state.authSession?.role === "admin"
@@ -461,6 +462,8 @@ setUnauthorizedHandler(() => {
 
 const tabs = document.querySelectorAll(".nav-link[data-tab]");
 const publicLoginOpenBtn = document.getElementById("public-login-open");
+const publicAnonymizationLoginBtn = document.getElementById("public-anonymization-login");
+const openAnonymizationToolBtn = document.getElementById("open-anonymization-tool");
 const loginBackPublicBtn = document.getElementById("login-back-public");
 const panels = {
   landing:     document.getElementById("tab-landing"),
@@ -519,6 +522,17 @@ const clinicalStepLabel = document.getElementById("clinical-step-label");
 const clinicalPageTitle = document.getElementById("clinical-page-title");
 const clinicalPageSubtitle = document.getElementById("clinical-page-subtitle");
 const clinicalPageMeta = document.getElementById("clinical-page-meta");
+const anonymizationFolderInput = document.getElementById("anon-folder-input");
+const anonymizationFileInput = document.getElementById("anon-file-input");
+const anonymizationStatusCard = document.getElementById("anon-status-card");
+const anonymizationPreviewGrid = document.getElementById("anon-preview-grid");
+const anonymizationOriginalList = document.getElementById("anon-original-list");
+const anonymizationOutputList = document.getElementById("anon-output-list");
+const anonymizationApproveBtn = document.getElementById("anon-approve");
+const anonymizationResetBtn = document.getElementById("anon-reset");
+const anonymizationScreen = document.getElementById("anonymization-screen");
+const anonymizationBackBtn = document.getElementById("anon-back-app");
+const anonymizationPackageTile = document.querySelector(".anon-package-tile");
 
 function isConsentConfirmed() {
   return state.studyFlow === "kfre"
@@ -708,6 +722,142 @@ function scrollToLandingSection(section) {
   if (!section) return;
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   section.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
+}
+
+function showAnonymizationWorkspace() {
+  if (!state.authSession) {
+    hideLoginError();
+    showLoginScreen();
+    return;
+  }
+
+  setMobileNavigationOpen(false);
+  document.getElementById("public-screen")?.classList.add("hidden");
+  loginScreen?.classList.add("hidden");
+  appNavbar?.classList.add("hidden");
+  document.querySelector(".app-container")?.classList.add("hidden");
+  document.getElementById("intake-stepper")?.classList.add("hidden");
+  hideAdminPortal();
+  anonymizationScreen?.classList.remove("hidden");
+  window.scrollTo({ top: 0, behavior: "auto" });
+}
+
+function hideAnonymizationWorkspace() {
+  anonymizationScreen?.classList.add("hidden");
+  if (!state.authSession) {
+    showPublicScreen();
+    return;
+  }
+  showApp();
+  updateWorkflowAccess();
+}
+
+function getAnonymizationCategory(file) {
+  const pathText = `${file.webkitRelativePath || ""}/${file.name}`.toLowerCase();
+  if (pathText.includes("left")) return { label: "Left kidney images", folder: "Left_Kidney_Images" };
+  if (pathText.includes("right")) return { label: "Right kidney images", folder: "Right_Kidney_Images" };
+  if (pathText.includes("lab")) return { label: "Lab reports", folder: "Lab_Reports" };
+  if (pathText.includes("report") || pathText.includes("ultrasound")) return { label: "Ultrasound reports", folder: "Ultrasound_Reports" };
+  return { label: "Needs review", folder: "Review_Required" };
+}
+
+function getFileExtension(name) {
+  const match = String(name || "").match(/(\.[a-z0-9]+)$/i);
+  return match ? match[1].toLowerCase() : "";
+}
+
+function renderAnonymizationRows(files) {
+  if (!anonymizationOriginalList || !anonymizationOutputList) return;
+  anonymizationOriginalList.innerHTML = "";
+  anonymizationOutputList.innerHTML = "";
+
+  files.slice(0, 80).forEach((file, index) => {
+    const category = getAnonymizationCategory(file);
+    const extension = getFileExtension(file.name);
+    const sourcePath = file.webkitRelativePath || file.name;
+    const anonymizedName = `ANON-PATIENT-001_${String(index + 1).padStart(3, "0")}${extension}`;
+    const anonymizedPath = `Anonymized_Patient_Folder/${category.folder}/${anonymizedName}`;
+
+    anonymizationOriginalList.insertAdjacentHTML("beforeend", `
+      <div class="anon-file-row">
+        <span class="anon-check" aria-hidden="true">✓</span>
+        <div>
+          <strong>${escapeHTML(sourcePath)}</strong>
+          <small>${escapeHTML(category.label)} · ${formatBytes(file.size || 0)}</small>
+        </div>
+      </div>
+    `);
+    anonymizationOutputList.insertAdjacentHTML("beforeend", `
+      <div class="anon-file-row anonymized">
+        <span class="anon-check" aria-hidden="true">✓</span>
+        <div>
+          <strong>${escapeHTML(anonymizedPath)}</strong>
+          <small>Irreversible anonymized filename/path in demo preview</small>
+        </div>
+      </div>
+    `);
+  });
+
+  if (files.length > 80) {
+    const remaining = files.length - 80;
+    const message = `<div class="anon-file-row"><span class="anon-check" aria-hidden="true">…</span><div><strong>${remaining} more file(s)</strong><small>Hidden from preview for readability.</small></div></div>`;
+    anonymizationOriginalList.insertAdjacentHTML("beforeend", message);
+    anonymizationOutputList.insertAdjacentHTML("beforeend", message);
+  }
+}
+
+function updateAnonymizationDemo(files, modeLabel) {
+  const selectedFiles = Array.from(files || []);
+  const hasFiles = selectedFiles.length > 0;
+  anonymizationPreviewGrid?.classList.toggle("hidden", !hasFiles);
+  anonymizationPackageTile?.classList.toggle("tile-has-file", hasFiles);
+  anonymizationStatusCard?.classList.toggle("has-file", hasFiles);
+  if (anonymizationApproveBtn) anonymizationApproveBtn.disabled = !hasFiles;
+  if (anonymizationResetBtn) anonymizationResetBtn.disabled = !hasFiles;
+
+  if (!anonymizationStatusCard) return;
+  if (!hasFiles) {
+    anonymizationStatusCard.textContent = "No file selected";
+    if (anonymizationOriginalList) anonymizationOriginalList.innerHTML = "";
+    if (anonymizationOutputList) anonymizationOutputList.innerHTML = "";
+    return;
+  }
+
+  const categories = selectedFiles.reduce((acc, file) => {
+    const category = getAnonymizationCategory(file).label;
+    acc[category] = (acc[category] || 0) + 1;
+    return acc;
+  }, {});
+  const categorySummary = Object.entries(categories)
+    .map(([label, count]) => `${count} ${label}`)
+    .join(" · ");
+  anonymizationStatusCard.innerHTML = `
+    <div class="file-preview-details">
+      <span class="file-preview-name">
+        <svg class="file-check-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <circle cx="8" cy="8" r="7" fill="#14868c"/>
+          <path d="M5 8.2l2.2 2.2L11 5.5" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        ${escapeHTML(modeLabel)} prepared for irreversible anonymization
+      </span>
+      <small>${selectedFiles.length} file(s) · ${escapeHTML(categorySummary)}</small>
+    </div>
+  `;
+  renderAnonymizationRows(selectedFiles);
+}
+
+function clearAnonymizationDemo(message = "Temporary originals cleared from this browser demo.") {
+  if (anonymizationFolderInput) anonymizationFolderInput.value = "";
+  if (anonymizationFileInput) anonymizationFileInput.value = "";
+  updateAnonymizationDemo([], "");
+  if (anonymizationStatusCard) {
+    anonymizationStatusCard.innerHTML = `
+      <div class="file-preview-details">
+        <strong>${escapeHTML(message)}</strong>
+        <small>No files are retained by this frontend-only demonstration.</small>
+      </div>
+    `;
+  }
 }
 
 const studyIdInput = document.getElementById("study-id");
@@ -1050,7 +1200,7 @@ function fillDemoQuestionnaire() {
   setDemoRadio("hypertension", "Yes");
   updateLinkedPatientSummary();
   updateQuestionnaireContinueState();
-  showToast("Intake demo values filled. Review once, then continue.");
+  showToast("Intake demo values filled. Confirm once, then continue.");
 }
 
 function fillDemoEgfrFlow() {
@@ -1674,15 +1824,30 @@ document.querySelectorAll("[data-tab-jump]").forEach((button) => {
 });
 
 publicLoginOpenBtn?.addEventListener("click", () => {
+  pendingAnonymizationOpen = false;
+  hideLoginError();
+  showLoginScreen();
+});
+
+publicAnonymizationLoginBtn?.addEventListener("click", () => {
+  if (state.authSession) {
+    showAnonymizationWorkspace();
+    return;
+  }
+  pendingAnonymizationOpen = true;
   hideLoginError();
   showLoginScreen();
 });
 
 loginBackPublicBtn?.addEventListener("click", () => {
+  pendingAnonymizationOpen = false;
   hideLoginError();
   showPublicScreen();
   loadPublicDashboard();
 });
+
+openAnonymizationToolBtn?.addEventListener("click", showAnonymizationWorkspace);
+anonymizationBackBtn?.addEventListener("click", hideAnonymizationWorkspace);
 
 tabs.forEach((tab) => {
   tab.addEventListener("click", () => activateTab(tab.dataset.tab));
@@ -3059,7 +3224,7 @@ function buildSubmissionFromForm() {
     hasVideo: Boolean(!isKfre && ultrasoundVideoFile),
     uploadFiles,
     progress: 0,
-    status: "Awaiting Review",
+    status: "Ready for Cloud Upload",
     reviewedAt: null
   };
   submission.dataQualityWarnings = computeDataQualityWarnings(submission);
@@ -3164,7 +3329,7 @@ function renderReviewSubmission(submission) {
 function showReviewSubmission(submission) {
   state.pendingSubmission = submission;
   if (reviewTitle) {
-    reviewTitle.textContent = submission.studyFlow === "kfre" ? "Review KFRE Record" : "Review eGFR Record";
+    reviewTitle.textContent = submission.studyFlow === "kfre" ? "Confirm KFRE Record" : "Confirm eGFR Record";
   }
   resetUploadProgress();
   renderReviewSubmission(submission);
@@ -3234,7 +3399,7 @@ refreshDashboard();
 
 async function uploadReviewedSubmission() {
   if (!state.pendingSubmission) {
-    showToast("No record is waiting for review.");
+    showToast("No record is waiting for upload.");
     return;
   }
 
@@ -3291,7 +3456,7 @@ async function uploadReviewedSubmission() {
       reviewProceedBtn.textContent = "Resume Upload";
     }
     refreshDashboard();
-    showToast("Upload interrupted: " + err.message + " You can resume from the review window.");
+    showToast("Upload interrupted: " + err.message + " You can resume from the confirmation window.");
   } finally {
     reviewProceedBtn.disabled = false;
     reviewEditBtn.disabled = false;
@@ -3321,7 +3486,6 @@ const subPageInfo       = document.getElementById("sub-page-info");
 const subPrevBtn        = document.getElementById("sub-prev-btn");
 const subNextBtn        = document.getElementById("sub-next-btn");
 const subHospitalFilter = document.getElementById("sub-hospital-filter");
-const subReviewedFilter = document.getElementById("sub-reviewed-filter");
 const subSearchInput    = document.getElementById("sub-search-input");
 const subDateFromInput  = document.getElementById("sub-date-from");
 const subDateToInput    = document.getElementById("sub-date-to");
@@ -3341,7 +3505,6 @@ subExportBtn?.addEventListener("click", exportSubmissionsCsv);
 subApplyBtn?.addEventListener("click", () => loadSubmissions(1));
 subResetBtn?.addEventListener("click", () => {
   if (subHospitalFilter) subHospitalFilter.value = "";
-  if (subReviewedFilter) subReviewedFilter.value = "";
   if (subSearchInput)    subSearchInput.value    = "";
   if (subDateFromInput)  subDateFromInput.value  = "";
   if (subDateToInput)    subDateToInput.value    = "";
@@ -3439,6 +3602,10 @@ loginForm?.addEventListener("submit", async (event) => {
     updateConsentContext();
     updateLinkedPatientSummary();
     refreshDashboard();
+    if (pendingAnonymizationOpen) {
+      pendingAnonymizationOpen = false;
+      showAnonymizationWorkspace();
+    }
   } catch (error) {
     if (error?.name === "AbortError") {
       showLoginError("The connection is taking too long. Please retry.", { retryable: true });
@@ -3461,6 +3628,7 @@ logoutBtn?.addEventListener("click", async () => {
     await authedFetch("/api/auth/logout", { method: "POST" });
   } catch { /* ignore */ }
   clearAuthSession();
+  anonymizationScreen?.classList.add("hidden");
   showLoginScreen();
   document.getElementById("login-username") && (document.getElementById("login-username").value = "");
   document.getElementById("login-password") && (document.getElementById("login-password").value = "");
@@ -3468,6 +3636,25 @@ logoutBtn?.addEventListener("click", async () => {
 
 studyFlowSwitch?.addEventListener("change", (event) => {
   switchStudyFlow(event.target.value);
+});
+
+anonymizationFolderInput?.addEventListener("change", () => {
+  if (anonymizationFileInput) anonymizationFileInput.value = "";
+  updateAnonymizationDemo(anonymizationFolderInput.files, "Folder");
+});
+
+anonymizationFileInput?.addEventListener("change", () => {
+  if (anonymizationFolderInput) anonymizationFolderInput.value = "";
+  updateAnonymizationDemo(anonymizationFileInput.files, "Selection");
+});
+
+anonymizationResetBtn?.addEventListener("click", () => {
+  clearAnonymizationDemo("Demo selection cleared.");
+});
+
+anonymizationApproveBtn?.addEventListener("click", () => {
+  clearAnonymizationDemo("Irreversible anonymized output approved. Temporary originals removed in this demo flow.");
+  showToast("Irreversible anonymization demo approved and temporary originals cleared.");
 });
 
 // Password show/hide toggle

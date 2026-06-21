@@ -372,7 +372,7 @@ let subPage = 1;
 const SUB_PAGE_SIZE = 20;
 let selectedReviewHospitalId = "";
 let selectedReviewHospitalName = "";
-let currentHospitalPendingRows = [];
+let currentHospitalSubmissionRows = [];
 let currentReviewIndex = -1;
 let currentReviewDetails = null;
 
@@ -390,26 +390,26 @@ async function loadAdminSubs(page = subPage) {
 
   const pagination = document.getElementById("admin-sub-pagination");
   if (!selectedReviewHospitalId) {
-    wrap.innerHTML = `<p class="admin-empty">Select a hospital queue above to start reviewing pending records.</p>`;
+    wrap.innerHTML = `<p class="admin-empty">Select a hospital below to view submitted records.</p>`;
     if (pagination) pagination.innerHTML = "";
     return;
   }
 
-  const pendingRows = await fetchAllPendingSubmissions(selectedReviewHospitalId, search);
-  currentHospitalPendingRows = pendingRows;
+  const submissionRows = await fetchAllSubmissionsForHospital(selectedReviewHospitalId, search);
+  currentHospitalSubmissionRows = submissionRows;
 
-  if (!pendingRows.length) {
-    wrap.innerHTML = `<p class="admin-empty">No pending submissions found for ${escapeHTML(selectedReviewHospitalName || selectedReviewHospitalId)}.</p>`;
+  if (!submissionRows.length) {
+    wrap.innerHTML = `<p class="admin-empty">No submissions found for ${escapeHTML(selectedReviewHospitalName || selectedReviewHospitalId)}.</p>`;
     if (pagination) pagination.innerHTML = "";
     return;
   }
 
-  const total = pendingRows.length;
-  const pageRows = pendingRows.slice((page - 1) * SUB_PAGE_SIZE, page * SUB_PAGE_SIZE);
+  const total = submissionRows.length;
+  const pageRows = submissionRows.slice((page - 1) * SUB_PAGE_SIZE, page * SUB_PAGE_SIZE);
 
   wrap.innerHTML = `<table class="admin-table">
     <thead><tr>
-      <th>Record ID</th><th>Patient ID</th><th>Hospital</th><th>Study</th><th>CKD</th><th>Package</th><th>Submitted</th><th>Status</th><th>Action</th>
+      <th>Record ID</th><th>Patient ID</th><th>Hospital</th><th>Study</th><th>CKD</th><th>Package</th><th>Submitted</th><th>Storage Status</th><th>Action</th>
     </tr></thead>
     <tbody>
       ${pageRows.map((s, idx) => `<tr>
@@ -420,15 +420,14 @@ async function loadAdminSubs(page = subPage) {
         <td>${escapeHTML(s.knownCkd || (s.ckdStage === "Normal" ? "No" : "Yes"))}</td>
         <td>${escapeHTML(subUploadMode(s.uploadMode))}</td>
         <td class="admin-nowrap">${fmtDate(s.receivedAt || s.created_at)}</td>
-        <td>${s.reviewedAt ? "Reviewed" : "Awaiting Review"}</td>
+        <td>Stored</td>
         <td>
           <button class="admin-btn admin-btn-outline admin-btn-sm"
             type="button"
             data-action="review-submission"
             data-recordid="${escapeHTML(s.recordId || "")}"
-            data-index="${(page - 1) * SUB_PAGE_SIZE + idx}"
-            data-reviewed="${s.reviewedAt ? "yes" : "no"}">
-            ${s.reviewedAt ? "View / Unreview" : "Review"}
+            data-index="${(page - 1) * SUB_PAGE_SIZE + idx}">
+            View
           </button>
         </td>
       </tr>`).join("")}
@@ -447,15 +446,14 @@ async function renderHospitalReviewCards() {
     ? (summary.summary?.pathways?.all?.hospitalBreakdown || summary.summary?.hospitalBreakdown || [])
     : [];
 
-  const pendingByHospital = new Map();
+  const countByHospital = new Map();
   breakdown.forEach((item) => {
-    const pending = Math.max(0, Number(item.patients || 0) - Number(item.reviewed || 0));
-    pendingByHospital.set(item.hospitalId, pending);
+    countByHospital.set(item.hospitalId, Number(item.patients || 0));
   });
 
   const sourceHospitals = adminHospitals.length
     ? adminHospitals
-    : Array.from(pendingByHospital.keys()).map((id) => ({ id, name: id }));
+    : Array.from(countByHospital.keys()).map((id) => ({ id, name: id }));
 
   if (!sourceHospitals.length) {
     cardWrap.innerHTML = `<p class="admin-empty">No hospitals found.</p>`;
@@ -463,7 +461,7 @@ async function renderHospitalReviewCards() {
   }
 
   cardWrap.innerHTML = sourceHospitals.map((hospital) => {
-    const pending = pendingByHospital.get(hospital.id) || 0;
+    const count = countByHospital.get(hospital.id) || 0;
     const isActive = selectedReviewHospitalId === hospital.id;
     return `<button type="button" class="admin-hospital-card ${isActive ? "active" : ""}"
       data-action="select-hospital-queue"
@@ -471,14 +469,14 @@ async function renderHospitalReviewCards() {
       data-hospitalname="${escapeHTML(hospital.name)}">
       <div class="admin-hospital-card-head">
         <p class="admin-hospital-card-name">${escapeHTML(hospital.name)}</p>
-        <span class="admin-pending-pill">${pending}</span>
+        <span class="admin-pending-pill">${count}</span>
       </div>
-      <p class="admin-hospital-card-meta">${pending === 1 ? "1 pending review" : `${pending} pending reviews`}</p>
+      <p class="admin-hospital-card-meta">${count === 1 ? "1 submitted record" : `${count} submitted records`}</p>
     </button>`;
   }).join("");
 }
 
-async function fetchAllPendingSubmissions(hospitalId, search = "") {
+async function fetchAllSubmissionsForHospital(hospitalId, search = "") {
   if (!hospitalId) return [];
   const all = [];
   let page = 1;
@@ -487,8 +485,7 @@ async function fetchAllPendingSubmissions(hospitalId, search = "") {
     const params = new URLSearchParams({
       page: String(page),
       limit: "50",
-      hospitalId,
-      reviewed: "no"
+      hospitalId
     });
     if (search) params.set("search", search);
     const res = await apiGet(`/api/submissions?${params}`);
@@ -551,8 +548,7 @@ function buildSubmissionReviewRows(submission) {
     ["CKD Stage", submission.ckdStage || "—"],
     ["Upload Mode", subUploadMode(submission.uploadMode)],
     ["Submitted", fmtDate(submission.receivedAt)],
-    ["Reviewed", submission.reviewedAt ? `Yes (${fmtDate(submission.reviewedAt)})` : "No"],
-    ["Reviewed By", submission.reviewedBy || "—"]
+    ["Storage Status", "Stored"]
   ];
 
   if ((submission.studyFlow || "egfr") === "kfre") {
@@ -605,12 +601,12 @@ function formatFileSize(bytes) {
 }
 
 function reviewNavigatorHtml() {
-  if (currentReviewIndex < 0 || !currentHospitalPendingRows.length) return "";
+  if (currentReviewIndex < 0 || !currentHospitalSubmissionRows.length) return "";
   return `<div class="admin-review-toolbar">
-    <p class="admin-review-index">Record ${currentReviewIndex + 1} of ${currentHospitalPendingRows.length}</p>
+    <p class="admin-review-index">Record ${currentReviewIndex + 1} of ${currentHospitalSubmissionRows.length}</p>
     <div class="admin-review-nav">
       <button class="admin-btn admin-btn-outline admin-btn-sm" type="button" data-action="review-prev" ${currentReviewIndex <= 0 ? "disabled" : ""}>← Previous</button>
-      <button class="admin-btn admin-btn-outline admin-btn-sm" type="button" data-action="review-next" ${currentReviewIndex >= currentHospitalPendingRows.length - 1 ? "disabled" : ""}>Next →</button>
+      <button class="admin-btn admin-btn-outline admin-btn-sm" type="button" data-action="review-next" ${currentReviewIndex >= currentHospitalSubmissionRows.length - 1 ? "disabled" : ""}>Next →</button>
     </div>
   </div>`;
 }
@@ -631,8 +627,8 @@ function buildSubmissionReviewModalBody(submission) {
 
 async function openSubmissionReviewModal(recordId, index = -1) {
   currentReviewIndex = Number.isInteger(index) ? index : -1;
-  if (currentReviewIndex < 0 && currentHospitalPendingRows.length) {
-    currentReviewIndex = currentHospitalPendingRows.findIndex((item) => item.recordId === recordId);
+  if (currentReviewIndex < 0 && currentHospitalSubmissionRows.length) {
+    currentReviewIndex = currentHospitalSubmissionRows.findIndex((item) => item.recordId === recordId);
   }
   const result = await apiGet(`/api/submissions/${encodeURIComponent(recordId)}`);
   if (!result.ok || !result.submission) {
@@ -641,49 +637,23 @@ async function openSubmissionReviewModal(recordId, index = -1) {
   }
   const submission = result.submission;
   currentReviewDetails = submission;
-  const isReviewed = Boolean(submission.reviewedAt);
-  const confirmText = isReviewed ? "Mark Pending" : "Mark Reviewed";
 
   openModal(
-    `${isReviewed ? "Review Completed" : "Submission Review"} — ${submission.recordId || recordId}`,
+    `Submission Detail — ${submission.recordId || recordId}`,
     buildSubmissionReviewModalBody(submission),
-    async () => {
-      const response = await apiReq(`/api/submissions/${encodeURIComponent(recordId)}`, { reviewed: !isReviewed }, "PATCH");
-      if (!response.ok) {
-        showToast(response.error || "Could not update review status.");
-        return;
-      }
-      if (!isReviewed && currentReviewIndex >= 0) {
-        currentHospitalPendingRows.splice(currentReviewIndex, 1);
-      } else if (isReviewed) {
-        await loadAdminSubs(subPage);
-      }
-      showToast(!isReviewed ? "Submission marked as reviewed." : "Submission moved back to pending.");
-      await renderHospitalReviewCards();
-
-      if (!isReviewed && currentHospitalPendingRows.length) {
-        const nextIndex = Math.min(currentReviewIndex, currentHospitalPendingRows.length - 1);
-        const nextRecord = currentHospitalPendingRows[nextIndex];
-        await openSubmissionReviewModal(nextRecord.recordId, nextIndex);
-      } else {
-        closeModal();
-      }
-
-      loadAdminSubs(subPage);
-      if (activeSection === "overview") loadOverview();
-    },
-    { confirmText, cancelText: "Close" }
+    null,
+    { hideConfirm: true, cancelText: "Close" }
   );
 
   const modalBody = document.getElementById("admin-modal-body");
   modalBody?.querySelector("[data-action='review-prev']")?.addEventListener("click", async () => {
     if (currentReviewIndex <= 0) return;
-    const prev = currentHospitalPendingRows[currentReviewIndex - 1];
+    const prev = currentHospitalSubmissionRows[currentReviewIndex - 1];
     if (prev?.recordId) await openSubmissionReviewModal(prev.recordId, currentReviewIndex - 1);
   });
   modalBody?.querySelector("[data-action='review-next']")?.addEventListener("click", async () => {
-    if (currentReviewIndex >= currentHospitalPendingRows.length - 1) return;
-    const next = currentHospitalPendingRows[currentReviewIndex + 1];
+    if (currentReviewIndex >= currentHospitalSubmissionRows.length - 1) return;
+    const next = currentHospitalSubmissionRows[currentReviewIndex + 1];
     if (next?.recordId) await openSubmissionReviewModal(next.recordId, currentReviewIndex + 1);
   });
 }

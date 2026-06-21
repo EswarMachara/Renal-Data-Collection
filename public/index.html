@@ -79,6 +79,31 @@
         </article>
       </section>
 
+      <section class="public-anonymization-panel" aria-label="Anonymization tool preview">
+        <div class="public-panel-head">
+          <span class="eyebrow">Privacy-first preparation</span>
+          <h2>Anonymization Tool</h2>
+          <p>Preview the hospital-side workflow for irreversible anonymization of ultrasound images, reports, and lab documents before research upload.</p>
+        </div>
+        <div class="public-anon-grid">
+          <div class="public-anon-structure" aria-label="Expected input structure">
+            <strong>Expected input folder</strong>
+            <ul>
+              <li>Patient package</li>
+              <li>Left kidney ultrasound images</li>
+              <li>Right kidney ultrasound images</li>
+              <li>Ultrasound reports</li>
+              <li>Lab reports</li>
+            </ul>
+          </div>
+          <div class="public-anon-note">
+            <span>Non-persistent demo</span>
+            <p>Authenticated users can simulate parsing, preview original versus anonymized names, and approve cleanup of temporary originals.</p>
+            <button class="public-login-btn" id="public-anonymization-login" type="button">Login to use tool</button>
+          </div>
+        </div>
+      </section>
+
       <section class="public-map-panel" aria-label="Partner hospital map">
         <div class="public-panel-head">
           <span class="eyebrow">India footprint</span>
@@ -345,6 +370,7 @@
               </div>
               <div class="landing-actions">
                 <button class="btn-premium" id="landing-scroll-setup" type="button">Begin Session</button>
+                <button class="btn-secondary" id="open-anonymization-tool" type="button">Open Anonymization Tool</button>
                 <button class="btn-secondary" data-tab-jump="dashboard" type="button">View Dashboard</button>
               </div>
             </div>
@@ -1170,12 +1196,15 @@
 
           <div class="form-section" id="package-upload-section">
             <div class="section-title"><span class="section-index">1.</span> Patient File Package <span class="required-marker">*</span> <span class="section-note">Upload a ZIP file or Select files, or choose a Folder</span></div>
-            <p class="section-description">Add all available anonymized ultrasound images and the clinical PDF together. If you select files or a folder, the portal will automatically create one ZIP package before submission. Maximum upload size: 250 MB per package or video.</p>
-            <p class="section-description"><strong>Note:</strong> Ultrasound videos are not part of the ZIP or folder package. Please upload videos only in the Ultrasound Video section below.</p>
+            <p class="section-description">Add all available anonymized ultrasound images and the clinical PDF together. If you select files or a folder, the portal will automatically create one ZIP package before submission.</p>
             <div class="upload-grid">
               <div class="upload-tile wide package-upload-tile" id="patient-package-tile">
                 <span class="upload-title">UPLOAD PATIENT PACKAGE</span>
                 <span class="upload-subtitle">ZIP, multiple files, or a complete patient folder</span>
+                <div class="upload-guidance">
+                  <strong>Maximum upload size: 250 MB per package or video.</strong>
+                  <span><strong>Note:</strong> Ultrasound videos are not part of the ZIP or folder package. Please upload videos only in the Ultrasound Video section below.</span>
+                </div>
                 <div class="package-upload-actions">
                   <label class="package-upload-action">
                     <input id="patient-package-file" name="patientPackageFile" type="file" multiple />
@@ -1436,7 +1465,7 @@
       <div id="dash-admin-view" class="hidden">
         <div class="page-hero dashboard-hero">
           <h1>Data Collection Operations</h1>
-          <p>Monitor participating hospitals, submitted patient records, and review readiness across both study pathways</p>
+          <p>Monitor participating hospitals, submitted patient records, and cloud storage activity across both study pathways</p>
           <span class="hero-update" id="dashboard-updated-at">Awaiting live data</span>
           <div class="hero-divider"></div>
         </div>
@@ -1501,7 +1530,7 @@
               </div>
               <div class="summary-card">
                 <span class="summary-value" id="study-summary-pending">0</span>
-                <span class="summary-label">AWAITING ADMIN REVIEW</span>
+                <span class="summary-label">CLOUD-STORED RECORDS</span>
               </div>
             </div>
 
@@ -1560,7 +1589,7 @@
       <div id="dash-hospital-view" class="hidden">
         <div class="page-hero dashboard-hero">
           <h1>Hospital Submission Overview</h1>
-          <p id="dash-hospital-subtitle">Your submitted patient records and review progress</p>
+          <p id="dash-hospital-subtitle">Your submitted patient records and cloud storage activity</p>
           <span class="hero-update" id="dash-hospital-updated">Awaiting live data</span>
           <div class="hero-divider"></div>
         </div>
@@ -1576,7 +1605,7 @@
             </div>
             <div class="summary-card">
               <span class="summary-value" id="hosp-summary-pending">0</span>
-              <span class="summary-label">AWAITING ADMIN REVIEW</span>
+              <span class="summary-label">CLOUD-STORED RECORDS</span>
             </div>
           </div>
 
@@ -1606,7 +1635,7 @@
             <div class="table-wrap">
               <table>
                 <thead>
-                  <tr><th>Patient ID</th><th>Method</th><th>Received</th><th>Review Status</th></tr>
+                  <tr><th>Patient ID</th><th>Method</th><th>Received</th><th>Storage Status</th></tr>
                 </thead>
                 <tbody id="hosp-recent-body"></tbody>
               </table>
@@ -1620,9 +1649,9 @@
     <!-- ── Submissions Panel ─────────────────────────────────────────── -->
     <section class="tab-panel" id="tab-submissions" aria-labelledby="Submissions">
       <div class="page-hero submissions-hero">
-        <span class="submissions-kicker">Clinical intake review</span>
+        <span class="submissions-kicker">Clinical intake records</span>
         <h1>Submission Records</h1>
-        <p>Browse, filter, and review patient data submissions from all partner hospitals</p>
+        <p>Browse, filter, and view patient data submissions from all partner hospitals</p>
       </div>
 
       <!-- Filter bar -->
@@ -1631,14 +1660,6 @@
           <label class="sub-filter-label" for="sub-hospital-filter">Hospital</label>
           <select class="sub-filter-select" id="sub-hospital-filter">
             <option value="">All Hospitals</option>
-          </select>
-        </div>
-        <div class="sub-filter-group">
-          <label class="sub-filter-label" for="sub-reviewed-filter">Status</label>
-          <select class="sub-filter-select" id="sub-reviewed-filter">
-            <option value="">All Records</option>
-            <option value="no">Awaiting Review</option>
-            <option value="yes">Reviewed</option>
           </select>
         </div>
         <div class="sub-filter-group sub-filter-search">
@@ -1681,7 +1702,7 @@
                 <th>Mode</th>
                 <th>Files</th>
                 <th>Received</th>
-                <th>Status</th>
+                <th>Storage Status</th>
               </tr>
             </thead>
             <tbody id="sub-tbody">
@@ -1697,7 +1718,117 @@
         </div>
       </article>
     </section>
+
   </main>
+
+  <div id="anonymization-screen" class="anonymization-screen hidden" role="main" aria-label="Anonymization Tool">
+    <header class="anon-topbar">
+      <a class="public-brand" href="#" aria-label="TANUH Renal Health Data Collection Platform">
+        <img src="assets/tanuh.png" alt="TANUH" />
+        <span>
+          <strong>Anonymization Tool</strong>
+          <small>Privacy preparation workspace · Demo mode</small>
+        </span>
+      </a>
+      <button class="btn-secondary" id="anon-back-app" type="button">Back to Portal</button>
+    </header>
+
+    <main class="anon-workbench">
+      <section class="anon-hero-panel">
+        <div>
+          <span class="eyebrow">PII removal workflow</span>
+          <h1>Anonymization Tool</h1>
+          <p>Hospitals can upload the Ultrasound images, Ultrasound Reports, and Lab Reports and get the Anonymized version</p>
+        </div>
+        <div class="anon-hero-steps" aria-label="Anonymization workflow">
+          <div><span>1</span><strong>Select package</strong><small>Folder or files</small></div>
+          <div><span>2</span><strong>Preview output</strong><small>Original vs irreversible anonymized</small></div>
+          <div><span>3</span><strong>Approve cleanup</strong><small>Remove temporary originals</small></div>
+        </div>
+      </section>
+
+      <section class="anon-layout">
+        <article class="panel-card anon-intro-card">
+          <div class="anon-card-head">
+            <span class="eyebrow">Expected input structure</span>
+            <h2>One patient folder, predictable subfolders</h2>
+            <p>This structure helps the Anonymization tool to classify files consistently and produce an Anonymized package.</p>
+          </div>
+          <div class="anon-folder-tree" aria-label="Expected folder structure">
+            <div><strong>Patient_Folder/</strong></div>
+            <div><span>├─</span> Left_Kidney_Images/ <small>DICOM, JPEG, PNG</small></div>
+            <div><span>├─</span> Right_Kidney_Images/ <small>DICOM, JPEG, PNG</small></div>
+            <div><span>├─</span> Ultrasound_Reports/ <small>PDF or document files</small></div>
+            <div><span>└─</span> Lab_Reports/ <small>PDF or document files</small></div>
+          </div>
+          <div class="anon-policy-grid">
+            <div>
+              <strong>Irreversible</strong>
+              <p>The intended output cannot be used to reconstruct the original patient identity.</p>
+            </div>
+            <div>
+              <strong>Human approval gate</strong>
+              <p>Operators compare Original and Anonymized previews before cleanup.</p>
+            </div>
+            <!-- <div>
+              <strong>Backend pending</strong>
+              <p>This screen demonstrates the intended UX; production anonymization logic will be connected later.</p>
+            </div> -->
+          </div>
+        </article>
+
+        <article class="panel-card anon-tool-card">
+          <div class="anon-card-head">
+            <!-- <span class="eyebrow">Demo run</span> -->
+            <h2>Preview Anonymized output</h2>
+            <p>Choose files or a folder to simulate how the anonymized package will be presented for approval.</p>
+          </div>
+
+          <div class="upload-grid anon-upload-grid">
+            <div class="upload-tile wide package-upload-tile anon-package-tile">
+              <span class="upload-title">UPLOAD PATIENT PACKAGE FOR ANONYMIZATION</span>
+              <span class="upload-subtitle">Folder, selected files, ultrasound reports, and lab reports</span>
+              <div class="upload-guidance">
+                <!-- <strong>Demo mode: files are not uploaded to the server.</strong> -->
+                <span><strong>Expected:</strong> One patient folder with left/right kidney images, ultrasound reports, and lab reports. The tool previews irreversible anonymized output before cleanup.</span>
+              </div>
+              <div class="package-upload-actions">
+                <label class="package-upload-action">
+                  <input id="anon-folder-input" type="file" webkitdirectory directory multiple />
+                  Choose Folder
+                </label>
+                <label class="package-upload-action">
+                  <input id="anon-file-input" type="file" multiple />
+                  Choose Files
+                </label>
+              </div>
+              <div class="file-preview anon-status-card" id="anon-status-card" role="status" aria-live="polite">
+                No file selected
+              </div>
+            </div>
+          </div>
+
+          <div class="anon-preview-grid hidden" id="anon-preview-grid">
+            <section class="anon-preview-panel" aria-labelledby="anon-original-title">
+              <h3 id="anon-original-title">Original preview</h3>
+              <p>Visible only for operator review. Files stay in browser memory for this demo.</p>
+              <div class="anon-file-list" id="anon-original-list"></div>
+            </section>
+            <section class="anon-preview-panel" aria-labelledby="anon-output-title">
+              <h3 id="anon-output-title">Irreversible anonymized output preview</h3>
+              <p>Names and paths are replaced with research-safe labels for the demo output.</p>
+              <div class="anon-file-list" id="anon-output-list"></div>
+            </section>
+          </div>
+
+          <div class="anon-actions">
+            <button class="btn-secondary" id="anon-reset" type="button" disabled>Clear demo files</button>
+            <button class="btn-premium" id="anon-approve" type="button" disabled>Approve & Remove Originals</button>
+          </div>
+        </article>
+      </section>
+    </main>
+  </div>
 
   <!-- Submission detail slide-in panel -->
   <div class="sub-detail-overlay hidden" id="sub-detail-overlay" role="dialog" aria-modal="true" aria-label="Submission detail">
@@ -1721,9 +1852,9 @@
       <div class="review-header">
         <div>
           <span class="review-kicker">Final check before cloud upload</span>
-          <h2 id="review-title">Review eGFR Record</h2>
+          <h2 id="review-title">Confirm eGFR Record</h2>
         </div>
-        <button class="review-close" id="review-close" type="button" aria-label="Close review">×</button>
+        <button class="review-close" id="review-close" type="button" aria-label="Close confirmation">×</button>
       </div>
       <div class="review-content" id="review-content"></div>
       <div class="upload-progress-panel hidden" id="upload-progress-panel" role="status" aria-live="polite">
@@ -1808,7 +1939,7 @@
           <button class="admin-btn admin-btn-outline" id="admin-export-btn" type="button">Export CSV</button>
         </div>
         <div class="admin-hospital-review-cards" id="admin-sub-hospital-cards">
-          <p class="admin-empty">Loading hospital queues…</p>
+          <p class="admin-empty">Loading hospital records…</p>
         </div>
         <div class="admin-card">
           <div id="admin-sub-table-wrap" class="admin-table-wrap"><p class="admin-empty">Loading…</p></div>
