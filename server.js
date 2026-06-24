@@ -1624,6 +1624,9 @@ function computeDataQualityWarnings(record) {
   if (["3a", "3b", "4", "5"].includes(record.ckdStage)) {
     if (record.knownCkd === "No") warnings.push("Advanced CKD stage selected while Known CKD is No; verify clinical history.");
   }
+  if (["4", "5"].includes(record.ckdStage) && record.dialysis === "-") {
+    warnings.push("Advanced CKD stage selected without dialysis status; verify if unavailable or not collected.");
+  }
   if (record.diabetic === "No" && record.diabetesDuration !== "-") warnings.push("Diabetes duration is present while Diabetes Mellitus is No.");
   if (record.hypertension === "No" && record.hypertensionDuration !== "-") warnings.push("Hypertension duration is present while Hypertension is No.");
 
@@ -1727,10 +1730,6 @@ function normalizeSubmission(item, options = {}) {
   }
   if (uploadMode === "package" && files.some((f) => f.fieldName === "patientPackage" && path.extname(f.name || "").toLowerCase() !== ".zip")) {
     throw new Error("Patient package must be a .zip file.");
-  }
-  // Require dialysis only for advanced CKD stages 4 and 5 (KFRE-specific rule)
-  if (["4", "5"].includes(normalized.ckdStage) && normalized.dialysis === "-") {
-    throw new Error("Dialysis status is required for CKD stage 4 or 5.");
   }
   if (normalized.ckdStage === "Other" && normalized.ckdStageRemarks === "-") {
     normalized.ckdStageRemarks = "CKD reported; stage not collected in simplified intake.";
