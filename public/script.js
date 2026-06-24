@@ -888,6 +888,7 @@ const ckdStageRemarksInput = document.getElementById("ckd-stage-remarks");
 const dialysisBlock = document.getElementById("dialysis-block");
 const dialysisInput = document.getElementById("dialysis-yes-no");
 const dialysisFrequencyInput = document.getElementById("dialysis-frequency");
+const dialysisFrequencyBlock = document.getElementById("dialysis-frequency-block");
 const diabeticInput = document.getElementById("diabetic-yes-no");
 const diabeticStageBlock = document.getElementById("diabetic-stage-block");
 const diabeticStageInput = document.getElementById("diabetic-stage");
@@ -2216,6 +2217,7 @@ function updateKfreQuestionnaireVisibility({ clearHidden = false } = {}) {
   const showCkdDetails = isKfre && knownCkd === "Yes";
   const showDialysisDetails = showCkdDetails && ["3a", "3b", "4", "5"].includes(ckdStageInput.value);
   const requireDialysisDetails = showCkdDetails && ["4", "5"].includes(ckdStageInput.value);
+  const showDialysisFrequency = showDialysisDetails && dialysisInput.value === "Yes";
   const showOtherCkdRemarks = showCkdDetails && ckdStageInput.value === "Other";
 
   if (questionnaireSection1Title) {
@@ -2228,6 +2230,7 @@ function updateKfreQuestionnaireVisibility({ clearHidden = false } = {}) {
   if (ckdStageBlock) ckdStageBlock.classList.toggle("hidden", !showCkdDetails);
   if (ckdDurationBlock) ckdDurationBlock.classList.toggle("hidden", !showCkdDetails);
   dialysisBlock.classList.toggle("hidden", !showDialysisDetails);
+  dialysisFrequencyBlock?.classList.toggle("hidden", !showDialysisFrequency);
   // ckdStageRemarksBlock removed (Other option removed — uncomment to revert)
   // ckdStageRemarksBlock?.classList.toggle("hidden", !showOtherCkdRemarks);
 
@@ -2240,8 +2243,10 @@ function updateKfreQuestionnaireVisibility({ clearHidden = false } = {}) {
   ckdStageInput.required = showCkdDetails;
   // ckdStageRemarksInput removed (Other option removed — uncomment to revert)
   // if (ckdStageRemarksInput) ckdStageRemarksInput.required = showOtherCkdRemarks;
-  dialysisInput.required = requireDialysisDetails;
-  dialysisFrequencyInput.required = requireDialysisDetails && dialysisInput.value === "Yes";
+  dialysisInput.required = false;
+  dialysisFrequencyInput.required = showDialysisFrequency;
+  dialysisFrequencyInput.disabled = !showDialysisFrequency;
+  if (!showDialysisFrequency) dialysisFrequencyInput.value = "";
 
   if (knownCkd === "No" || !isKfre) {
     ckdStageInput.value = "";
@@ -2520,7 +2525,7 @@ function updateKfreConditionalFields({ clearHidden = false } = {}) {
     kfreRapidProgressionInput, kfreKidneyFailureEventInput,
     kfreHospitalizationInput, kfreDialysisInitiatedInput, kfreTransplantInput
   ];
-  alwaysRequired.filter(Boolean).forEach((input) => { input.required = false; });
+  alwaysRequired.filter(Boolean).forEach((input) => { input.required = isKfre; });
 
   // Follow-up conditional fields removed (uncomment block to revert)
   // const followupAvailable = isKfre && kfreFollowupStatusInput.value === "Available";
