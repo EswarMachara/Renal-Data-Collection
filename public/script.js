@@ -887,6 +887,7 @@ const ckdStageRemarksBlock = document.getElementById("ckd-stage-remarks-block");
 const ckdStageRemarksInput = document.getElementById("ckd-stage-remarks");
 const dialysisBlock = document.getElementById("dialysis-block");
 const dialysisInput = document.getElementById("dialysis-yes-no");
+const dialysisChoiceInputs = document.querySelectorAll("input[name='dialysisChoice']");
 const dialysisFrequencyInput = document.getElementById("dialysis-frequency");
 const dialysisFrequencyBlock = document.getElementById("dialysis-frequency-block");
 const diabeticInput = document.getElementById("diabetic-yes-no");
@@ -1276,10 +1277,19 @@ function getCheckedValue(inputs) {
   return Array.from(inputs).find((input) => input.checked)?.value || "";
 }
 
+let latestDialysisChoice = "";
+
+function rememberDialysisChoice(value) {
+  latestDialysisChoice = value || "";
+  if (dialysisInput) dialysisInput.value = latestDialysisChoice;
+}
+
 function syncDialysisValue() {
-  const selectedDialysis = document.querySelector("input[name='dialysisChoice']:checked");
-  if (dialysisInput) dialysisInput.value = selectedDialysis?.value || "";
-  return dialysisInput?.value || "";
+  const selectedDialysis = Array.from(dialysisChoiceInputs).find((input) => input.checked);
+  const formDialysisValue = questionnaireForm ? new FormData(questionnaireForm).get("dialysisChoice") : "";
+  const dialysisValue = selectedDialysis?.value || formDialysisValue || latestDialysisChoice || dialysisInput?.value || "";
+  rememberDialysisChoice(dialysisValue);
+  return dialysisValue;
 }
 
 function getDialysisValue() {
@@ -1873,8 +1883,20 @@ syncChoiceInputs.forEach((input) => {
       updateDiabeticVisibility();
     }
     if (input.name === "dialysisChoice") {
+      rememberDialysisChoice(input.value);
       updateKfreQuestionnaireVisibility({ clearHidden: false });
     }
+    updateQuestionnaireContinueState();
+  });
+});
+
+dialysisChoiceInputs.forEach((input) => {
+  input.addEventListener("click", () => {
+    rememberDialysisChoice(input.value);
+    updateQuestionnaireContinueState();
+  });
+  input.addEventListener("input", () => {
+    rememberDialysisChoice(input.value);
     updateQuestionnaireContinueState();
   });
 });
@@ -2284,14 +2306,14 @@ function updateKfreQuestionnaireVisibility({ clearHidden = false } = {}) {
     // if (ckdStageRemarksInput) ckdStageRemarksInput.value = "";  // uncomment to revert
   }
   if (!showDialysisDetails) {
-    dialysisInput.value = "";
+    rememberDialysisChoice("");
     dialysisFrequencyInput.value = "";
-    document.querySelectorAll("input[name='dialysisChoice']").forEach((input) => {
+    dialysisChoiceInputs.forEach((input) => {
       input.checked = false;
       input.required = false;
     });
   } else {
-    document.querySelectorAll("input[name='dialysisChoice']").forEach((input) => {
+    dialysisChoiceInputs.forEach((input) => {
       input.required = requireDialysisDetails;
     });
   }
