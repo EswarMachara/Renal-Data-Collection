@@ -1274,6 +1274,10 @@ function getCheckedValue(inputs) {
   return Array.from(inputs).find((input) => input.checked)?.value || "";
 }
 
+function getDialysisValue() {
+  return getCheckedValue(document.querySelectorAll("input[name='dialysisChoice']")) || dialysisInput?.value || "";
+}
+
 function setFieldError(input, message) {
   input.setCustomValidity(message);
   if (message) {
@@ -2214,10 +2218,11 @@ function setControlRequired(controlId, required) {
 function updateKfreQuestionnaireVisibility({ clearHidden = false } = {}) {
   const isKfre = state.studyFlow === "kfre";
   const knownCkd = getCheckedValue(knownCkdInputs);
+  const dialysisValue = getDialysisValue();
   const showCkdDetails = isKfre && knownCkd === "Yes";
   const showDialysisDetails = showCkdDetails && ["3a", "3b", "4", "5"].includes(ckdStageInput.value);
   const requireDialysisDetails = showCkdDetails && ["4", "5"].includes(ckdStageInput.value);
-  const showDialysisFrequency = showDialysisDetails && dialysisInput.value === "Yes";
+  const showDialysisFrequency = showDialysisDetails && dialysisValue === "Yes";
   const showOtherCkdRemarks = showCkdDetails && ckdStageInput.value === "Other";
 
   if (questionnaireSection1Title) {
@@ -2244,6 +2249,7 @@ function updateKfreQuestionnaireVisibility({ clearHidden = false } = {}) {
   // ckdStageRemarksInput removed (Other option removed — uncomment to revert)
   // if (ckdStageRemarksInput) ckdStageRemarksInput.required = showOtherCkdRemarks;
   dialysisInput.required = false;
+  dialysisInput.value = dialysisValue;
   dialysisFrequencyInput.required = showDialysisFrequency;
   dialysisFrequencyInput.disabled = !showDialysisFrequency;
   if (!showDialysisFrequency) dialysisFrequencyInput.value = "";
@@ -2279,6 +2285,7 @@ function isQuestionnaireReadyForClinicalFlow() {
   const knownCkd = getCheckedValue(knownCkdInputs);
   const height = Number(heightInput.value);
   const weight = Number(weightInput.value);
+  const dialysisValue = getDialysisValue();
   const dialysisRequiredStage = ["4", "5"].includes(ckdStageInput.value);
   return Boolean(
     hospitalIdInput.value &&
@@ -2298,8 +2305,8 @@ function isQuestionnaireReadyForClinicalFlow() {
         ckdStageInput.value &&
         (ckdStageInput.value !== "Other" || ckdStageRemarksInput?.value.trim()) &&
         (!dialysisRequiredStage || (
-          dialysisInput.value &&
-          (dialysisInput.value !== "Yes" || dialysisFrequencyInput.value.trim())
+          dialysisValue &&
+          (dialysisValue !== "Yes" || dialysisFrequencyInput.value.trim())
         ))
       ))
     ))
@@ -2341,6 +2348,7 @@ function validateQuestionnaireForClinicalUpload() {
   }
 
   if (state.studyFlow === "kfre") {
+    const dialysisValue = getDialysisValue();
     // Consent Obtained removed from intake (uncomment to revert)
     // if (!getCheckedValue(consentObtainedInputs)) {
     //   showToast("Select whether patient consent was obtained.");
@@ -2359,11 +2367,11 @@ function validateQuestionnaireForClinicalUpload() {
     //   showToast("Enter CKD stage remarks for Other.");
     //   return false;
     // }
-    if (["4", "5"].includes(ckdStageInput.value) && !dialysisInput.value) {
+    if (["4", "5"].includes(ckdStageInput.value) && !dialysisValue) {
       showToast("Select dialysis status for CKD stage 4 or 5.");
       return false;
     }
-    if (dialysisInput.value === "Yes" && !dialysisFrequencyInput.value.trim()) {
+    if (dialysisValue === "Yes" && !dialysisFrequencyInput.value.trim()) {
       showToast("Enter dialysis frequency.");
       return false;
     }
@@ -3037,7 +3045,7 @@ function buildSubmissionFromForm() {
   const ckdStageRemarks = isKfre
     ? (ckdStage === "Other" ? (ckdStageRemarksInput?.value.trim() || "-") : "-")  // ckdStageRemarksInput may be null
     : (knownCkd === "Yes" ? "CKD reported; stage not collected in simplified intake." : "-");
-  const dialysis = isKfre ? dialysisInput.value : "";
+  const dialysis = isKfre ? getDialysisValue() : "";
   const dialysisFrequency = isKfre ? dialysisFrequencyInput.value.trim() : "";
   const diabetic = diabeticInput.value;
   // diabeticStageInput removed from KFRE intake (uncomment to revert)
