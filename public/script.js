@@ -2651,7 +2651,7 @@ function buildSubmissionPayload(timestamp, submission) {
       files: uploadFiles.map((upload) => ({
         fieldName: upload.fieldName,
         name: upload.file.name,
-        type: upload.file.type || "application/octet-stream",
+        type: upload.file.type || "",
         size: upload.file.size
       }))
     };

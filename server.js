@@ -396,7 +396,7 @@ async function readSubmissionPayload(req) {
       const index     = Number(match[1]);
       const fieldName = match[2];
       const files     = fileMap.get(index) || [];
-      files.push({ fieldName, name: file.filename, type: file.contentType || "application/octet-stream", size: file.content.length, content: file.content });
+      files.push({ fieldName, name: file.filename, type: file.contentType || "", size: file.content.length, content: file.content });
       fileMap.set(index, files);
     });
     payload.submissions = (payload.submissions || []).map((item, index) => ({
@@ -1473,7 +1473,7 @@ function normalizeFiles(files, { requireContent = true } = {}) {
     }
     if (requireContent && contentSize <= 0) throw new Error(`${name} is empty or invalid.`);
     if (!requireContent && size <= 0) throw new Error(`${name} is empty or invalid.`);
-    return { ...file, fieldName, name, type: cleanText(file.type, 120) || "application/octet-stream", size: effectiveSize };
+    return { ...file, fieldName, name, type: cleanText(file.type, 120) || "", size: effectiveSize };
   });
 }
 
@@ -2690,7 +2690,7 @@ async function finalizeSubmissionBatch({ normalizedSubmissions, session, req }) 
         bucketPath: path.posix.join(cloudRecordPrefix, topLevelFolder, subFolder, storedName).replace(/\/+/g, "/"),
         storageCategory: topLevelFolder,
         storageSubfolder: subFolder || null,
-        type:        file.type || "application/octet-stream",
+        type:        file.type || "",
         size:        Number(file.size || storedSize || 0)
       };
     });
