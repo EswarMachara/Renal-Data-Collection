@@ -2267,7 +2267,6 @@ function updateKfreQuestionnaireVisibility({ clearHidden = false } = {}) {
   const dialysisValue = getDialysisValue();
   const showCkdDetails = isKfre && knownCkd === "Yes";
   const showDialysisDetails = showCkdDetails && ["3a", "3b", "4", "5"].includes(ckdStageInput.value);
-  const requireDialysisDetails = showCkdDetails && ["4", "5"].includes(ckdStageInput.value);
   const showDialysisFrequency = showDialysisDetails && dialysisValue === "Yes";
   const showOtherCkdRemarks = showCkdDetails && ckdStageInput.value === "Other";
 
@@ -2296,6 +2295,8 @@ function updateKfreQuestionnaireVisibility({ clearHidden = false } = {}) {
   // if (ckdStageRemarksInput) ckdStageRemarksInput.required = showOtherCkdRemarks;
   dialysisInput.required = false;
   dialysisInput.value = dialysisValue;
+  ckdDurationInput.required = false;
+  ckdDurationInput.setCustomValidity("");
   dialysisFrequencyInput.required = showDialysisFrequency;
   dialysisFrequencyInput.disabled = !showDialysisFrequency;
   if (!showDialysisFrequency) dialysisFrequencyInput.value = "";
@@ -2314,7 +2315,7 @@ function updateKfreQuestionnaireVisibility({ clearHidden = false } = {}) {
     });
   } else {
     dialysisChoiceInputs.forEach((input) => {
-      input.required = requireDialysisDetails;
+      input.required = false;
     });
   }
   // if (!showOtherCkdRemarks && ckdStageRemarksInput) ckdStageRemarksInput.value = "";  // uncomment to revert
@@ -2332,7 +2333,6 @@ function isQuestionnaireReadyForClinicalFlow() {
   const height = Number(heightInput.value);
   const weight = Number(weightInput.value);
   const dialysisValue = getDialysisValue();
-  const dialysisRequiredStage = ["4", "5"].includes(ckdStageInput.value);
   return Boolean(
     hospitalIdInput.value &&
     uhidInput.value.trim() &&
@@ -2350,10 +2350,7 @@ function isQuestionnaireReadyForClinicalFlow() {
       (knownCkd === "No" || (
         ckdStageInput.value &&
         (ckdStageInput.value !== "Other" || ckdStageRemarksInput?.value.trim()) &&
-        (!dialysisRequiredStage || (
-          dialysisValue &&
-          (dialysisValue !== "Yes" || dialysisFrequencyInput.value.trim())
-        ))
+        (dialysisValue !== "Yes" || dialysisFrequencyInput.value.trim())
       ))
     ))
   );
@@ -2413,10 +2410,6 @@ function validateQuestionnaireForClinicalUpload() {
     //   showToast("Enter CKD stage remarks for Other.");
     //   return false;
     // }
-    if (["4", "5"].includes(ckdStageInput.value) && !dialysisValue) {
-      showToast("Select dialysis status for CKD stage 4 or 5.");
-      return false;
-    }
     if (dialysisValue === "Yes" && !dialysisFrequencyInput.value.trim()) {
       showToast("Enter dialysis frequency.");
       return false;
