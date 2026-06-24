@@ -1297,12 +1297,10 @@ async function getDatabaseSummary(scopeHospitalId = null) {
     receivedAt: row.received_at,
     reviewedAt: row.reviewed_at || null
   }));
-  const pathwaySummaries = scopeHospitalId
-    ? null
-    : await Promise.all([
-      getDatabasePathwaySummary("egfr"),
-      getDatabasePathwaySummary("kfre")
-    ]);
+  const pathwaySummaries = await Promise.all([
+    getDatabasePathwaySummary("egfr", scopeHospitalId),
+    getDatabasePathwaySummary("kfre", scopeHospitalId)
+  ]);
 
   return {
     summary: {
@@ -1325,12 +1323,10 @@ async function getDatabaseSummary(scopeHospitalId = null) {
     })),
     ageBuckets,
     recentRecords,
-    ...(pathwaySummaries ? {
-      pathways: {
-        egfr: pathwaySummaries[0],
-        kfre: pathwaySummaries[1]
-      }
-    } : {})
+    pathways: {
+      egfr: pathwaySummaries[0],
+      kfre: pathwaySummaries[1]
+    }
   };
 }
 
@@ -3560,12 +3556,10 @@ async function getFilesystemSummary(scopeHospitalId = null) {
     hospitalBreakdown,
     ageBuckets,
     recentRecords,
-    ...(!scopeHospitalId ? {
-      pathways: {
-        egfr: getFilesystemPathwaySummary(all.filter((record) => record.studyFlow !== "kfre")),
-        kfre: getFilesystemPathwaySummary(all.filter((record) => record.studyFlow === "kfre"))
-      }
-    } : {})
+    pathways: {
+      egfr: getFilesystemPathwaySummary(all.filter((record) => record.studyFlow !== "kfre")),
+      kfre: getFilesystemPathwaySummary(all.filter((record) => record.studyFlow === "kfre"))
+    }
   };
 }
 

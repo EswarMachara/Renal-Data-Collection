@@ -1428,6 +1428,7 @@ function switchStudyFlow(nextFlow, { skipConfirm = false } = {}) {
   }
 
   state.studyFlow = normalized;
+  state.hospitalDashboardView = normalized;
   saveStudyFlow(normalized);
   closeReviewSubmission();
   resetEgfrForm();
@@ -2679,6 +2680,22 @@ adminDashboardTabs.forEach((button, index) => {
     event.preventDefault();
     const offset = event.key === "ArrowRight" ? 1 : -1;
     const nextButton = adminDashboardTabs[(index + offset + adminDashboardTabs.length) % adminDashboardTabs.length];
+    nextButton.focus();
+    nextButton.click();
+  });
+});
+
+const hospitalDashboardTabs = [...document.querySelectorAll("[data-hospital-dashboard-view]")];
+hospitalDashboardTabs.forEach((button, index) => {
+  button.addEventListener("click", () => {
+    state.hospitalDashboardView = button.dataset.hospitalDashboardView === "kfre" ? "kfre" : "egfr";
+    updateDashboards();
+  });
+  button.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    const offset = event.key === "ArrowRight" ? 1 : -1;
+    const nextButton = hospitalDashboardTabs[(index + offset + hospitalDashboardTabs.length) % hospitalDashboardTabs.length];
     nextButton.focus();
     nextButton.click();
   });

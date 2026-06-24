@@ -5,6 +5,7 @@ export const state = {
   hospitalSession: null,
   backendDashboard: null,
   adminDashboardView: "overview",
+  hospitalDashboardView: "egfr",
   authSession: null,
   studyFlow: "egfr",
   consentId: null,
@@ -31,6 +32,7 @@ export function loadStudyFlow() {
   } catch {
     state.studyFlow = "egfr";
   }
+  state.hospitalDashboardView = state.studyFlow;
   return state.studyFlow;
 }
 

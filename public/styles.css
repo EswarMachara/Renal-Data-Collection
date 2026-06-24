@@ -1979,7 +1979,8 @@ body {
   text-align: center;
 }
 
-.admin-pathway-tab[data-admin-dashboard-view="kfre"] .pathway-count {
+.admin-pathway-tab[data-admin-dashboard-view="kfre"] .pathway-count,
+.admin-pathway-tab[data-hospital-dashboard-view="kfre"] .pathway-count {
   background: #e8f0fe;
   color: #2359ae;
 }

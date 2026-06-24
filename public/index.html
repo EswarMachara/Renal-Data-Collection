@@ -1593,15 +1593,30 @@
           <span class="hero-update" id="dash-hospital-updated">Awaiting live data</span>
           <div class="hero-divider"></div>
         </div>
-        <article class="panel-card flow-card dashboard-card">
+        <div class="admin-pathway-switcher hospital-pathway-switcher" role="tablist" aria-label="Select hospital dashboard study">
+          <button class="admin-pathway-tab active" id="hospital-egfr-tab" type="button" role="tab" aria-selected="true" aria-controls="hospital-study-dashboard" tabindex="0" data-hospital-dashboard-view="egfr">
+            <span class="pathway-dot egfr"></span>eGFR Study <span class="pathway-count" id="hospital-egfr-tab-count">0</span>
+          </button>
+          <button class="admin-pathway-tab" id="hospital-kfre-tab" type="button" role="tab" aria-selected="false" aria-controls="hospital-study-dashboard" tabindex="-1" data-hospital-dashboard-view="kfre">
+            <span class="pathway-dot kfre"></span>KFRE Study <span class="pathway-count" id="hospital-kfre-tab-count">0</span>
+          </button>
+        </div>
+        <article class="panel-card flow-card dashboard-card" id="hospital-study-dashboard">
+          <header class="admin-study-header" id="hospital-study-header">
+            <div>
+              <span class="admin-study-badge" id="hospital-study-badge">eGFR STUDY</span>
+              <h2 id="hospital-study-title">Ultrasound and Clinical Intake</h2>
+              <p id="hospital-study-description">Your hospital’s kidney ultrasound and clinical document submissions.</p>
+            </div>
+          </header>
           <div class="summary-grid">
             <div class="summary-card">
               <span class="summary-value" id="hosp-summary-patients">0</span>
-              <span class="summary-label">PATIENT RECORDS SUBMITTED</span>
+              <span class="summary-label">PATIENT RECORDS</span>
             </div>
             <div class="summary-card">
               <span class="summary-value" id="hosp-summary-videos">0</span>
-              <span class="summary-label">ULTRASOUND VIDEOS</span>
+              <span class="summary-label" id="hosp-summary-files-label">ULTRASOUND VIDEOS</span>
             </div>
             <div class="summary-card">
               <span class="summary-value" id="hosp-summary-pending">0</span>
@@ -1611,7 +1626,7 @@
 
           <div class="viz-grid">
             <section class="viz-card">
-              <div class="viz-header"><h3>CKD Status</h3></div>
+              <div class="viz-header"><h3 id="hosp-stage-title">CKD Status</h3></div>
               <div class="donut-wrap">
                 <div class="donut" id="hosp-ckd-donut" aria-label="My chronic kidney disease status distribution"></div>
                 <div class="donut-center" id="hosp-ckd-center">--</div>
@@ -1620,8 +1635,8 @@
             </section>
             <section class="viz-card">
               <div class="viz-header">
-                <h3>Age Distribution</h3>
-                <span class="viz-note">Adults 18+, with 80+ grouped</span>
+                <h3 id="hosp-secondary-title">Age Distribution</h3>
+                <span class="viz-note" id="hosp-secondary-note">Adults 18+, with 80+ grouped</span>
               </div>
               <div class="histogram" id="hosp-age-histogram" aria-label="My age distribution"></div>
             </section>
@@ -1629,8 +1644,8 @@
 
           <section class="table-section">
             <div class="viz-header">
-              <h3>Recent Submissions</h3>
-              <span class="viz-note">Latest records uploaded by your hospital</span>
+              <h3 id="hosp-recent-title">Recent eGFR Records</h3>
+              <span class="viz-note" id="hosp-recent-note">Latest eGFR records uploaded by your hospital</span>
             </div>
             <div class="table-wrap">
               <table>
@@ -2032,6 +2047,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-  <script type="module" src="./script.js?v=20260624-kfre-stage45-fix"></script>
+  <script type="module" src="./script.js?v=20260624-hospital-study-dashboard"></script>
 </body>
 </html>

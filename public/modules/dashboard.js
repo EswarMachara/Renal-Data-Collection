@@ -57,6 +57,18 @@ export function refreshDashboard() {
   redrawRecentUploads();
 }
 
+function emptyPathwaySummary() {
+  return {
+    summary: { patients: 0, videos: 0, documents: 0, reviewed: 0, pending: 0 },
+    stages: [],
+    diabetic: [],
+    ageBuckets: [],
+    followUp: [],
+    kidneyFailureEvents: [],
+    recentRecords: []
+  };
+}
+
 export async function loadBackendDashboard() {
   if (window.location.protocol === "file:") return;
   try {
@@ -111,15 +123,7 @@ export function updateDashboards() {
 
   if (role === "admin") {
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-    const emptyPathway = {
-      summary: { patients: 0, videos: 0, documents: 0, pending: 0 },
-      stages: [],
-      diabetic: [],
-      ageBuckets: [],
-      followUp: [],
-      kidneyFailureEvents: [],
-      recentRecords: []
-    };
+    const emptyPathway = emptyPathwaySummary();
     const egfr = d.pathways?.egfr || { ...emptyPathway, ...d, summary: d.summary || emptyPathway.summary };
     const kfre = d.pathways?.kfre || emptyPathway;
     const currentView = state.adminDashboardView === "egfr" || state.adminDashboardView === "kfre"
@@ -205,25 +209,57 @@ export function updateDashboards() {
     renderRecentRecordsTable("recent-body", pathway.recentRecords || [], ["uhid", "hospitalId", "uploadMode", "receivedAt", "reviewedAt"]);
   } else {
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-    set("hosp-summary-patients", d.summary?.patients ?? 0);
-    set("hosp-summary-videos", d.summary?.videos ?? 0);
-    set("hosp-summary-pending", d.summary?.patients ?? 0);
+    const emptyPathway = emptyPathwaySummary();
+    const egfr = d.pathways?.egfr || { ...emptyPathway, ...d, summary: d.summary || emptyPathway.summary };
+    const kfre = d.pathways?.kfre || emptyPathway;
+    const currentView = state.hospitalDashboardView === "kfre" ? "kfre" : "egfr";
+    const pathway = currentView === "kfre" ? kfre : egfr;
+    const isKfre = currentView === "kfre";
+
+    set("hospital-egfr-tab-count", egfr.summary?.patients ?? 0);
+    set("hospital-kfre-tab-count", kfre.summary?.patients ?? 0);
+    document.querySelectorAll("[data-hospital-dashboard-view]").forEach((button) => {
+      const isActive = button.dataset.hospitalDashboardView === currentView;
+      button.classList.toggle("active", isActive);
+      button.setAttribute("aria-selected", String(isActive));
+      button.setAttribute("tabindex", isActive ? "0" : "-1");
+    });
+
+    const studyHeader = document.getElementById("hospital-study-header");
+    studyHeader?.classList.toggle("is-kfre", isKfre);
+    set("hospital-study-badge", isKfre ? "KFRE STUDY" : "eGFR STUDY");
+    set("hospital-study-title", isKfre ? "Kidney Failure Risk Assessment" : "Ultrasound and Clinical Intake");
+    set("hospital-study-description", isKfre
+      ? "Your hospital’s clinical document records for KFRE risk modelling."
+      : "Your hospital’s ultrasound package and clinical report submissions.");
+    set("hosp-summary-patients", pathway.summary?.patients ?? 0);
+    const kfreFollowUpCount = (pathway.followUp || []).find((item) => item.label === "Recorded")?.value || 0;
+    set("hosp-summary-videos", isKfre ? kfreFollowUpCount : pathway.summary?.videos ?? 0);
+    set("hosp-summary-files-label", isKfre ? "FOLLOW-UP RECORDS" : "ULTRASOUND VIDEOS");
+    set("hosp-summary-pending", pathway.summary?.patients ?? 0);
+    set("hosp-stage-title", isKfre ? "KFRE CKD Status" : "CKD Status");
+    set("hosp-secondary-title", "Age Distribution");
+    set("hosp-secondary-note", isKfre ? "KFRE records by patient age band" : "Adults 18+, with 80+ grouped");
+    set("hosp-recent-title", isKfre ? "Recent KFRE Records" : "Recent eGFR Records");
+    set("hosp-recent-note", isKfre
+      ? "Latest KFRE clinical document records uploaded by your hospital"
+      : "Latest eGFR ultrasound records uploaded by your hospital");
 
     const subtitleEl = document.getElementById("dash-hospital-subtitle");
     const hospName = state.authSession?.hospitalName || state.authSession?.hospitalId || "";
-    if (subtitleEl && hospName) subtitleEl.textContent = `Submitted patient records and cloud storage activity for ${hospName}`;
+    if (subtitleEl && hospName) subtitleEl.textContent = `${isKfre ? "KFRE" : "eGFR"} records and cloud storage activity for ${hospName}`;
 
     const updEl = document.getElementById("dash-hospital-updated");
     if (updEl) updEl.textContent = nowStr;
 
-    const stageCounts = ckdStatusCounts(d.stages);
-    const total = d.summary?.patients || 0;
+    const stageCounts = ckdStatusCounts(pathway.stages);
+    const total = pathway.summary?.patients || 0;
     renderDonut("hosp-ckd-donut", "hosp-ckd-center", "hosp-ckd-legend",
       CKD_STATUS_DONUT_SEGMENTS(stageCounts), String(total));
 
-    const ageBuckets = (d.ageBuckets || []).map((bucket) => ({ label: bucket.bucket, value: bucket.count }));
+    const ageBuckets = (pathway.ageBuckets || []).map((bucket) => ({ label: bucket.bucket, value: bucket.count }));
     renderHistogram("hosp-age-histogram", ageBuckets);
-    renderRecentRecordsTable("hosp-recent-body", d.recentRecords || [], ["uhid", "uploadMode", "receivedAt", "reviewedAt"]);
+    renderRecentRecordsTable("hosp-recent-body", pathway.recentRecords || [], ["uhid", "uploadMode", "receivedAt", "reviewedAt"]);
   }
 }
 
