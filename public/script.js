@@ -893,8 +893,10 @@ const diabeticInput = document.getElementById("diabetic-yes-no");
 const diabeticStageBlock = document.getElementById("diabetic-stage-block");
 const diabeticStageInput = document.getElementById("diabetic-stage");
 const diabetesDurationInput = document.getElementById("diabetes-duration");
+const diabetesDurationBlock = document.getElementById("diabetes-duration-block");
 const hypertensionInputs = document.querySelectorAll("input[name='hypertension']");
 const hypertensionDurationInput = document.getElementById("hypertension-duration");
+const hypertensionDurationBlock = document.getElementById("hypertension-duration-block");
 const cardiovascularDiseaseInputs = document.querySelectorAll("input[name='cardiovascularDisease']");
 const familyKidneyHistoryInputs = document.querySelectorAll("input[name='familyKidneyHistory']");
 const uploadModeInputs = document.querySelectorAll("input[name='uploadMode']");
@@ -1274,8 +1276,14 @@ function getCheckedValue(inputs) {
   return Array.from(inputs).find((input) => input.checked)?.value || "";
 }
 
+function syncDialysisValue() {
+  const selectedDialysis = document.querySelector("input[name='dialysisChoice']:checked");
+  if (dialysisInput) dialysisInput.value = selectedDialysis?.value || "";
+  return dialysisInput?.value || "";
+}
+
 function getDialysisValue() {
-  return getCheckedValue(document.querySelectorAll("input[name='dialysisChoice']")) || dialysisInput?.value || "";
+  return syncDialysisValue();
 }
 
 function setFieldError(input, message) {
@@ -1859,7 +1867,23 @@ tabs.forEach((tab) => {
 });
 
 syncChoiceInputs.forEach((input) => {
-  input.addEventListener("change", () => syncChoiceValue(input));
+  input.addEventListener("change", () => {
+    syncChoiceValue(input);
+    if (["diabetesMellitus", "hypertension"].includes(input.name)) {
+      updateDiabeticVisibility();
+    }
+    if (input.name === "dialysisChoice") {
+      updateKfreQuestionnaireVisibility({ clearHidden: false });
+    }
+    updateQuestionnaireContinueState();
+  });
+});
+
+hypertensionInputs.forEach((input) => {
+  input.addEventListener("change", () => {
+    updateDiabeticVisibility();
+    updateQuestionnaireContinueState();
+  });
 });
 
 // ─── Intake stepper + autosave ────────────────────────────────────────────────
@@ -2395,6 +2419,8 @@ questionnaireWeightInput?.addEventListener("input", updateQuestionnaireBmi);
 questionnaireForm?.addEventListener("input", updateQuestionnaireContinueState);
 questionnaireForm?.addEventListener("change", updateQuestionnaireContinueState);
 questionnaireContinueBtn?.addEventListener("click", () => {
+  syncDialysisValue();
+  updateKfreQuestionnaireVisibility({ clearHidden: false });
   if (!questionnaireForm.checkValidity()) {
     questionnaireForm.reportValidity();
     updateQuestionnaireContinueState();
@@ -2604,6 +2630,20 @@ function updateDiabeticVisibility() {
   // const showClassification = state.studyFlow === "kfre" && diabeticInput.value === "Yes";
   // diabeticStageBlock?.classList.toggle("hidden", !showClassification);
   // if (!showClassification && diabeticStageInput) diabeticStageInput.value = "";
+  const showDiabetesDuration = state.studyFlow === "kfre" && diabeticInput.value === "Yes";
+  const showHypertensionDuration = state.studyFlow === "kfre" && getCheckedValue(hypertensionInputs) === "Yes";
+  diabetesDurationBlock?.classList.toggle("hidden", !showDiabetesDuration);
+  hypertensionDurationBlock?.classList.toggle("hidden", !showHypertensionDuration);
+  if (diabetesDurationInput) {
+    diabetesDurationInput.required = false;
+    diabetesDurationInput.disabled = !showDiabetesDuration;
+    if (!showDiabetesDuration) diabetesDurationInput.value = "";
+  }
+  if (hypertensionDurationInput) {
+    hypertensionDurationInput.required = false;
+    hypertensionDurationInput.disabled = !showHypertensionDuration;
+    if (!showHypertensionDuration) hypertensionDurationInput.value = "";
+  }
   updateLinkedPatientSummary();
   updateQuestionnaireContinueState();
 }
