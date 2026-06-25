@@ -47,7 +47,7 @@ const STORAGE_SCHEMA_VERSION = 2;
 const UPLOAD_SESSION_DIR = path.join(DATA_DIR, "upload-sessions");
 const PARTICIPANT_MAP_FILE = path.join(DATA_DIR, "private", "participant-mapping.json");
 const PUBLIC_DASHBOARD_CACHE_FILE = path.join(DATA_DIR, "private", "public-dashboard-cache.json");
-const PUBLIC_DASHBOARD_CACHE_VERSION = 3;
+const PUBLIC_DASHBOARD_CACHE_VERSION = 4;
 const PUBLIC_DASHBOARD_CACHE_TTL_MS = Number(process.env.PUBLIC_DASHBOARD_CACHE_TTL_MS || 2 * 60 * 1000);
 const PUBLIC_DASHBOARD_CACHE_STALE_MS = Number(process.env.PUBLIC_DASHBOARD_CACHE_STALE_MS || 24 * 60 * 60 * 1000);
 const RAW_DATABASE_URL = process.env.DATABASE_URL || "";
@@ -3941,6 +3941,45 @@ async function getCkdDistributionForPublicRecordIds(recordIds) {
   return result.rows;
 }
 
+async function getDemographicsForPublicRecordIds(recordIds) {
+  if (!dbPool || !dbReady || !recordIds.length) return [];
+  const result = await dbPool.query(
+    `SELECT age_group, sex, COUNT(*)::int AS value
+     FROM (
+       SELECT
+         CASE
+           WHEN age >= 80 THEN '80+'
+           WHEN age >= 70 THEN '70-79'
+           WHEN age >= 60 THEN '60-69'
+           WHEN age >= 50 THEN '50-59'
+           WHEN age >= 40 THEN '40-49'
+           WHEN age >= 30 THEN '30-39'
+           ELSE '18-29'
+         END AS age_group,
+         sex
+       FROM submissions
+       WHERE record_id = ANY($1::text[])
+         AND NOT (hospital_id = ANY($2::text[]))
+         AND age >= 18
+         AND sex IN ('Male', 'Female')
+     ) scoped
+     GROUP BY age_group, sex
+     ORDER BY
+       CASE age_group
+         WHEN '18-29' THEN 1
+         WHEN '30-39' THEN 2
+         WHEN '40-49' THEN 3
+         WHEN '50-59' THEN 4
+         WHEN '60-69' THEN 5
+         WHEN '70-79' THEN 6
+         ELSE 7
+       END,
+       sex`,
+    [recordIds, Array.from(publicDashboardExcludedHospitals)]
+  );
+  return result.rows;
+}
+
 async function getPublicDashboardSummary(options = {}) {
   const includeRecordIds = Boolean(options.includeRecordIds);
   const excludedIds = Array.from(publicDashboardExcludedHospitals);
@@ -3948,7 +3987,12 @@ async function getPublicDashboardSummary(options = {}) {
   const gcsPaths = await listGcsSubmissionObjects();
   if (gcsPaths) {
     const storageSummary = buildPublicStorageSummaryFromGcs(gcsPaths);
-    storageSummary.ckdDistribution = await getCkdDistributionForPublicRecordIds(storageSummary.recordIds);
+    const [ckdDistribution, demographics] = await Promise.all([
+      getCkdDistributionForPublicRecordIds(storageSummary.recordIds),
+      getDemographicsForPublicRecordIds(storageSummary.recordIds)
+    ]);
+    storageSummary.ckdDistribution = ckdDistribution;
+    storageSummary.demographics = demographics;
     if (!includeRecordIds) delete storageSummary.recordIds;
     return {
       ...storageSummary,

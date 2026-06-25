@@ -61,7 +61,7 @@ import {
 const RESUMABLE_UPLOAD_RETRIES = 3;
 const MAX_UPLOAD_FILE_BYTES = 250 * 1024 * 1024;
 const MAX_UPLOAD_FILE_LABEL = formatBytes(MAX_UPLOAD_FILE_BYTES);
-const PUBLIC_DASHBOARD_CACHE_KEY = "tanuh-public-dashboard-summary-v1";
+const PUBLIC_DASHBOARD_CACHE_KEY = "tanuh-public-dashboard-summary-v2";
 const publicMetricAnimations = new Map();
 
 const ADMIN_INTAKE_SOURCE = { id: "TANUH-ADMIN", name: "Admin" };
@@ -552,7 +552,6 @@ function renderPublicCharts(summary) {
         }]
       },
       options: {
-        indexAxis: 'y',
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
@@ -566,13 +565,14 @@ function renderPublicCharts(summary) {
         },
         scales: {
           x: {
-            grid: { display: true, color: '#e2e8f0', drawBorder: false },
-            ticks: { font: { family: "'Inter', sans-serif" } },
-            title: { display: true, text: 'Number of Patients', font: { family: "'Inter', sans-serif", size: 12, weight: '600' }, color: '#64748b' }
-          },
-          y: {
             grid: { display: false, drawBorder: false },
             ticks: { font: { family: "'Inter', sans-serif", weight: '600', size: 13 }, color: '#334155' }
+          },
+          y: {
+            beginAtZero: true,
+            grid: { display: true, color: '#e2e8f0', drawBorder: false },
+            ticks: { precision: 0, font: { family: "'Inter', sans-serif" } },
+            title: { display: true, text: 'Number of Patients', font: { family: "'Inter', sans-serif", size: 12, weight: '600' }, color: '#64748b' }
           }
         }
       }
