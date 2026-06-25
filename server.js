@@ -89,7 +89,8 @@ const seededHospitalCredentials = [
   { id: "GEMS-SKLM", password: "GEMS_Sklm@2026" },
   { id: "AIIMS-NGP", password: "AIIMS_NagpuR@2026" },
   { id: "NIMS-HYD-TG", password: "qazplm@234W" },
-  { id: "ISHA-MLM-KA", password: "Isha_Malleswaram@2026#" }
+  { id: "ISHA-MLM-KA", password: "Isha_Malleswaram@2026#" },
+  { id: "NH-BLR-KA", username: "nyra-ka", password: "Nyra_KA@2026#" }
 ];
 
 function findIntakeSource(sourceId) {
@@ -452,9 +453,11 @@ function setupEnvCredentials() {
     envCredentials.set("admin", { password: ADMIN_PASSWORD, hospitalId: null, role: "admin" });
   }
   seededHospitalCredentials.forEach((credential) => {
-    envCredentials.set(credential.id, {
+    const username = credential.username || credential.id;
+    const hospitalId = credential.hospitalId || credential.id;
+    envCredentials.set(username, {
       password:   credential.password,
-      hospitalId: credential.id,
+      hospitalId,
       role:       "hospital"
     });
   });
@@ -936,10 +939,12 @@ async function initializeDatabase() {
       [adminIntakeSource.id, adminIntakeSource.name]
     );
     for (const credential of seededHospitalCredentials) {
+      const username = credential.username || credential.id;
+      const hospitalId = credential.hospitalId || credential.id;
       const passwordDetails = await hashPassword(credential.password);
       await client.query(
         `INSERT INTO users (user_id, username, password_hash, password_salt, hospital_id, role, active)
-         VALUES ($1, $1, $2, $3, $1, 'hospital', true)
+         VALUES ($1, $1, $2, $3, $4, 'hospital', true)
          ON CONFLICT (user_id)
          DO UPDATE SET
            username = EXCLUDED.username,
@@ -948,7 +953,7 @@ async function initializeDatabase() {
            hospital_id = EXCLUDED.hospital_id,
            role = 'hospital',
            active = true`,
-        [credential.id, passwordDetails.hash, passwordDetails.salt]
+        [username, passwordDetails.hash, passwordDetails.salt, hospitalId]
       );
     }
 
