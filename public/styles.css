@@ -3909,6 +3909,14 @@ th {
   outline: none;
 }
 
+.india-hospital-marker .marker-leader {
+  stroke: rgba(14, 106, 111, 0.42);
+  stroke-dasharray: 2 2;
+  stroke-linecap: round;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
 .india-hospital-marker .marker-pulse {
   fill: rgba(20, 134, 140, 0.18);
   stroke: rgba(14, 106, 111, 0.28);

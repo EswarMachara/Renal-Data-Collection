@@ -278,7 +278,8 @@ function showPublicMapTooltip(group, marker) {
   const wrap = document.getElementById("public-map-wrap");
   if (!tooltip || !wrap || !marker) return;
   tooltip.innerHTML = getMapTooltipHtml(group);
-  const markerRect = marker.getBoundingClientRect();
+  const markerTarget = marker.querySelector(".marker-pin") || marker;
+  const markerRect = markerTarget.getBoundingClientRect();
   const wrapRect = wrap.getBoundingClientRect();
   tooltip.style.left = `${markerRect.left - wrapRect.left + markerRect.width / 2}px`;
   tooltip.style.top = `${markerRect.top - wrapRect.top}px`;
@@ -313,6 +314,52 @@ function buildHospitalLocationGroups(apiLocations, configuredHospitals) {
   return Array.from(groups.values());
 }
 
+function distanceBetweenPoints(first, second) {
+  return Math.hypot(first.x - second.x, first.y - second.y);
+}
+
+function buildMarkerLayouts(groups, projection) {
+  const projectedGroups = groups
+    .map((group) => {
+      const point = projectIndiaCoordinate(projection, group.longitude, group.latitude);
+      if (!point) return null;
+      return { ...group, x: point[0], y: point[1], offsetX: 0, offsetY: 0 };
+    })
+    .filter(Boolean);
+  const remaining = [...projectedGroups];
+  const clusters = [];
+  const clusterDistance = 30;
+
+  while (remaining.length) {
+    const cluster = [remaining.shift()];
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (let i = remaining.length - 1; i >= 0; i--) {
+        if (cluster.some((item) => distanceBetweenPoints(item, remaining[i]) <= clusterDistance)) {
+          cluster.push(remaining.splice(i, 1)[0]);
+          changed = true;
+        }
+      }
+    }
+    clusters.push(cluster);
+  }
+
+  clusters.forEach((cluster) => {
+    if (cluster.length === 1) return;
+    const radius = cluster.length > 3 ? 18 : 14;
+    cluster
+      .sort((first, second) => first.y - second.y || first.x - second.x)
+      .forEach((item, index) => {
+        const angle = -Math.PI / 2 + (index * 2 * Math.PI) / cluster.length;
+        item.offsetX = Math.cos(angle) * radius;
+        item.offsetY = Math.sin(angle) * radius;
+      });
+  });
+
+  return projectedGroups;
+}
+
 async function renderPublicMap(locations) {
   const svg = document.getElementById("india-map");
   const markerLayer = document.getElementById("india-map-markers");
@@ -330,20 +377,22 @@ async function renderPublicMap(locations) {
       setPublicMapStatus("Partner locations will appear here after verified coordinates are added.", "empty");
       return;
     }
-    groups.forEach((group) => {
-      const point = projectIndiaCoordinate(projection, group.longitude, group.latitude);
-      if (!point) return;
-      const [x, y] = point;
+    const markerLayouts = buildMarkerLayouts(groups, projection);
+    markerLayouts.forEach((group) => {
+      const hasOffset = Math.abs(group.offsetX) > 0.1 || Math.abs(group.offsetY) > 0.1;
       const marker = document.createElementNS("http://www.w3.org/2000/svg", "g");
       marker.setAttribute("class", "india-hospital-marker");
       marker.setAttribute("tabindex", "0");
       marker.setAttribute("role", "button");
       marker.setAttribute("aria-label", `${group.city}, ${group.state}: ${group.hospitals.length} partner hospital${group.hospitals.length === 1 ? "" : "s"}`);
-      marker.setAttribute("transform", `translate(${x.toFixed(2)} ${y.toFixed(2)})`);
+      marker.setAttribute("transform", `translate(${group.x.toFixed(2)} ${group.y.toFixed(2)})`);
       marker.innerHTML = `
-        <circle class="marker-pulse" r="15"></circle>
-        <circle class="marker-dot" r="${group.hospitals.length > 1 ? 8 : 6}"></circle>
-        ${group.hospitals.length > 1 ? `<text class="marker-count" y="3">${group.hospitals.length}</text>` : ""}
+        ${hasOffset ? `<line class="marker-leader" x1="0" y1="0" x2="${group.offsetX.toFixed(2)}" y2="${group.offsetY.toFixed(2)}"></line>` : ""}
+        <g class="marker-pin" transform="translate(${group.offsetX.toFixed(2)} ${group.offsetY.toFixed(2)})">
+          <circle class="marker-pulse" r="15"></circle>
+          <circle class="marker-dot" r="${group.hospitals.length > 1 ? 8 : 6}"></circle>
+          ${group.hospitals.length > 1 ? `<text class="marker-count" y="3">${group.hospitals.length}</text>` : ""}
+        </g>
       `;
       marker.addEventListener("mouseenter", () => showPublicMapTooltip(group, marker));
       marker.addEventListener("mouseleave", hidePublicMapTooltip);

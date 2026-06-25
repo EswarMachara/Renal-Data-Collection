@@ -47,7 +47,7 @@ const STORAGE_SCHEMA_VERSION = 2;
 const UPLOAD_SESSION_DIR = path.join(DATA_DIR, "upload-sessions");
 const PARTICIPANT_MAP_FILE = path.join(DATA_DIR, "private", "participant-mapping.json");
 const PUBLIC_DASHBOARD_CACHE_FILE = path.join(DATA_DIR, "private", "public-dashboard-cache.json");
-const PUBLIC_DASHBOARD_CACHE_VERSION = 2;
+const PUBLIC_DASHBOARD_CACHE_VERSION = 3;
 const PUBLIC_DASHBOARD_CACHE_TTL_MS = Number(process.env.PUBLIC_DASHBOARD_CACHE_TTL_MS || 2 * 60 * 1000);
 const PUBLIC_DASHBOARD_CACHE_STALE_MS = Number(process.env.PUBLIC_DASHBOARD_CACHE_STALE_MS || 24 * 60 * 60 * 1000);
 const RAW_DATABASE_URL = process.env.DATABASE_URL || "";
@@ -2451,6 +2451,39 @@ async function handleAdminAudit(req, res) {
 }
 
 // GET /api/admin/analytics/summary
+async function getCloudBackedAdminMetrics(dbSubmissionMetrics) {
+  try {
+    const publicSummary = await getPublicDashboardSummary({ includeRecordIds: true });
+    const recordIds = Array.isArray(publicSummary.recordIds) ? publicSummary.recordIds : [];
+    const metrics = {
+      totalHospitals: publicSummary.partnerHospitals,
+      totalSubmissions: publicSummary.totalRecords,
+      submissionsToday: dbSubmissionMetrics.today,
+      submissionsThisWeek: dbSubmissionMetrics.this_week,
+      submissionsThisMonth: dbSubmissionMetrics.this_month
+    };
+
+    if (dbPool && dbReady && recordIds.length) {
+      const dateMetrics = await dbPool.query(
+        `SELECT
+           COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE)::int AS today,
+           COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')::int AS this_week,
+           COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days')::int AS this_month
+         FROM submissions
+         WHERE record_id = ANY($1::text[])`,
+        [recordIds]
+      );
+      metrics.submissionsToday = dateMetrics.rows[0]?.today || 0;
+      metrics.submissionsThisWeek = dateMetrics.rows[0]?.this_week || 0;
+      metrics.submissionsThisMonth = dateMetrics.rows[0]?.this_month || 0;
+    }
+
+    return metrics;
+  } catch {
+    return null;
+  }
+}
+
 async function handleAdminAnalyticsSummary(req, res) {
   const session = await requireAuth(req, res);
   if (!session) return;
@@ -2479,14 +2512,17 @@ async function handleAdminAnalyticsSummary(req, res) {
         [excludedIds]
       )
     ]);
+    const dbSubmissionMetrics = submissionMetrics.rows[0] || {};
+    const cloudMetrics = await getCloudBackedAdminMetrics(dbSubmissionMetrics);
+
     sendJson(res, 200, {
       ok: true,
-      total_hospitals: hospitalMetrics.rows[0]?.total || 0,
+      total_hospitals: cloudMetrics?.totalHospitals ?? hospitalMetrics.rows[0]?.total ?? 0,
       active_hospitals: hospitalMetrics.rows[0]?.active || 0,
-      total_submissions: submissionMetrics.rows[0]?.total || 0,
-      submissions_today: submissionMetrics.rows[0]?.today || 0,
-      submissions_this_week: submissionMetrics.rows[0]?.this_week || 0,
-      submissions_this_month: submissionMetrics.rows[0]?.this_month || 0,
+      total_submissions: cloudMetrics?.totalSubmissions ?? dbSubmissionMetrics.total ?? 0,
+      submissions_today: cloudMetrics?.submissionsToday ?? dbSubmissionMetrics.today ?? 0,
+      submissions_this_week: cloudMetrics?.submissionsThisWeek ?? dbSubmissionMetrics.this_week ?? 0,
+      submissions_this_month: cloudMetrics?.submissionsThisMonth ?? dbSubmissionMetrics.this_month ?? 0,
       active_sessions: activeSessions
     });
   } catch (err) {
@@ -3905,14 +3941,15 @@ async function getCkdDistributionForPublicRecordIds(recordIds) {
   return result.rows;
 }
 
-async function getPublicDashboardSummary() {
+async function getPublicDashboardSummary(options = {}) {
+  const includeRecordIds = Boolean(options.includeRecordIds);
   const excludedIds = Array.from(publicDashboardExcludedHospitals);
 
   const gcsPaths = await listGcsSubmissionObjects();
   if (gcsPaths) {
     const storageSummary = buildPublicStorageSummaryFromGcs(gcsPaths);
     storageSummary.ckdDistribution = await getCkdDistributionForPublicRecordIds(storageSummary.recordIds);
-    delete storageSummary.recordIds;
+    if (!includeRecordIds) delete storageSummary.recordIds;
     return {
       ...storageSummary,
       reviewedRecords: 0,
