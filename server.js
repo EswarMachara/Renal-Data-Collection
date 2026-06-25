@@ -102,10 +102,11 @@ const allowedStudyFlows   = new Set(["egfr", "kfre"]);
 const allowedUploadModes  = new Set(["separate", "package", "clinical_document"]);
 const allowedSexValues    = new Set(["Male", "Female", "Other"]);
 const allowedYesNoValues  = new Set(["Yes", "No"]);
+const allowedYesNoNaValues = new Set(["Yes", "No", "N/A"]);
 const allowedCkdStages    = new Set(["Normal", "1", "2", "3a", "3b", "4", "5", "Other"]);
-const allowedEchogenicityValues = new Set(["Normal", "Mild Increased", "Moderate Increased", "Severe Increased"]);
-const allowedKidneySizeValues = new Set(["Normal", "Small", "Enlarged"]);
-const allowedParenchymalTextureValues = new Set(["Normal", "Altered"]);
+const allowedEchogenicityValues = new Set(["Normal", "Mild Increased", "Moderate Increased", "Severe Increased", "Increased (Not specified)", "N/A"]);
+const allowedKidneySizeValues = new Set(["Normal", "Small", "Enlarged", "N/A"]);
+const allowedParenchymalTextureValues = new Set(["Normal", "Altered", "N/A"]);
 const allowedKfreOutcomeStages = new Set(["1", "2", "3a", "3b", "4", "5"]);
 const allowedKfreProgressionValues = new Set(["No change", "Improved", "Progressed", "Kidney failure", "Not assessed"]);
 const allowedKfreEventTypes = new Set(["Dialysis", "Transplant"]);
@@ -1371,7 +1372,7 @@ function requiredChoice(item, field, label, allowedValues) {
 function optionalYesNo(item, field, label) {
   const value = cleanText(item[field], 12);
   if (!value || value === "-") return "-";
-  if (!allowedYesNoValues.has(value)) throw new Error(`${label} must be Yes or No.`);
+  if (!allowedYesNoNaValues.has(value)) throw new Error(`${label} must be Yes, No, or N/A.`);
   return value;
 }
 
@@ -1694,10 +1695,10 @@ function normalizeSubmission(item, options = {}) {
     ckdStageRemarks,
     dialysis:             optionalYesNo(item, "dialysis", "Dialysis"),
     dialysisFrequency:    optionalNumber(item, "dialysisFrequency", "Dialysis frequency", { min: 0, max: 21, integer: true }),
-    diabetic:             requiredChoice(item, "diabetic", "Diabetic status", allowedYesNoValues),
+    diabetic:             requiredChoice(item, "diabetic", "Diabetic status", allowedYesNoNaValues),
     diabeticStage:        optionalText(item.diabeticStage, 120),
     diabetesDuration:     optionalNumber(item, "diabetesDuration", "Diabetes duration", { min: 0, max: 120 }),
-    hypertension:         requiredChoice(item, "hypertension", "Hypertension", allowedYesNoValues),
+    hypertension:         requiredChoice(item, "hypertension", "Hypertension", allowedYesNoNaValues),
     hypertensionDuration: optionalNumber(item, "hypertensionDuration", "Hypertension duration", { min: 0, max: 120 }),
     cardiovascularDisease:  optionalYesNo(item, "cardiovascularDisease", "Cardiovascular disease"),
     familyKidneyHistory:    optionalYesNo(item, "familyKidneyHistory", "Family history of kidney disease"),
@@ -1785,6 +1786,10 @@ function buildStoredFileName(recordKey, label, originalName, timestamp, suffix) 
 function getFileContent(file) {
   if (Buffer.isBuffer(file.content)) return file.content;
   return Buffer.from(file.contentBase64 || "", "base64");
+}
+
+function getCkdStatusLabel(record) {
+  return record.knownCkd === "No" || record.ckdStage === "Normal" ? "No" : "Yes";
 }
 
 function writeSubmissionFile(file, localPath, syncPath) {
@@ -3414,7 +3419,7 @@ function getFilesystemPathwaySummary(records) {
     if (files.some((file) => file.fieldName === "ultrasoundVideo")) totalVideos++;
     if (files.some((file) => file.fieldName === "egfrReport" || file.fieldName === "clinicalDocument")) totalDocuments++;
     if (record.reviewedAt) totalReviewed++;
-    const ckdStatus = record.knownCkd === "No" || record.ckdStage === "Normal" ? "No" : "Yes";
+    const ckdStatus = getCkdStatusLabel(record);
     stageCounts[ckdStatus] = (stageCounts[ckdStatus] || 0) + 1;
     if (ckdStatus === "Yes") {
       const diabetic = record.diabetic === "Yes" ? "Yes" : "No";
@@ -3430,7 +3435,7 @@ function getFilesystemPathwaySummary(records) {
     if (record.kfreForm?.outcomes?.kidneyFailureEvent === "Yes") failureEvents++;
   }
 
-  const stageOrder = ["Yes", "No"];
+  const stageOrder = ["Yes", "No", "N/A"];
   const ageBucketOrder = ["18-29", "30-39", "40-49", "50-59", "60-69", "70-79", "80+"];
 
   return {
@@ -3503,7 +3508,7 @@ async function getFilesystemSummary(scopeHospitalId = null) {
     if (r.reviewedAt) { hospitalMap[hid].reviewed++; totalReviewed++; }
 
     // CKD yes/no distribution
-    const ckdStatus = r.knownCkd === "No" || r.ckdStage === "Normal" ? "No" : "Yes";
+    const ckdStatus = getCkdStatusLabel(r);
     stageCounts[ckdStatus] = (stageCounts[ckdStatus] || 0) + 1;
 
     // Diabetic split (exclude Normal kidney status)
@@ -3537,7 +3542,7 @@ async function getFilesystemSummary(scopeHospitalId = null) {
     reviewedAt:  r.reviewedAt || null
   }));
 
-  const stageOrder = ["Yes","No"];
+  const stageOrder = ["Yes", "No", "N/A"];
   const stages = Object.entries(stageCounts)
     .map(([label, value]) => ({ label, value }))
     .sort((a, b) => (stageOrder.indexOf(a.label) + 1 || 99) - (stageOrder.indexOf(b.label) + 1 || 99));
@@ -3942,7 +3947,7 @@ async function getPublicDashboardSummary() {
     else hospitalMap[hospitalId].egfrPatients++;
     if ((record.files || []).some((file) => file.fieldName === "ultrasoundVideo")) ultrasoundVideos++;
     if (record.reviewedAt) reviewedRecords++;
-    const ckdStatus = record.knownCkd === "No" || record.ckdStage === "Normal" ? "No" : "Yes";
+    const ckdStatus = getCkdStatusLabel(record);
     ckdCounts[ckdStatus] = (ckdCounts[ckdStatus] || 0) + 1;
   }
 

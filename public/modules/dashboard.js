@@ -13,12 +13,13 @@ function subUploadMode(mode) {
 }
 
 function ckdStatusCounts(items) {
-  const counts = { Yes: 0, No: 0 };
+  const counts = { Yes: 0, No: 0, notAvailable: 0 };
   (items || []).forEach((item) => {
     const label = String(item.label ?? item.stage ?? "").trim();
     const value = Number(item.value ?? item.count ?? 0);
     if (!value) return;
     if (label === "No" || label === "Normal") counts.No += value;
+    else if (label === "N/A") counts.notAvailable += value;
     else counts.Yes += value;
   });
   return counts;
@@ -26,7 +27,8 @@ function ckdStatusCounts(items) {
 
 const CKD_STATUS_DONUT_SEGMENTS = (counts) => [
   { label: "CKD: Yes", value: counts.Yes || 0, color: "#0f9a87" },
-  { label: "CKD: No", value: counts.No || 0, color: "#94a3b8" }
+  { label: "CKD: No", value: counts.No || 0, color: "#94a3b8" },
+  { label: "Not Available", value: counts.notAvailable || 0, color: "#fbbf24" }
 ];
 
 function chartColorClass(color) {

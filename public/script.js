@@ -2302,7 +2302,7 @@ function updateKfreQuestionnaireVisibility({ clearHidden = false } = {}) {
   dialysisFrequencyInput.disabled = !showDialysisFrequency;
   if (!showDialysisFrequency) dialysisFrequencyInput.value = "";
 
-  if (knownCkd === "No" || !isKfre) {
+  if (knownCkd !== "Yes" || !isKfre) {
     ckdStageInput.value = "";
     ckdDurationInput.value = "";
     // if (ckdStageRemarksInput) ckdStageRemarksInput.value = "";  // uncomment to revert
@@ -2348,7 +2348,7 @@ function isQuestionnaireReadyForClinicalFlow() {
       // getCheckedValue(consentObtainedInputs) &&  // Consent Obtained removed from intake (uncomment to revert)
       Number.isFinite(height) && height >= 50 && height <= 250 &&
       Number.isFinite(weight) && weight >= 10 && weight <= 400 &&
-      (knownCkd === "No" || (
+      (knownCkd !== "Yes" || (
         ckdStageInput.value &&
         (ckdStageInput.value !== "Other" || ckdStageRemarksInput?.value.trim()) &&
         (dialysisValue !== "Yes" || dialysisFrequencyInput.value.trim())
