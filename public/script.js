@@ -548,7 +548,7 @@ function renderPublicCharts(summary) {
           ],
           borderWidth: 1,
           borderRadius: 6,
-          barThickness: 40
+          barThickness: 100
         }]
       },
       options: {
