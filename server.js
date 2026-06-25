@@ -47,6 +47,7 @@ const STORAGE_SCHEMA_VERSION = 2;
 const UPLOAD_SESSION_DIR = path.join(DATA_DIR, "upload-sessions");
 const PARTICIPANT_MAP_FILE = path.join(DATA_DIR, "private", "participant-mapping.json");
 const PUBLIC_DASHBOARD_CACHE_FILE = path.join(DATA_DIR, "private", "public-dashboard-cache.json");
+const PUBLIC_DASHBOARD_CACHE_VERSION = 2;
 const PUBLIC_DASHBOARD_CACHE_TTL_MS = Number(process.env.PUBLIC_DASHBOARD_CACHE_TTL_MS || 2 * 60 * 1000);
 const PUBLIC_DASHBOARD_CACHE_STALE_MS = Number(process.env.PUBLIC_DASHBOARD_CACHE_STALE_MS || 24 * 60 * 60 * 1000);
 const RAW_DATABASE_URL = process.env.DATABASE_URL || "";
@@ -73,7 +74,7 @@ const hospitals = [
   { id: "SCMC-RMN-KA", name: "Sri Chamundeshwari Medical College, Ramanagara Dist, Karnataka" },
   { id: "SH-SLM-TN",   name: "Shanmuga Hospital, Salem, Tamil Nadu" },
   { id: "JSS-MYS-KA",  name: "JSS Medical College, Mysore, Karnataka" },
-  { id: "NH-BLR-KA",   name: "Nira Health Care Private Limited, Bangalore, Karnataka" },
+  { id: "NH-BLR-KA",   name: "NIRA Health Care Private Limited, Bangalore, Karnataka" },
   { id: "MIL-NDL-DL",  name: "Mahajan Imaging & Labs, New Delhi" },
   { id: "GEMS-SKLM",   name: "GEMS-SKLM" },
   { id: "AIIMS-NGP",   name: "AIIMS, Nagpur" },
@@ -83,6 +84,7 @@ const hospitals = [
 ];
 const adminIntakeSource = { id: "TANUH-ADMIN", name: "Admin" };
 const publicDashboardExcludedHospitals = new Set(["HOSP-DEMO", adminIntakeSource.id]);
+const analyticsExcludedHospitals = publicDashboardExcludedHospitals;
 const demoHospitalCredential = { id: "HOSP-DEMO", password: "1234" };
 const seededHospitalCredentials = [
   demoHospitalCredential,
@@ -96,6 +98,14 @@ const seededHospitalCredentials = [
 function findIntakeSource(sourceId) {
   return hospitals.find((hospital) => hospital.id === sourceId)
     || (sourceId === adminIntakeSource.id ? adminIntakeSource : null);
+}
+
+function isAnalyticsExcludedHospital(hospitalId) {
+  return analyticsExcludedHospitals.has(hospitalId);
+}
+
+function filterTrackableSubmissions(records) {
+  return (records || []).filter((record) => !isAnalyticsExcludedHospital(record.hospitalId));
 }
 
 const allowedStudyFlows   = new Set(["egfr", "kfre"]);
@@ -1149,13 +1159,17 @@ async function persistRecordsToDatabase({ batchId, batchDir, records, gcsResult 
 }
 
 async function getDatabasePathwaySummary(studyFlow, scopeHospitalId = null) {
-  const filter = scopeHospitalId ? [studyFlow, scopeHospitalId] : [studyFlow];
+  if (scopeHospitalId && isAnalyticsExcludedHospital(scopeHospitalId)) {
+    return getFilesystemPathwaySummary([]);
+  }
+  const excludedIds = Array.from(analyticsExcludedHospitals);
+  const filter = scopeHospitalId ? [studyFlow, scopeHospitalId] : [studyFlow, excludedIds];
   const cond = scopeHospitalId
     ? "WHERE study_flow = $1 AND hospital_id = $2"
-    : "WHERE study_flow = $1";
+    : "WHERE study_flow = $1 AND NOT (hospital_id = ANY($2::text[]))";
   const joinedCond = scopeHospitalId
     ? "WHERE s.study_flow = $1 AND s.hospital_id = $2"
-    : "WHERE s.study_flow = $1";
+    : "WHERE s.study_flow = $1 AND NOT (s.hospital_id = ANY($2::text[]))";
   const diabeticCond = `${cond} AND ckd_stage <> 'Normal'`;
   const ckdStatusExpr = "COALESCE(NULLIF(known_ckd, ''), CASE WHEN ckd_stage = 'Normal' THEN 'No' ELSE 'Yes' END)";
 
@@ -1239,19 +1253,35 @@ async function getDatabasePathwaySummary(studyFlow, scopeHospitalId = null) {
 
 async function getDatabaseSummary(scopeHospitalId = null) {
   if (!dbPool || !dbReady) return null;
+  if (scopeHospitalId && isAnalyticsExcludedHospital(scopeHospitalId)) {
+    const emptyPathway = getFilesystemPathwaySummary([]);
+    return {
+      summary: { hospitals: 0, patients: 0, videos: 0, reviewed: 0, pending: 0 },
+      stages: [],
+      diabetic: [],
+      hospitalBreakdown: [],
+      ageBuckets: [],
+      recentRecords: [],
+      pathways: { egfr: emptyPathway, kfre: emptyPathway }
+    };
+  }
 
-  const filter = scopeHospitalId ? [scopeHospitalId] : [];
-  const cond   = scopeHospitalId ? "WHERE hospital_id = $1" : "";
-  const activeHospitalCond = scopeHospitalId ? "AND hospital_id = $1" : "";
+  const excludedIds = Array.from(analyticsExcludedHospitals);
+  const filter = scopeHospitalId ? [scopeHospitalId] : [excludedIds];
+  const cond   = scopeHospitalId ? "WHERE hospital_id = $1" : "WHERE NOT (hospital_id = ANY($1::text[]))";
+  const activeHospitalCond = scopeHospitalId ? "AND hospital_id = $1" : "AND NOT (hospital_id = ANY($1::text[]))";
   const videoQuery = scopeHospitalId
     ? `SELECT COUNT(DISTINCT sf.record_id)::int AS value
        FROM submission_files sf
        JOIN submissions s ON sf.record_id = s.record_id
        WHERE s.hospital_id = $1 AND sf.field_name = 'ultrasoundVideo'`
-    : `SELECT COUNT(DISTINCT record_id)::int AS value FROM submission_files WHERE field_name = 'ultrasoundVideo'`;
+    : `SELECT COUNT(DISTINCT sf.record_id)::int AS value
+       FROM submission_files sf
+       JOIN submissions s ON sf.record_id = s.record_id
+       WHERE sf.field_name = 'ultrasoundVideo' AND NOT (s.hospital_id = ANY($1::text[]))`;
   const diabeticCond = scopeHospitalId
     ? "WHERE hospital_id = $1 AND ckd_stage <> 'Normal'"
-    : "WHERE ckd_stage <> 'Normal'";
+    : "WHERE ckd_stage <> 'Normal' AND NOT (hospital_id = ANY($1::text[]))";
   const ckdStatusExpr = "COALESCE(NULLIF(known_ckd, ''), CASE WHEN ckd_stage = 'Normal' THEN 'No' ELSE 'Yes' END)";
   const hospitalBreakdownQuery = `
     SELECT h.hospital_id, h.hospital_name,
@@ -1263,7 +1293,8 @@ async function getDatabaseSummary(scopeHospitalId = null) {
     FROM hospitals h
     LEFT JOIN submissions s ON s.hospital_id = h.hospital_id
     LEFT JOIN submission_files sf ON sf.record_id = s.record_id
-    WHERE (h.active = true OR (h.hospital_id = 'TANUH-ADMIN' AND s.record_id IS NOT NULL)) ${scopeHospitalId ? "AND h.hospital_id = $1" : ""}
+    WHERE (h.active = true OR (h.hospital_id = 'TANUH-ADMIN' AND s.record_id IS NOT NULL))
+      ${scopeHospitalId ? "AND h.hospital_id = $1" : "AND NOT (h.hospital_id = ANY($1::text[]))"}
     GROUP BY h.hospital_id, h.hospital_name
     ORDER BY patients DESC, h.hospital_name ASC`;
 
@@ -2055,11 +2086,11 @@ async function handleAdminGetHospitals(req, res) {
       const counts = new Map();
       submissions.forEach((item) => {
         const hospitalId = item.hospitalId;
-        if (!hospitalId || hospitalId === adminIntakeSource.id) return;
+        if (!hospitalId || isAnalyticsExcludedHospital(hospitalId)) return;
         counts.set(hospitalId, (counts.get(hospitalId) || 0) + 1);
       });
       const fallbackHospitals = hospitals
-        .filter((hospital) => hospital.id !== adminIntakeSource.id)
+        .filter((hospital) => !isAnalyticsExcludedHospital(hospital.id))
         .map((hospital) => ({
           id: hospital.id,
           name: hospital.name,
@@ -2078,10 +2109,10 @@ async function handleAdminGetHospitals(req, res) {
               COUNT(s.record_id)::int AS submission_count
        FROM hospitals h
        LEFT JOIN submissions s ON s.hospital_id = h.hospital_id
-       WHERE h.hospital_id <> $1
+       WHERE NOT (h.hospital_id = ANY($1::text[]))
        GROUP BY h.hospital_id
        ORDER BY h.hospital_name ASC`,
-      [adminIntakeSource.id]
+      [Array.from(analyticsExcludedHospitals)]
     );
     sendJson(res, 200, { ok: true, hospitals: result.rows });
   } catch (err) {
@@ -2388,12 +2419,18 @@ async function handleAdminAudit(req, res) {
     return;
   }
 
-  const params = [hospitalId, eventType, from, to];
+  if (hospitalId && isAnalyticsExcludedHospital(hospitalId)) {
+    sendJson(res, 200, { ok: true, logs: [], total: 0, page, limit });
+    return;
+  }
+  const excludedIds = Array.from(analyticsExcludedHospitals);
+  const params = [hospitalId, eventType, from, to, excludedIds];
   const whereClause = `
     WHERE ($1::text IS NULL OR al.hospital_id = $1)
       AND ($2::text IS NULL OR al.event_type = $2)
       AND ($3::timestamptz IS NULL OR al.created_at >= $3)
-      AND ($4::timestamptz IS NULL OR al.created_at <= $4)`;
+      AND ($4::timestamptz IS NULL OR al.created_at <= $4)
+      AND ($1::text IS NOT NULL OR al.hospital_id IS NULL OR NOT (al.hospital_id = ANY($5::text[])))`;
   try {
     const [logs, count] = await Promise.all([
       dbPool.query(
@@ -2402,7 +2439,7 @@ async function handleAdminAudit(req, res) {
          LEFT JOIN hospitals h ON h.hospital_id = al.hospital_id
          ${whereClause}
          ORDER BY al.created_at DESC
-         LIMIT $5 OFFSET $6`,
+         LIMIT $6 OFFSET $7`,
         [...params, limit, (page - 1) * limit]
       ),
       dbPool.query(`SELECT COUNT(*)::int AS total FROM audit_logs al ${whereClause}`, params)
@@ -2425,10 +2462,11 @@ async function handleAdminAnalyticsSummary(req, res) {
 
   try {
     const activeSessions = await getActiveSessionCount();
+    const excludedIds = Array.from(analyticsExcludedHospitals);
     const [hospitalMetrics, submissionMetrics] = await Promise.all([
       dbPool.query(
-        "SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE active)::int AS active FROM hospitals WHERE hospital_id <> $1",
-        [adminIntakeSource.id]
+        "SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE active)::int AS active FROM hospitals WHERE NOT (hospital_id = ANY($1::text[]))",
+        [excludedIds]
       ),
       dbPool.query(
         `SELECT
@@ -2436,7 +2474,9 @@ async function handleAdminAnalyticsSummary(req, res) {
            COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE)::int AS today,
            COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')::int AS this_week,
            COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days')::int AS this_month
-         FROM submissions`
+         FROM submissions
+         WHERE NOT (hospital_id = ANY($1::text[]))`,
+        [excludedIds]
       )
     ]);
     sendJson(res, 200, {
@@ -2467,13 +2507,15 @@ async function handleAdminAnalyticsTrends(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const days = Math.min(365, Math.max(1, Number.parseInt(url.searchParams.get("days") || "30", 10) || 30));
   try {
+    const excludedIds = Array.from(analyticsExcludedHospitals);
     const result = await dbPool.query(
       `SELECT DATE(created_at) AS date, COUNT(*)::int AS count
        FROM submissions
        WHERE created_at >= NOW() - ($1 * INTERVAL '1 day')
+         AND NOT (hospital_id = ANY($2::text[]))
        GROUP BY DATE(created_at)
        ORDER BY date ASC`,
-      [days]
+      [days, excludedIds]
     );
     sendJson(res, 200, { ok: true, trends: result.rows });
   } catch (err) {
@@ -2493,28 +2535,32 @@ async function handleAdminAnalyticsDistribution(req, res) {
 
   try {
     const ckdStatusExpr = "COALESCE(NULLIF(known_ckd, ''), CASE WHEN ckd_stage = 'Normal' THEN 'No' ELSE 'Yes' END)";
+    const excludedIds = Array.from(analyticsExcludedHospitals);
     const [egfrStages, ckdStages, byHospital] = await Promise.all([
       dbPool.query(
         `SELECT ${ckdStatusExpr} AS stage, COUNT(*)::int AS count
          FROM submissions
-         WHERE study_flow = 'egfr'
+         WHERE study_flow = 'egfr' AND NOT (hospital_id = ANY($1::text[]))
          GROUP BY ${ckdStatusExpr}
-         ORDER BY CASE ${ckdStatusExpr} WHEN 'Yes' THEN 0 WHEN 'No' THEN 1 ELSE 2 END`
+         ORDER BY CASE ${ckdStatusExpr} WHEN 'Yes' THEN 0 WHEN 'No' THEN 1 ELSE 2 END`,
+        [excludedIds]
       ),
       dbPool.query(
         `SELECT ${ckdStatusExpr} AS stage, COUNT(*)::int AS count
          FROM submissions
+         WHERE NOT (hospital_id = ANY($1::text[]))
          GROUP BY ${ckdStatusExpr}
-         ORDER BY CASE ${ckdStatusExpr} WHEN 'Yes' THEN 0 WHEN 'No' THEN 1 ELSE 2 END`
+         ORDER BY CASE ${ckdStatusExpr} WHEN 'Yes' THEN 0 WHEN 'No' THEN 1 ELSE 2 END`,
+        [excludedIds]
       ),
       dbPool.query(
         `SELECT h.hospital_id, h.hospital_name, COUNT(s.record_id)::int AS count
          FROM hospitals h
          LEFT JOIN submissions s ON s.hospital_id = h.hospital_id
-         WHERE h.hospital_id <> $1
+         WHERE NOT (h.hospital_id = ANY($1::text[]))
          GROUP BY h.hospital_id, h.hospital_name
          ORDER BY count DESC`,
-        [adminIntakeSource.id]
+        [excludedIds]
       )
     ]);
     sendJson(res, 200, {
@@ -3188,7 +3234,12 @@ async function handleGetSubmissions(req, res) {
     : (url.searchParams.get("hospitalId") || "");
 
   try {
+    if (filterHospital && isAnalyticsExcludedHospital(filterHospital)) {
+      sendJson(res, 200, { ok: true, total: 0, page, limit, items: [] });
+      return;
+    }
     let all = await readAllSubmissions(filterHospital || null);
+    if (!filterHospital) all = filterTrackableSubmissions(all);
 
     all = applySubmissionFilters(all, { reviewed, search, dateFrom, dateTo });
 
@@ -3231,6 +3282,10 @@ async function handleGetSubmissionDetail(req, res, recordId) {
     sendJson(res, 404, { ok: false, error: "Submission not found." });
     return;
   }
+  if (isAnalyticsExcludedHospital(submission.hospitalId)) {
+    sendJson(res, 404, { ok: false, error: "Submission not found." });
+    return;
+  }
   if (session.role === "hospital" && submission.hospitalId !== session.hospitalId) {
     sendJson(res, 403, { ok: false, error: "Access denied." });
     return;
@@ -3252,6 +3307,10 @@ async function handleReviewSubmission(req, res, recordId) {
 
   const submission = await findSubmissionById(recordId);
   if (!submission) {
+    sendJson(res, 404, { ok: false, error: "Submission not found." });
+    return;
+  }
+  if (isAnalyticsExcludedHospital(submission.hospitalId)) {
     sendJson(res, 404, { ok: false, error: "Submission not found." });
     return;
   }
@@ -3329,7 +3388,12 @@ async function handleExportSubmissions(req, res) {
     : (url.searchParams.get("hospitalId") || "");
 
   try {
+    if (filterHospital && isAnalyticsExcludedHospital(filterHospital)) {
+      sendJson(res, 403, { ok: false, error: "Demo submissions are not available for export." });
+      return;
+    }
     let all = await readAllSubmissions(filterHospital || null);
+    if (!filterHospital) all = filterTrackableSubmissions(all);
     all = applySubmissionFilters(all, { reviewed, search, dateFrom, dateTo });
 
     const cols = [
@@ -3478,12 +3542,13 @@ function getFilesystemPathwaySummary(records) {
 
 // Compute full summary from filesystem (used when DB is not ready)
 async function getFilesystemSummary(scopeHospitalId = null) {
-  const all = await readAllSubmissions(scopeHospitalId);
+  const all = filterTrackableSubmissions(await readAllSubmissions(scopeHospitalId));
 
   // Seed hospital map from known hospitals list so zero-record hospitals still appear (admin only)
   const hospitalMap = {};
   if (!scopeHospitalId) {
     for (const h of hospitals) {
+      if (isAnalyticsExcludedHospital(h.id)) continue;
       hospitalMap[h.id] = { hospitalId: h.id, hospitalName: h.name, patients: 0, egfrPatients: 0, kfrePatients: 0, videos: 0, reviewed: 0 };
     }
   }
@@ -3554,7 +3619,7 @@ async function getFilesystemSummary(scopeHospitalId = null) {
 
   return {
     summary: {
-      hospitals: scopeHospitalId ? Object.keys(hospitalMap).length : hospitals.length,
+      hospitals: scopeHospitalId ? Object.keys(hospitalMap).length : hospitals.filter((hospital) => !isAnalyticsExcludedHospital(hospital.id)).length,
       patients:  all.length,
       videos:    totalVideos,
       reviewed:  totalReviewed,
@@ -3746,6 +3811,7 @@ function loadPublicDashboardCacheFromDisk() {
   try {
     const payload = JSON.parse(fs.readFileSync(PUBLIC_DASHBOARD_CACHE_FILE, "utf8"));
     if (!payload || !payload.summary || !payload.cachedAt) return;
+    if (payload.version !== PUBLIC_DASHBOARD_CACHE_VERSION) return;
     const cachedAt = Number(payload.cachedAt);
     if (!Number.isFinite(cachedAt) || Date.now() - cachedAt > PUBLIC_DASHBOARD_CACHE_STALE_MS) return;
     const configuredPartnerCount = getConfiguredPublicPartnerHospitalCount();
@@ -3762,6 +3828,7 @@ function savePublicDashboardCacheToDisk() {
     .then(() => fs.promises.writeFile(
       PUBLIC_DASHBOARD_CACHE_FILE,
       JSON.stringify({
+        version: PUBLIC_DASHBOARD_CACHE_VERSION,
         cachedAt: publicDashboardCache.cachedAt,
         summary: publicDashboardCache.summary
       }, null, 2)
