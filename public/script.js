@@ -438,6 +438,21 @@ function applyPublicDashboardSummary(summary) {
   setPublicText("public-total-records", summary.totalRecords ?? 0);
   setPublicText("public-egfr-records", summary.egfrRecords ?? 0);
   setPublicText("public-kfre-records", summary.kfreRecords ?? 0);
+
+  loadPublicMapAssets().then(({ hospitals }) => {
+    const activeIds = new Set((summary.hospitalLocations || [])
+      .filter((loc) => loc.patients > 0)
+      .map((loc) => loc.hospitalId));
+    const activeStates = new Set();
+    (hospitals || []).forEach((h) => {
+      if (activeIds.has(h.id) && h.state) {
+        activeStates.add(h.state);
+      }
+    });
+    setPublicText("public-active-states", activeStates.size);
+  }).catch(() => {
+    setPublicText("public-active-states", 0);
+  });
   renderPublicBars("public-study-bars", [
     { label: "Ultrasound-based records", value: summary.egfrRecords || 0 },
     { label: "Clinical risk records", value: summary.kfreRecords || 0 }
@@ -447,6 +462,122 @@ function applyPublicDashboardSummary(summary) {
     value: row.value || row.count || 0
   })));
   renderPublicMap(summary.hospitalLocations || []);
+  renderPublicCharts(summary);
+}
+
+let pyramidChartInstance = null;
+let ckdChartInstance = null;
+
+function renderPublicCharts(summary) {
+  if (typeof Chart === 'undefined') return;
+
+  Chart.defaults.font.family = "'Inter', sans-serif";
+  Chart.defaults.color = "#64748b";
+
+  // Demographics (Age/Gender)
+  const demographics = summary.demographics || [];
+  const ageLabels = ['18-29', '30-39', '40-49', '50-59', '60-69', '70-79', '80+'];
+  const maleData = new Array(7).fill(0);
+  const femaleData = new Array(7).fill(0);
+
+  demographics.forEach((row) => {
+    const idx = ageLabels.indexOf(row.age_group);
+    if (idx !== -1) {
+      if (row.sex === 'Male') maleData[idx] -= row.value; // Negative for pyramid
+      else if (row.sex === 'Female') femaleData[idx] += row.value;
+    }
+  });
+
+  const ctxPyramid = document.getElementById('chart-pyramid');
+  if (ctxPyramid) {
+    if (pyramidChartInstance) pyramidChartInstance.destroy();
+    pyramidChartInstance = new Chart(ctxPyramid, {
+      type: 'bar',
+      data: {
+        labels: ageLabels,
+        datasets: [
+          { label: 'Male', data: maleData, backgroundColor: '#3b82f6', borderRadius: 4 },
+          { label: 'Female', data: femaleData, backgroundColor: '#a855f7', borderRadius: 4 }
+        ]
+      },
+      options: {
+        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+        scales: {
+          x: { 
+            stacked: true, 
+            ticks: { callback: (value) => Math.abs(value) }, 
+            grid: { display: false },
+            title: { display: true, text: 'Number of Patients', font: { family: "'Inter', sans-serif", size: 12, weight: '600' }, color: '#64748b' }
+          },
+          y: { 
+            stacked: true, 
+            grid: { display: false },
+            title: { display: true, text: 'Age Group (Years)', font: { family: "'Inter', sans-serif", size: 12, weight: '600' }, color: '#64748b' }
+          }
+        },
+        plugins: { tooltip: { callbacks: { label: (ctx) => ctx.dataset.label + ': ' + Math.abs(ctx.raw) } } }
+      }
+    });
+  }
+
+  // CKD Status
+  const ckdDist = summary.ckdDistribution || [];
+  let normalCount = 0;
+  let ckdCount = 0;
+  ckdDist.forEach(row => {
+    if (row.label === 'No' || row.label === 'Normal') normalCount += (row.value || row.count || 0);
+    else if (row.label === 'Yes') ckdCount += (row.value || row.count || 0);
+  });
+
+  const ctxCkd = document.getElementById('chart-ckd-bar');
+  if (ctxCkd) {
+    if (ckdChartInstance) ckdChartInstance.destroy();
+    ckdChartInstance = new Chart(ctxCkd, {
+      type: 'bar',
+      data: {
+        labels: ['Normal Status', 'CKD Present'],
+        datasets: [{
+          data: [normalCount, ckdCount],
+          backgroundColor: [
+            'rgba(16, 185, 129, 0.8)',
+            'rgba(239, 68, 68, 0.8)'
+          ],
+          borderColor: [
+            'rgb(16, 185, 129)',
+            'rgb(239, 68, 68)'
+          ],
+          borderWidth: 1,
+          borderRadius: 6,
+          barThickness: 40
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: { label: (ctx) => ` ${ctx.raw.toLocaleString()} Patients` },
+            padding: 12,
+            titleFont: { size: 14, family: "'Inter', sans-serif" },
+            bodyFont: { size: 13, family: "'Inter', sans-serif" }
+          }
+        },
+        scales: {
+          x: {
+            grid: { display: true, color: '#e2e8f0', drawBorder: false },
+            ticks: { font: { family: "'Inter', sans-serif" } },
+            title: { display: true, text: 'Number of Patients', font: { family: "'Inter', sans-serif", size: 12, weight: '600' }, color: '#64748b' }
+          },
+          y: {
+            grid: { display: false, drawBorder: false },
+            ticks: { font: { family: "'Inter', sans-serif", weight: '600', size: 13 }, color: '#334155' }
+          }
+        }
+      }
+    });
+  }
 }
 
 async function loadPublicDashboard() {

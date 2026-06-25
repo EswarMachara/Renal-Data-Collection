@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,25 +8,35 @@
   <link rel="icon" href="assets/tanuh.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&display=swap"
+    rel="stylesheet" />
   <link rel="preload" href="/maps/india_states_paths.json" as="fetch" type="application/json" crossorigin />
   <link rel="preload" href="/maps/partner_hospitals.json" as="fetch" type="application/json" crossorigin />
-  <link rel="stylesheet" href="./styles.css?v=old-kidney-animation-20260528" />
+  <link rel="stylesheet" href="./styles.css?v=20260625-v11" />
 </head>
+
 <body>
 
   <!-- Public dashboard — shown before authentication -->
   <div id="public-screen" class="public-screen" role="main" aria-label="Public renal health dashboard">
     <header class="public-nav">
       <a class="public-brand" href="#" aria-label="TANUH Renal Health Data Collection Platform">
-        <img src="assets/tanuh.png" alt="TANUH" />
+        <div class="brand-logos">
+          <img src="assets/tanuh.png" alt="TANUH" />
+          <img src="assets/moe-logo.svg" alt="MOE Logo" class="nav-partner-logo nav-moe-logo" />
+          <img src="assets/iisc-logo.png" alt="IISc Logo" class="nav-partner-logo nav-iisc-logo" />
+        </div>
         <span>
-          <strong>Renal Health Data Collection Platform</strong>
-          <small>TANUH · AI Centre of Excellence · IISc Bangalore</small>
+          <strong>TANUH</strong>
+          <small>The AI CoE in Healthcare</small>
         </span>
       </a>
       <div class="public-nav-actions">
         <a class="public-about-btn" href="https://www.tanuh.ai/solutions/renal-health">About Us</a>
+        <a class="public-about-btn"
+          href="https://www.tanuh.ai/solutions/renal-health#:~:text=Team%20%26%20Collaborators" target="_blank"
+          rel="noopener noreferrer">Team</a>
         <button class="public-login-btn" id="public-login-open" type="button">Login</button>
       </div>
     </header>
@@ -34,8 +45,11 @@
       <section class="public-hero">
         <div class="public-hero-copy">
           <span class="eyebrow">Collaborative renal research data collection</span>
-          <h1>Secure, Anonymized Kidney Health Data Collection Platform from Partner Hospitals</h1>
-          <p>Track the program footprint, submitted records, and partner hospital participation across eGFR and KFRE study pathways.</p>
+          <h1>Renal Health Data Collection Platform</h1>
+          <p class="hero-subtitle" style="font-size: 1.15rem; line-height: 1.6; color: #475569; max-width: 800px;">
+            Secure and anonymized data collection from partner hospitals to power
+            TANUH's next-generation AI solutions for the Estimated Glomerular Filtration Rate (eGFR) and Kidney Failure
+            Risk Equation (KFRE) renal studies.</p>
         </div>
       </section>
 
@@ -60,46 +74,84 @@
           <strong id="public-kfre-records">—</strong>
           <small>Clinical Risk Data Records</small>
         </article>
+        <article class="public-metric-card">
+          <span>Active States</span>
+          <strong id="public-active-states">—</strong>
+          <small>States collecting data</small>
+        </article>
       </section>
 
       <section class="public-insights-grid">
         <article class="public-panel">
           <div class="public-panel-head">
-            <span class="eyebrow">Study Overview</span>
-            <h2>Records collected</h2>
+            <span class="eyebrow">Demographics</span>
+            <h2>Age & Gender Distribution</h2>
           </div>
-          <div class="public-bars" id="public-study-bars" aria-live="polite"></div>
+          <div class="chart-canvas-wrap">
+            <canvas id="chart-pyramid"></canvas>
+          </div>
         </article>
+
         <article class="public-panel">
           <div class="public-panel-head">
-            <span class="eyebrow">Kidney Health Profile</span>
-            <h2>Patient kidney status</h2>
+            <span class="eyebrow">Clinical Profile</span>
+            <h2>Patient Kidney Status</h2>
           </div>
-          <div class="public-bars" id="public-ckd-bars" aria-live="polite"></div>
+          <div class="chart-canvas-wrap">
+            <canvas id="chart-ckd-bar"></canvas>
+          </div>
         </article>
       </section>
 
-      <section class="public-anonymization-panel" aria-label="Anonymization tool preview">
+      <!-- ANONYMIZATION DESKTOP APP SECTION -->
+      <section class="public-anon-desktop-panel" aria-label="Anonymization desktop app">
         <div class="public-panel-head">
-          <span class="eyebrow">Privacy-first preparation</span>
-          <h2>Anonymization Tool</h2>
-          <p>Preview the hospital-side workflow for irreversible anonymization of ultrasound images, reports, and lab documents before research upload.</p>
+          <span class="eyebrow">Offline Tools</span>
+          <h2>Local Anonymization Software for Partnered Hospitals</h2>
+          <p>A lightweight, personalized desktop application designed to run locally on your hospital machines.
+            Irreversibly strip PHI from ultrasound dicoms and lab reports before data ever leaves your network.
+            Available on all Operating Systems.</p>
         </div>
-        <div class="public-anon-grid">
-          <div class="public-anon-structure" aria-label="Expected input structure">
-            <strong>Expected input folder</strong>
-            <ul>
-              <li>Patient package</li>
-              <li>Left kidney ultrasound images</li>
-              <li>Right kidney ultrasound images</li>
-              <li>Ultrasound reports</li>
-              <li>Lab reports</li>
+
+        <div class="anon-desktop-grid">
+          <div class="anon-desktop-info">
+            <ul class="anon-feature-list">
+              <li><strong>Zero Cloud Footprint:</strong> All redaction occurs strictly offline on your own clinical
+                hardware.</li>
+              <li><strong>Low Requirements:</strong> Easily installs and runs on standard systems without heavy
+                overhead.</li>
+              <li><strong>Personalized Software:</strong> Pre-configured specifically for your hospital's workflow and
+                IDs.
+              </li>
+              <li><strong>Personalized Development:</strong> Contact us for customized software development and workflow
+                integrations.</li>
             </ul>
           </div>
-          <div class="public-anon-note">
-            <span>Non-persistent demo</span>
-            <p>Authenticated users can simulate parsing, preview original versus anonymized names, and approve cleanup of temporary originals.</p>
-            <button class="public-login-btn" id="public-anonymization-login" type="button">Login to use tool</button>
+
+          <div class="anon-desktop-download">
+            <div class="anon-download-box">
+              <div class="anon-os-logos">
+                <!-- Windows -->
+                <svg viewBox="0 0 88 88" width="28" height="28" fill="#00a4ef">
+                  <path
+                    d="M0 12.402l35.687-4.86.016 34.423-35.67.203zm35.67 33.529l.028 34.453L0 76.81v-30.82zm4.326-39.02l47.986-6.91v40.066l-47.986.385zm47.986 43.146V88l-47.986-6.604v-38.16z" />
+                </svg>
+                <!-- Mac -->
+                <svg viewBox="0 0 170 170" width="32" height="32" fill="#000">
+                  <path
+                    d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.92.21-9.84-1.96-14.74-6.53-3.13-2.73-7.1-7.43-11.87-14.1-5.13-7.22-9.6-16.14-13.43-26.78-3.83-10.64-5.75-21.2-5.75-31.7 0-14.86 3.66-26.64 10.98-35.34 4.88-5.75 10.74-10 17.58-12.73 6.84-2.73 14.1-4.04 21.78-3.92 5.5.11 11.2 1.34 17.13 3.69 5.94 2.34 9.87 3.53 11.82 3.53 1.53 0 5.6-1.25 12.18-3.75 6.58-2.5 12.83-3.66 18.73-3.48 8.13.24 15.34 2.44 21.6 6.58 6.26 4.14 11.08 9.58 14.47 16.32-10.45 6.27-15.54 14.93-15.28 25.96.26 8.58 3.53 15.82 9.81 21.72 6.28 5.89 13.88 9.29 22.8 10.18-2.72 8.78-6.66 16.71-11.83 23.8zm-31.66-115.11c-1.32 7.78-4.99 14.61-11 20.48-6 5.87-13 9.4-21.03 10.59-1.57-7.9 1.48-15.16 9.17-21.78 6.58-5.83 13.91-9.26 22.02-10.28.18.32.46.64.84.99z" />
+                </svg>
+                <!-- Ubuntu -->
+                <svg viewBox="0 0 24 24" width="28" height="28" fill="#E95420">
+                  <path
+                    d="M12 0C5.373 0 0 5.373 0 12c0 6.628 5.373 12 12 12s12-5.372 12-12c0-6.627-5.373-12-12-12zm-3.085 4.316a3.076 3.076 0 11-4.225 4.225 3.076 3.076 0 014.225-4.225zM4.14 18.155a3.076 3.076 0 11-1.385-5.86 8.685 8.685 0 00-.012.894 8.704 8.704 0 001.397 4.966zm13.197 1.54a3.076 3.076 0 11-4.225-4.225 3.076 3.076 0 014.225 4.225zM20.215 11.2a3.076 3.076 0 111.458 5.845 8.71 8.71 0 00-1.45-5.021 8.674 8.674 0 00-.008-.824z" />
+                </svg>
+              </div>
+              <h4>Download Client</h4>
+              <p>Login to your hospital's workspace to access personalized binaries.</p>
+              <button class="public-login-btn anon-download-btn" id="public-anonymization-login" type="button">Login to
+                Workspace</button>
+            </div>
           </div>
         </div>
       </section>
@@ -112,13 +164,100 @@
         </div>
         <div class="public-map-status hidden" id="public-map-status" role="status" aria-live="polite"></div>
         <div class="public-map-wrap" id="public-map-wrap">
-          <svg class="india-map" id="india-map" viewBox="0 0 640 720" role="img" aria-label="India map showing partner hospital locations">
+          <svg class="india-map" id="india-map" viewBox="0 0 640 720" role="img"
+            aria-label="India map showing partner hospital locations">
             <g id="india-map-states" class="india-map-states"></g>
             <g id="india-map-markers" class="india-map-markers"></g>
           </svg>
           <div class="public-map-tooltip hidden" id="public-map-tooltip" role="tooltip"></div>
         </div>
       </section>
+
+      <!-- Dashboard Footer -->
+      <footer class="public-footer-panel" aria-label="Footer">
+        <div class="footer-grid">
+          <!-- Column 1: Brand & Socials -->
+          <div class="footer-col brand-col">
+            <div class="footer-brand-header">
+              <img src="assets/tanuh.png" alt="TANUH Logo" class="footer-logo-img" />
+              <div>
+                <h3 class="footer-brand-title">TANUH</h3>
+                <p class="footer-brand-subtitle">The AI Centre of Excellence in Healthcare</p>
+              </div>
+            </div>
+            <p class="footer-brand-desc">Advancing renal healthcare through secure, AI-powered collaborative research
+              and data collection.</p>
+            <div class="footer-social-links">
+              <a href="https://linkedin.com/company/tanuh-ai" target="_blank" rel="noopener noreferrer"
+                class="social-btn" aria-label="LinkedIn">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                  <path
+                    d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z" />
+                </svg>
+              </a>
+              <a href="https://x.com/tanuh_ai" target="_blank" rel="noopener noreferrer" class="social-btn"
+                aria-label="X (formerly Twitter)">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                  <path
+                    d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                </svg>
+              </a>
+            </div>
+          </div>
+
+          <!-- Column 2: Address & Location -->
+          <div class="footer-col info-col">
+            <h4 class="footer-col-title">Location</h4>
+            <div class="footer-info-item">
+              <svg class="info-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                <circle cx="12" cy="10" r="3"></circle>
+              </svg>
+              <div>
+                <p class="info-text">AI Centre of Excellence in Healthcare</p>
+                <p class="info-subtext">Indian Institute of Science</p>
+                <p class="info-subtext">Seventh Floor, TCS Smart-X Hub</p>
+                <p class="info-subtext">Bengaluru, India - 560 012</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Column 3: Contact & Links -->
+          <div class="footer-col contact-col">
+            <h4 class="footer-col-title">Contact</h4>
+            <div class="footer-info-item">
+              <svg class="info-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                <polyline points="22,6 12,13 2,6"></polyline>
+              </svg>
+              <div>
+                <span class="info-label">Email Support</span>
+                <a href="mailto:renalhealth@tanuh.ai" class="info-link">renalhealth@tanuh.ai</a>
+              </div>
+            </div>
+            <div class="footer-info-item">
+              <svg class="info-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path
+                  d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z">
+                </path>
+              </svg>
+              <div>
+                <span class="info-label">Helpline</span>
+                <p class="info-text">(080) 2293 4106 / 4107</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="footer-divider-line"></div>
+        <div class="footer-copyright-row">
+          <p>&copy; 2026 by TANUH. All rights reserved.</p>
+          <p class="footer-policy-text">Clinical Data Collection Node</p>
+        </div>
+      </footer>
     </main>
   </div>
 
@@ -132,7 +271,11 @@
       <div class="ls-blob ls-blob-3"></div>
       <div class="ls-left-content">
         <div class="ls-brand">
-          <img src="assets/tanuh.png" alt="TANUH" class="ls-brand-logo" />
+          <div class="brand-logos ls-brand-logos">
+            <img src="assets/tanuh.png" alt="TANUH" class="ls-brand-logo" />
+            <img src="assets/moe-logo.svg" alt="MOE Logo" class="ls-brand-logo nav-moe-logo" />
+            <img src="assets/iisc-logo.png" alt="IISc Logo" class="ls-brand-logo nav-iisc-logo" />
+          </div>
           <span class="ls-brand-name">TANUH</span>
         </div>
         <div class="ls-headline">
@@ -160,7 +303,11 @@
       <div class="ls-form-wrap">
         <div class="ls-form-top">
           <div class="ls-form-brand">
-            <img src="assets/tanuh.png" alt="TANUH" class="ls-form-logo" />
+            <div class="brand-logos ls-form-brand-logos">
+              <img src="assets/tanuh.png" alt="TANUH" class="ls-form-logo" />
+              <img src="assets/moe-logo.svg" alt="MOE Logo" class="ls-form-logo nav-moe-logo" />
+              <img src="assets/iisc-logo.png" alt="IISc Logo" class="ls-form-logo nav-iisc-logo" />
+            </div>
             <span class="ls-portal-badge">Hospital Portal</span>
           </div>
           <button class="ls-back-public" id="login-back-public" type="button">
@@ -176,30 +323,36 @@
             <label class="ls-label" for="login-username">Username</label>
             <div class="ls-input-shell">
               <svg class="ls-input-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/>
-                <path d="M4 20c0-4 3.582-7 8-7s8 3 8 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8" />
+                <path d="M4 20c0-4 3.582-7 8-7s8 3 8 7" stroke="currentColor" stroke-width="1.8"
+                  stroke-linecap="round" />
               </svg>
-              <input id="login-username" type="text" class="ls-input" autocomplete="username" placeholder="e.g. SH-SLM-TN" required />
+              <input id="login-username" type="text" class="ls-input" autocomplete="username"
+                placeholder="e.g. SH-SLM-TN" required />
             </div>
           </div>
           <div class="ls-field">
             <label class="ls-label" for="login-password">Password</label>
             <div class="ls-input-shell">
               <svg class="ls-input-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <rect x="3" y="11" width="18" height="11" rx="2" stroke="currentColor" stroke-width="1.8"/>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                <circle cx="12" cy="16" r="1.5" fill="currentColor"/>
+                <rect x="3" y="11" width="18" height="11" rx="2" stroke="currentColor" stroke-width="1.8" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                <circle cx="12" cy="16" r="1.5" fill="currentColor" />
               </svg>
-              <input id="login-password" type="password" class="ls-input" autocomplete="current-password" placeholder="Enter your password" required />
-              <button type="button" class="ls-pw-toggle" id="ls-pw-toggle" aria-label="Show or hide password" tabindex="-1">
+              <input id="login-password" type="password" class="ls-input" autocomplete="current-password"
+                placeholder="Enter your password" required />
+              <button type="button" class="ls-pw-toggle" id="ls-pw-toggle" aria-label="Show or hide password"
+                tabindex="-1">
                 <svg id="ls-eye-open" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" stroke-width="1.8"/>
-                  <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" stroke-width="1.8" />
+                  <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8" />
                 </svg>
                 <svg id="ls-eye-shut" viewBox="0 0 24 24" fill="none" aria-hidden="true" class="hidden">
-                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                  <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                  <path d="M1 1l22 22" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"
+                    stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                  <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" stroke="currentColor"
+                    stroke-width="1.8" stroke-linecap="round" />
+                  <path d="M1 1l22 22" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
                 </svg>
               </button>
             </div>
@@ -230,12 +383,13 @@
           <button class="ls-btn" type="submit">
             <span class="ls-btn-label">Sign In</span>
             <svg class="ls-btn-arrow" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-              <path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round" />
             </svg>
           </button>
         </form>
 
-        <p class="ls-footer">TANUH · AI Centre of Excellence · IISc Bangalore</p>
+        <p class="ls-footer">TANUH · AI CoE · IISc Bangalore</p>
       </div>
     </div>
 
@@ -250,7 +404,8 @@
           <img class="logo-img iisc-logo nav-partner-logo nav-iisc-logo" src="assets/iisc-logo.png" alt="IISc Logo" />
         </a>
       </div>
-      <button class="navbar-menu-toggle" id="navbar-menu-toggle" type="button" aria-controls="navbar-tabs" aria-expanded="false" aria-label="Open navigation menu">
+      <button class="navbar-menu-toggle" id="navbar-menu-toggle" type="button" aria-controls="navbar-tabs"
+        aria-expanded="false" aria-label="Open navigation menu">
         <span></span>
         <span></span>
         <span></span>
@@ -260,8 +415,10 @@
         <!-- E-consent tab temporarily disabled.
         <button class="nav-link workflow-nav is-locked" id="consent-nav" data-tab="consent" type="button"><span>E-Consent Form</span><small class="nav-gate-badge">Locked</small></button>
         -->
-        <button class="nav-link workflow-nav is-locked" id="questionnaire-nav" data-tab="questionnaire" type="button"><span>Data Collection Form</span><small class="nav-gate-badge">Locked</small></button>
-        <button class="nav-link workflow-nav is-locked" id="egfr-nav" data-tab="egfr" type="button"><span id="clinical-flow-nav-label">eGFR Flow</span><small class="nav-gate-badge">Locked</small></button>
+        <button class="nav-link workflow-nav is-locked" id="questionnaire-nav" data-tab="questionnaire"
+          type="button"><span>Data Collection Form</span><small class="nav-gate-badge">Locked</small></button>
+        <button class="nav-link workflow-nav is-locked" id="egfr-nav" data-tab="egfr" type="button"><span
+            id="clinical-flow-nav-label">eGFR Flow</span><small class="nav-gate-badge">Locked</small></button>
         <button class="nav-link" data-tab="dashboard" type="button">Dashboard</button>
         <button class="nav-link" id="submissions-nav" data-tab="submissions" type="button">Records</button>
       </nav>
@@ -287,7 +444,10 @@
         <li class="stp-step stp-active" id="stp-1" data-stp="1">
           <div class="stp-node" aria-hidden="true">
             <span class="stp-num">1</span>
-            <svg class="stp-check" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <svg class="stp-check" viewBox="0 0 16 16" fill="none">
+              <path d="M3 8l3.5 3.5L13 4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+                stroke-linejoin="round" />
+            </svg>
           </div>
           <div class="stp-label-wrap">
             <span class="stp-label">Patient Setup</span>
@@ -300,7 +460,10 @@
         <li class="stp-step stp-pending" id="stp-2" data-stp="2">
           <div class="stp-node" aria-hidden="true">
             <span class="stp-num">2</span>
-            <svg class="stp-check" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <svg class="stp-check" viewBox="0 0 16 16" fill="none">
+              <path d="M3 8l3.5 3.5L13 4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+                stroke-linejoin="round" />
+            </svg>
           </div>
           <div class="stp-label-wrap">
             <span class="stp-label">Data Collection Form</span>
@@ -313,7 +476,10 @@
         <li class="stp-step stp-pending" id="stp-3" data-stp="3">
           <div class="stp-node" aria-hidden="true">
             <span class="stp-num">3</span>
-            <svg class="stp-check" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <svg class="stp-check" viewBox="0 0 16 16" fill="none">
+              <path d="M3 8l3.5 3.5L13 4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+                stroke-linejoin="round" />
+            </svg>
           </div>
           <div class="stp-label-wrap">
             <span class="stp-label" id="clinical-step-label">Upload &amp; Submit</span>
@@ -326,7 +492,10 @@
         <li class="stp-step stp-pending hidden" id="stp-4" data-stp="4">
           <div class="stp-node" aria-hidden="true">
             <span class="stp-num">4</span>
-            <svg class="stp-check" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <svg class="stp-check" viewBox="0 0 16 16" fill="none">
+              <path d="M3 8l3.5 3.5L13 4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+                stroke-linejoin="round" />
+            </svg>
           </div>
           <div class="stp-label-wrap">
             <span class="stp-label">Upload &amp; Submit</span>
@@ -345,13 +514,17 @@
 
   <!-- Draft restore toast -->
   <div class="draft-toast hidden" id="draft-toast" role="alert" aria-live="assertive">
-    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2a8 8 0 100 16A8 8 0 0010 2zm0 4v4l2.5 2.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path d="M10 2a8 8 0 100 16A8 8 0 0010 2zm0 4v4l2.5 2.5" stroke="currentColor" stroke-width="1.8"
+        stroke-linecap="round" />
+    </svg>
     <span id="draft-toast-msg">Draft restored</span>
     <button class="draft-toast-clear" id="draft-toast-clear" type="button">Clear draft</button>
     <button class="draft-toast-dismiss" id="draft-toast-dismiss" type="button" aria-label="Dismiss">&times;</button>
   </div>
 
-  <button class="demo-autofill hidden" id="demo-autofill" type="button" aria-label="Fill demo data for the current page">
+  <button class="demo-autofill hidden" id="demo-autofill" type="button"
+    aria-label="Fill demo data for the current page">
     <span>Demo</span>
     <strong>Auto-fill</strong>
   </button>
@@ -364,13 +537,15 @@
             <div class="landing-copy">
               <span class="eyebrow" id="landing-study-eyebrow">AI-Based eGFR Research Study</span>
               <h1 id="landing-study-title">Secure Renal Data Capture for Partner Hospitals</h1>
-              <p id="landing-study-description">Collect patient-linked kidney ultrasound data, clinical reports, and intake details in one guided workflow.</p>
+              <p id="landing-study-description">Collect patient-linked kidney ultrasound data, clinical reports, and
+                intake details in one guided workflow.</p>
               <div class="hero-highlights" aria-label="Portal capability">
                 <span>Patient-linked intake</span>
               </div>
               <div class="landing-actions">
                 <button class="btn-premium" id="landing-scroll-setup" type="button">Begin Session</button>
-                <button class="btn-secondary" id="open-anonymization-tool" type="button">Open Anonymization Tool</button>
+                <button class="btn-secondary" id="open-anonymization-tool" type="button">Open Anonymization
+                  Tool</button>
                 <button class="btn-secondary" data-tab-jump="dashboard" type="button">View Dashboard</button>
               </div>
             </div>
@@ -423,7 +598,8 @@
             <div>
               <span class="eyebrow">Intake Workspace</span>
               <h2>Start a hospital session, then add patients.</h2>
-                  <p>The hospital context remains active for this browser session. Each patient gets a focused intake and clinical upload flow.</p>
+              <p>The hospital context remains active for this browser session. Each patient gets a focused intake and
+                clinical upload flow.</p>
             </div>
             <span class="secure-badge">Controlled Research Intake</span>
           </div>
@@ -471,7 +647,8 @@
               </div>
               <div class="field-block hidden">
                 <label for="landing-study-id">Study ID <span class="required-marker">*</span></label>
-                <input id="landing-study-id" type="text" placeholder="Auto-generated from pathway, hospital, and patient ID" readonly required disabled />
+                <input id="landing-study-id" type="text"
+                  placeholder="Auto-generated from pathway, hospital, and patient ID" readonly required disabled />
               </div>
               <div class="field-block">
                 <label for="landing-enrollment-date">Date</label>
@@ -482,7 +659,8 @@
               </div>
               <div class="actions setup-actions">
                 <p>Next: complete the intake form.</p>
-                <button class="btn-premium" id="start-patient-consent" type="submit" disabled>Start Data Collection Form</button>
+                <button class="btn-premium" id="start-patient-consent" type="submit" disabled>Start Data Collection
+                  Form</button>
               </div>
             </form>
           </div>
@@ -491,189 +669,256 @@
     </section>
 
     <template id="disabled-consent-tab">
-    <section class="tab-panel" id="tab-consent" aria-labelledby="E-Consent Form">
-      <div class="page-hero form-hero">
-        <h1 id="consent-page-title">E-Consent Form</h1>
-        <p>Participant information linked to the current patient intake session</p>
-        <span class="hero-meta" id="consent-page-meta">eGFR Study · Please verify the patient context before continuing</span>
-      </div>
-      <div class="stage-access-banner hidden" id="consent-access-banner" role="status" aria-live="polite">
-        <span class="stage-access-badge">Preview only</span>
-        <div>
-          <strong>Patient setup is required before consent can be recorded.</strong>
-          <p>You can read this form now. Start a patient intake to enable acceptance.</p>
+      <section class="tab-panel" id="tab-consent" aria-labelledby="E-Consent Form">
+        <div class="page-hero form-hero">
+          <h1 id="consent-page-title">E-Consent Form</h1>
+          <p>Participant information linked to the current patient intake session</p>
+          <span class="hero-meta" id="consent-page-meta">eGFR Study · Please verify the patient context before
+            continuing</span>
         </div>
-        <button class="btn-ghost" data-tab-jump="landing" type="button">Go to Patient Setup</button>
-      </div>
-      <article class="panel-card flow-card consent-card">
-        <div class="consent-context-card">
+        <div class="stage-access-banner hidden" id="consent-access-banner" role="status" aria-live="polite">
+          <span class="stage-access-badge">Preview only</span>
           <div>
-            <span class="eyebrow">Consent linked to</span>
-            <strong id="consent-context-patient">No patient selected</strong>
+            <strong>Patient setup is required before consent can be recorded.</strong>
+            <p>You can read this form now. Start a patient intake to enable acceptance.</p>
           </div>
-          <div class="consent-context-grid">
-            <div><small>Hospital</small><b id="consent-context-hospital">--</b></div>
-            <div><small>Hospital ID</small><b id="consent-context-hospital-id">--</b></div>
-            <div><small>Patient ID</small><b id="consent-context-uhid">--</b></div>
-            <div><small>Enrollment Date</small><b id="consent-context-date">--</b></div>
+          <button class="btn-ghost" data-tab-jump="landing" type="button">Go to Patient Setup</button>
+        </div>
+        <article class="panel-card flow-card consent-card">
+          <div class="consent-context-card">
+            <div>
+              <span class="eyebrow">Consent linked to</span>
+              <strong id="consent-context-patient">No patient selected</strong>
+            </div>
+            <div class="consent-context-grid">
+              <div><small>Hospital</small><b id="consent-context-hospital">--</b></div>
+              <div><small>Hospital ID</small><b id="consent-context-hospital-id">--</b></div>
+              <div><small>Patient ID</small><b id="consent-context-uhid">--</b></div>
+              <div><small>Enrollment Date</small><b id="consent-context-date">--</b></div>
+            </div>
+            <button class="btn-ghost" data-tab-jump="landing" type="button">Edit Patient Setup</button>
           </div>
-          <button class="btn-ghost" data-tab-jump="landing" type="button">Edit Patient Setup</button>
-        </div>
-        <div class="consent-flow-panel" data-consent-flow="egfr">
-        <div class="consent-study-info">
-          <div class="csi-row"><span class="csi-label">Study Title :</span><span class="csi-val">AI-Based Multimodal Estimation of eGFR Using Kidney Ultrasound and Clinical Parameters</span></div>
-          <div class="csi-row"><span class="csi-label">Sponsor :</span><span class="csi-val">TANUH Foundation</span></div>
-          <div class="csi-row"><span class="csi-label">IEC Approval :</span><span class="csi-val">Ethics committee approval received from Clinicom vide letter no: 02437 dated 24th March, 2026</span></div>
-          <div class="csi-row"><span class="csi-label">CTRI Approval :</span><span class="csi-val">CTRI committee registration done with CTRI no: CTRI/2026/05/110765 dated 21st May, 2026</span></div>
-        </div>
+          <div class="consent-flow-panel" data-consent-flow="egfr">
+            <div class="consent-study-info">
+              <div class="csi-row"><span class="csi-label">Study Title :</span><span class="csi-val">AI-Based Multimodal
+                  Estimation of eGFR Using Kidney Ultrasound and Clinical Parameters</span></div>
+              <div class="csi-row"><span class="csi-label">Sponsor :</span><span class="csi-val">TANUH Foundation</span>
+              </div>
+              <div class="csi-row"><span class="csi-label">IEC Approval :</span><span class="csi-val">Ethics committee
+                  approval received from Clinicom vide letter no: 02437 dated 24th March, 2026</span></div>
+              <div class="csi-row"><span class="csi-label">CTRI Approval :</span><span class="csi-val">CTRI committee
+                  registration done with CTRI no: CTRI/2026/05/110765 dated 21st May, 2026</span></div>
+            </div>
 
-        <div class="consent-intro">
-          <h2>AI-Based Multimodal Estimation of eGFR Using Kidney Ultrasound and Clinical Parameters</h2>
-          <p>You are being invited to take part in a research study titled “AI-Based Multimodal Estimation of eGFR Using Kidney Ultrasound and Clinical Parameters”. Before you decide, it is important for you to understand why the research is being done and what it will involve. Please take time to read the following information carefully and discuss it with friends, relatives and your doctors if you wish. Ask us if there is anything that is not clear or if you would like more information. Thank you for reading this.</p>
-        </div>
-        <ol class="consent-list">
-          <li>
-            <h3>What is the purpose of the study?</h3>
-            <p>The purpose of this study is to develop and test an Artificial Intelligence (AI) model that can detect and predict chronic kidney diseases at an early stage.</p>
-          </li>
-          <li>
-            <h3>Why have I been chosen?</h3>
-            <p>You have been chosen to participate because you had a kidney ultrasound and kidney-related laboratory tests as part of your clinical care. The clinical information you provide is good enough to train and test the AI model. The information is provided voluntarily.</p>
-          </li>
-          <li>
-            <h3>Do I have to take part?</h3>
-            <p>Your participation is completely voluntary and will not affect your level of medical care at the Health Centre. You may opt not to participate in the study at any time.</p>
-          </li>
-          <li>
-            <h3>What will happen to me if I take part?</h3>
-            <p>If you agree to participate, you will allow the research team to access and use</p>
-            <p>(i) Your kidney ultrasound images, and<br />(ii) Your laboratory reports related to kidney function</p>
-            <p>No extra procedures or examinations will be required.</p>
-          </li>
-          <li>
-            <h3>What do I have to do?</h3>
-            <p>You will not be required to attend any extra appointments or undergo additional tests. Your anonymized data will be used for research purposes. No identifiable information will be accessed, and you will not be contacted.</p>
-          </li>
-          <li>
-            <h3>What are the possible risks of taking part?</h3>
-            <p>Participation in this research study does not involve any known risks.</p>
-          </li>
-          <li>
-            <h3>What are the possible benefits of taking part?</h3>
-            <p>You may not receive direct personal benefit from taking part in this study. But your participation may contribute to the development of improved tools for early detection of chronic kidney diseases. The findings could support earlier diagnosis, better monitoring, and more effective treatment strategies for future patients.</p>
-          </li>
-          <li>
-            <h3>Will my taking part in this study be kept confidential?</h3>
-            <p>Your information will be handled in a confidential manner and protected according to institutional policies and applicable laws. The research dataset will no longer contain your name or any other direct identifiers. Data will be kept in a safe, password-protected system with controlled access.</p>
-          </li>
-          <li>
-            <h3>What will happen to the results of the research study?</h3>
-            <p>The findings of the study may be published or discussed in conferences or at scientific meetings. Only a collection of findings will be described in these results. Your private medical information will not be disclosed, and no specific participant will be identified. The results of the research study are used to improve early detection of chronic kidney disease.</p>
-            <p>About 20% of the total data, collected in an irreversible anonymized manner, will be part of benchmarking and open data initiative of TANUH for evaluation of AI algorithms.</p>
-          </li>
-          <li>
-            <h3>Who is organising and funding the research?</h3>
-            <p>The research study is being organized at the TANUH, AI Centre of Excellence, Indian Institute of Science, Bangalore 560012 and funded by a research grant from Ministry of Education, Government of India.</p>
-          </li>
-          <li>
-            <h3>Who has reviewed the study?</h3>
-            <p>The research study has been reviewed by the CLINICOM, Independent Ethics Committee for Evaluation of Protocols for Clinical Research, Bangalore 560003.</p>
-          </li>
-          <li>
-            <h3>Who can I contact for further information?</h3>
-            <p>If you have any questions about the study, you may contact Dr. S. Hema Priyadarshini, <a href="mailto:hema.priya@tanuh.ai">hema.priya@tanuh.ai</a>, +91 9945334356.</p>
-            <p>If you wish to speak to someone independent of the study as well as withdrawal of the consent, you may contact the Institutional Ethics Committee (IEC)</p>
-            <p>Name: Dr. Sri Vidhya Jagadish<br />Member Secretary, IEC, TANUH<br />Email: <a href="mailto:secretary.iec@tanuh.ai">secretary.iec@tanuh.ai</a><br />Phone# 080 - 2293 4106 / 2293 4107</p>
-          </li>
-        </ol>
-        <div class="consent-thanks">Thank you for taking part in the study!</div>
-        <div class="consent-confirmation-group">
-          <label class="consent-check">
-            <input id="consent-checkbox" type="checkbox" />
-            <span>I confirm that this consent review is linked to the patient intake shown above, and that I have read and understood the participant information before proceeding.</span>
-          </label>
-        </div>
-        </div>
+            <div class="consent-intro">
+              <h2>AI-Based Multimodal Estimation of eGFR Using Kidney Ultrasound and Clinical Parameters</h2>
+              <p>You are being invited to take part in a research study titled “AI-Based Multimodal Estimation of eGFR
+                Using Kidney Ultrasound and Clinical Parameters”. Before you decide, it is important for you to
+                understand why the research is being done and what it will involve. Please take time to read the
+                following information carefully and discuss it with friends, relatives and your doctors if you wish. Ask
+                us if there is anything that is not clear or if you would like more information. Thank you for reading
+                this.</p>
+            </div>
+            <ol class="consent-list">
+              <li>
+                <h3>What is the purpose of the study?</h3>
+                <p>The purpose of this study is to develop and test an Artificial Intelligence (AI) model that can
+                  detect and predict chronic kidney diseases at an early stage.</p>
+              </li>
+              <li>
+                <h3>Why have I been chosen?</h3>
+                <p>You have been chosen to participate because you had a kidney ultrasound and kidney-related laboratory
+                  tests as part of your clinical care. The clinical information you provide is good enough to train and
+                  test the AI model. The information is provided voluntarily.</p>
+              </li>
+              <li>
+                <h3>Do I have to take part?</h3>
+                <p>Your participation is completely voluntary and will not affect your level of medical care at the
+                  Health Centre. You may opt not to participate in the study at any time.</p>
+              </li>
+              <li>
+                <h3>What will happen to me if I take part?</h3>
+                <p>If you agree to participate, you will allow the research team to access and use</p>
+                <p>(i) Your kidney ultrasound images, and<br />(ii) Your laboratory reports related to kidney function
+                </p>
+                <p>No extra procedures or examinations will be required.</p>
+              </li>
+              <li>
+                <h3>What do I have to do?</h3>
+                <p>You will not be required to attend any extra appointments or undergo additional tests. Your
+                  anonymized data will be used for research purposes. No identifiable information will be accessed, and
+                  you will not be contacted.</p>
+              </li>
+              <li>
+                <h3>What are the possible risks of taking part?</h3>
+                <p>Participation in this research study does not involve any known risks.</p>
+              </li>
+              <li>
+                <h3>What are the possible benefits of taking part?</h3>
+                <p>You may not receive direct personal benefit from taking part in this study. But your participation
+                  may contribute to the development of improved tools for early detection of chronic kidney diseases.
+                  The findings could support earlier diagnosis, better monitoring, and more effective treatment
+                  strategies for future patients.</p>
+              </li>
+              <li>
+                <h3>Will my taking part in this study be kept confidential?</h3>
+                <p>Your information will be handled in a confidential manner and protected according to institutional
+                  policies and applicable laws. The research dataset will no longer contain your name or any other
+                  direct identifiers. Data will be kept in a safe, password-protected system with controlled access.</p>
+              </li>
+              <li>
+                <h3>What will happen to the results of the research study?</h3>
+                <p>The findings of the study may be published or discussed in conferences or at scientific meetings.
+                  Only a collection of findings will be described in these results. Your private medical information
+                  will not be disclosed, and no specific participant will be identified. The results of the research
+                  study are used to improve early detection of chronic kidney disease.</p>
+                <p>About 20% of the total data, collected in an irreversible anonymized manner, will be part of
+                  benchmarking and open data initiative of TANUH for evaluation of AI algorithms.</p>
+              </li>
+              <li>
+                <h3>Who is organising and funding the research?</h3>
+                <p>The research study is being organized at the TANUH, AI CoE, Indian Institute of Science, Bangalore
+                  560012 and funded by a research grant from Ministry of Education, Government of India.</p>
+              </li>
+              <li>
+                <h3>Who has reviewed the study?</h3>
+                <p>The research study has been reviewed by the CLINICOM, Independent Ethics Committee for Evaluation of
+                  Protocols for Clinical Research, Bangalore 560003.</p>
+              </li>
+              <li>
+                <h3>Who can I contact for further information?</h3>
+                <p>If you have any questions about the study, you may contact Dr. S. Hema Priyadarshini, <a
+                    href="mailto:hema.priya@tanuh.ai">hema.priya@tanuh.ai</a>, +91 9945334356.</p>
+                <p>If you wish to speak to someone independent of the study as well as withdrawal of the consent, you
+                  may contact the Institutional Ethics Committee (IEC)</p>
+                <p>Name: Dr. Sri Vidhya Jagadish<br />Member Secretary, IEC, TANUH<br />Email: <a
+                    href="mailto:secretary.iec@tanuh.ai">secretary.iec@tanuh.ai</a><br />Phone# 080 - 2293 4106 / 2293
+                  4107</p>
+              </li>
+            </ol>
+            <div class="consent-thanks">Thank you for taking part in the study!</div>
+            <div class="consent-confirmation-group">
+              <label class="consent-check">
+                <input id="consent-checkbox" type="checkbox" />
+                <span>I confirm that this consent review is linked to the patient intake shown above, and that I have
+                  read and understood the participant information before proceeding.</span>
+              </label>
+            </div>
+          </div>
 
-        <div class="consent-flow-panel hidden" data-consent-flow="kfre">
-          <div class="consent-study-info">
-            <div class="csi-row"><span class="csi-label">Study Title :</span><span class="csi-val">Recalibration and Validation of the Kidney Failure Risk Equation in an Indian Chronic Kidney Disease Cohort</span></div>
-            <div class="csi-row"><span class="csi-label">Sponsor :</span><span class="csi-val">TANUH Foundation</span></div>
-            <!-- <div class="csi-row"><span class="csi-label">Study Pathway :</span><span class="csi-val">KFRE Clinical Document Intake</span></div> -->
-            <div class="csi-row"><span class="csi-label">IEC Approval :</span><span class="csi-val">Ethics committee approval received from Clinicom vide letter no: 02436 dated 24th March, 2026</span></div>
-            <!-- <div class="csi-row"><span class="csi-label">CTRI Approval :</span><span class="csi-val">CTRI committee registration done with CTRI no: CTRI/2026/05/110766 dated 21st May, 2026</span></div> -->
+          <div class="consent-flow-panel hidden" data-consent-flow="kfre">
+            <div class="consent-study-info">
+              <div class="csi-row"><span class="csi-label">Study Title :</span><span class="csi-val">Recalibration and
+                  Validation of the Kidney Failure Risk Equation in an Indian Chronic Kidney Disease Cohort</span></div>
+              <div class="csi-row"><span class="csi-label">Sponsor :</span><span class="csi-val">TANUH Foundation</span>
+              </div>
+              <!-- <div class="csi-row"><span class="csi-label">Study Pathway :</span><span class="csi-val">KFRE Clinical Document Intake</span></div> -->
+              <div class="csi-row"><span class="csi-label">IEC Approval :</span><span class="csi-val">Ethics committee
+                  approval received from Clinicom vide letter no: 02436 dated 24th March, 2026</span></div>
+              <!-- <div class="csi-row"><span class="csi-label">CTRI Approval :</span><span class="csi-val">CTRI committee registration done with CTRI no: CTRI/2026/05/110766 dated 21st May, 2026</span></div> -->
+            </div>
+            <div class="consent-intro">
+              <h2>Recalibration and Validation of the Kidney Failure Risk Equation in an Indian Chronic Kidney Disease
+                Cohort</h2>
+              <p>You are being invited to take part in a research study titled “Recalibration and Validation of the
+                Kidney Failure Risk Equation in an Indian Chronic Kidney Disease Cohort”. Before you decide, it is
+                important for you to understand why the research is being done and what it will involve. Please take
+                time to read the following information carefully and discuss it with friends, relatives and your doctors
+                if you wish. Ask us if there is anything that is not clear or if you would like more information. Thank
+                you for reading this.</p>
+            </div>
+            <ol class="consent-list">
+              <li>
+                <h3>What is the purpose of the study?</h3>
+                <p>The purpose of this study is to improve the prediction of kidney failure risk in Indian patients with
+                  chronic kidney disease by adapting an existing risk prediction model using Indian patient data.</p>
+              </li>
+              <li>
+                <h3>Why have I been chosen?</h3>
+                <p>You have been chosen to participate because your medical records include kidney-related tests that
+                  are useful for understanding kidney health. The clinical information in the records is sufficient to
+                  train and test the AI model to assess the kidney function.</p>
+              </li>
+              <li>
+                <h3>Do I have to take part?</h3>
+                <p>Your participation is completely voluntary and will not affect your level of medical care at the
+                  Health Centre. You may opt not to participate in the study at any time.</p>
+              </li>
+              <li>
+                <h3>What will happen to me if I take part?</h3>
+                <p>If you agree to participate, you will allow the research team to access and use your laboratory
+                  reports related to kidney function. These data will be de-identified and analyzed using artificial
+                  intelligence-based methods to develop and validate models for estimating kidney function by estimating
+                  an individual’s 2-year and 5-year risk of progression to kidney failure.</p>
+              </li>
+              <li>
+                <h3>What do I have to do?</h3>
+                <p>You will not be required to attend any extra appointments or undergo additional tests. Your
+                  anonymized data will be used for research purposes. No identifiable information will be accessed, and
+                  you will not be contacted.</p>
+              </li>
+              <li>
+                <h3>What are the possible risks of taking part?</h3>
+                <p>Participation in this research study does not involve any known risks.</p>
+              </li>
+              <li>
+                <h3>What are the possible benefits of taking part?</h3>
+                <p>You may not receive direct personal benefit from participating in this study, as no changes will be
+                  made to your medical care based on the study findings. However, the knowledge gained may help improve
+                  assessment and management of kidney disease for future patients.</p>
+              </li>
+              <li>
+                <h3>Will my taking part in this study be kept confidential?</h3>
+                <p>Your information will be handled in a confidential manner and protected according to institutional
+                  policies and applicable laws. The research dataset will no longer contain your name or any other
+                  direct identifiers. Data will be kept in a safe, password-protected system with controlled access.</p>
+              </li>
+              <li>
+                <h3>What will happen to the results of the research study?</h3>
+                <p>The study results will be used for research and academic purposes to improve prediction of kidney
+                  failure risk in Indian CKD patients. Results may be published or presented in summary form, without
+                  revealing any personal identity. About 20% of the total data, collected in an irreversible anonymized
+                  manner, will be part of benchmarking and open data initiative of TANUH for evaluation of AI
+                  algorithms.</p>
+              </li>
+              <li>
+                <h3>Who is organising and funding the research?</h3>
+                <p>The research study is being organized at the TANUH, AI CoE, Indian Institute of Science, Bangalore
+                  560012 and funded by a research grant from Ministry of Education, Government of India.</p>
+              </li>
+              <li>
+                <h3>Who has reviewed the study?</h3>
+                <p>The research study has been reviewed by the CLINICOM, Independent Ethics Committee for Evaluation of
+                  Protocols for Clinical Research, Bangalore 560003.</p>
+              </li>
+              <li>
+                <h3>Who can I contact for further information?</h3>
+                <p>If you have any questions about the study you may contact Dr. S. Hema Priyadarshini, <a
+                    href="mailto:hema.priya@tanuh.ai">hema.priya@tanuh.ai</a>, +91 9945334356.</p>
+                <p>If you wish to speak to someone independent of the study as well as withdrawal of the consent, you
+                  may contact the Institutional Ethics Committee (IEC).</p>
+                <p>Name: Dr. Sri Vidhya Jagadish<br />Member Secretary, IEC, TANUH<br />Email: <a
+                    href="mailto:secretary.iec@tanuh.ai">secretary.iec@tanuh.ai</a><br />Phone# 080 - 2293 4106 / 2293
+                  4107</p>
+              </li>
+            </ol>
+            <div class="consent-thanks">Thank you for taking part in the study!</div>
+            <div class="consent-confirmation-group">
+              <label class="consent-check">
+                <input id="kfre-consent-checkbox" type="checkbox" />
+                <span>I confirm that this KFRE consent review is linked to the patient intake shown above, and that I
+                  have read and understood the participant information before proceeding.</span>
+              </label>
+            </div>
           </div>
-          <div class="consent-intro">
-            <h2>Recalibration and Validation of the Kidney Failure Risk Equation in an Indian Chronic Kidney Disease Cohort</h2>
-            <p>You are being invited to take part in a research study titled “Recalibration and Validation of the Kidney Failure Risk Equation in an Indian Chronic Kidney Disease Cohort”. Before you decide, it is important for you to understand why the research is being done and what it will involve. Please take time to read the following information carefully and discuss it with friends, relatives and your doctors if you wish. Ask us if there is anything that is not clear or if you would like more information. Thank you for reading this.</p>
-          </div>
-          <ol class="consent-list">
-            <li>
-              <h3>What is the purpose of the study?</h3>
-              <p>The purpose of this study is to improve the prediction of kidney failure risk in Indian patients with chronic kidney disease by adapting an existing risk prediction model using Indian patient data.</p>
-            </li>
-            <li>
-              <h3>Why have I been chosen?</h3>
-              <p>You have been chosen to participate because your medical records include kidney-related tests that are useful for understanding kidney health. The clinical information in the records is sufficient to train and test the AI model to assess the kidney function.</p>
-            </li>
-            <li>
-              <h3>Do I have to take part?</h3>
-              <p>Your participation is completely voluntary and will not affect your level of medical care at the Health Centre. You may opt not to participate in the study at any time.</p>
-            </li>
-            <li>
-              <h3>What will happen to me if I take part?</h3>
-              <p>If you agree to participate, you will allow the research team to access and use your laboratory reports related to kidney function. These data will be de-identified and analyzed using artificial intelligence-based methods to develop and validate models for estimating kidney function by estimating an individual’s 2-year and 5-year risk of progression to kidney failure.</p>
-            </li>
-            <li>
-              <h3>What do I have to do?</h3>
-              <p>You will not be required to attend any extra appointments or undergo additional tests. Your anonymized data will be used for research purposes. No identifiable information will be accessed, and you will not be contacted.</p>
-            </li>
-            <li>
-              <h3>What are the possible risks of taking part?</h3>
-              <p>Participation in this research study does not involve any known risks.</p>
-            </li>
-            <li>
-              <h3>What are the possible benefits of taking part?</h3>
-              <p>You may not receive direct personal benefit from participating in this study, as no changes will be made to your medical care based on the study findings. However, the knowledge gained may help improve assessment and management of kidney disease for future patients.</p>
-            </li>
-            <li>
-              <h3>Will my taking part in this study be kept confidential?</h3>
-              <p>Your information will be handled in a confidential manner and protected according to institutional policies and applicable laws. The research dataset will no longer contain your name or any other direct identifiers. Data will be kept in a safe, password-protected system with controlled access.</p>
-            </li>
-            <li>
-              <h3>What will happen to the results of the research study?</h3>
-              <p>The study results will be used for research and academic purposes to improve prediction of kidney failure risk in Indian CKD patients. Results may be published or presented in summary form, without revealing any personal identity. About 20% of the total data, collected in an irreversible anonymized manner, will be part of benchmarking and open data initiative of TANUH for evaluation of AI algorithms.</p>
-            </li>
-            <li>
-              <h3>Who is organising and funding the research?</h3>
-              <p>The research study is being organized at the TANUH, AI Centre of Excellence, Indian Institute of Science, Bangalore 560012 and funded by a research grant from Ministry of Education, Government of India.</p>
-            </li>
-            <li>
-              <h3>Who has reviewed the study?</h3>
-              <p>The research study has been reviewed by the CLINICOM, Independent Ethics Committee for Evaluation of Protocols for Clinical Research, Bangalore 560003.</p>
-            </li>
-            <li>
-              <h3>Who can I contact for further information?</h3>
-              <p>If you have any questions about the study you may contact Dr. S. Hema Priyadarshini, <a href="mailto:hema.priya@tanuh.ai">hema.priya@tanuh.ai</a>, +91 9945334356.</p>
-              <p>If you wish to speak to someone independent of the study as well as withdrawal of the consent, you may contact the Institutional Ethics Committee (IEC).</p>
-              <p>Name: Dr. Sri Vidhya Jagadish<br />Member Secretary, IEC, TANUH<br />Email: <a href="mailto:secretary.iec@tanuh.ai">secretary.iec@tanuh.ai</a><br />Phone# 080 - 2293 4106 / 2293 4107</p>
-            </li>
-          </ol>
-          <div class="consent-thanks">Thank you for taking part in the study!</div>
-          <div class="consent-confirmation-group">
-            <label class="consent-check">
-              <input id="kfre-consent-checkbox" type="checkbox" />
-              <span>I confirm that this KFRE consent review is linked to the patient intake shown above, and that I have read and understood the participant information before proceeding.</span>
-            </label>
-          </div>
-        </div>
 
-        <div class="consent-acceptance consent-action-bar">
-          <div class="consent-record-status" id="consent-record-status" role="status">Consent is not recorded yet.</div>
-          <button class="btn-premium" id="consent-continue" type="button" disabled>Accept & Continue</button>
-        </div>
-      </article>
-    </section>
+          <div class="consent-acceptance consent-action-bar">
+            <div class="consent-record-status" id="consent-record-status" role="status">Consent is not recorded yet.
+            </div>
+            <button class="btn-premium" id="consent-continue" type="button" disabled>Accept & Continue</button>
+          </div>
+        </article>
+      </section>
     </template>
 
     <section class="tab-panel" id="tab-questionnaire" aria-labelledby="Data Collection Form">
@@ -691,16 +936,25 @@
         <button class="btn-ghost" data-tab-jump="landing" type="button">Go to Patient Setup</button>
       </div>
       <div class="consent-study-info">
-          <div class="csi-row"><span class="csi-label">Study Title :</span><span class="csi-val" id="questionnaire-study-title">AI-Based Multimodal Estimation of eGFR Using Kidney Ultrasound and Clinical Parameters</span></div>
-          <div class="csi-row"><span class="csi-label">Sponsor :</span><span class="csi-val">TANUH Foundation</span></div>
-          <div class="csi-row" id="questionnaire-egfr-iec"><span class="csi-label">IEC Approval :</span><span class="csi-val">Ethics committee approval received from Clinicom vide letter no: 02437 dated 24th March, 2026</span></div>
-          <div class="csi-row" id="questionnaire-egfr-ctri"><span class="csi-label">CTRI Approval :</span><span class="csi-val">CTRI committee registration done with CTRI no: CTRI/2026/05/110765 dated 21st May, 2026</span></div>
-          <div class="csi-row hidden" id="questionnaire-kfre-iec"><span class="csi-label">IEC Approval :</span><span class="csi-val">Ethics committee approval received from Clinicom vide letter no: 02436 dated 24th March, 2026</span></div>
-        </div>
+        <div class="csi-row"><span class="csi-label">Study Title :</span><span class="csi-val"
+            id="questionnaire-study-title">AI-Based Multimodal Estimation of eGFR Using Kidney Ultrasound and Clinical
+            Parameters</span></div>
+        <div class="csi-row"><span class="csi-label">Sponsor :</span><span class="csi-val">TANUH Foundation</span></div>
+        <div class="csi-row" id="questionnaire-egfr-iec"><span class="csi-label">IEC Approval :</span><span
+            class="csi-val">Ethics committee approval received from Clinicom vide letter no: 02437 dated 24th March,
+            2026</span></div>
+        <div class="csi-row" id="questionnaire-egfr-ctri"><span class="csi-label">CTRI Approval :</span><span
+            class="csi-val">CTRI committee registration done with CTRI no: CTRI/2026/05/110765 dated 21st May,
+            2026</span></div>
+        <div class="csi-row hidden" id="questionnaire-kfre-iec"><span class="csi-label">IEC Approval :</span><span
+            class="csi-val">Ethics committee approval received from Clinicom vide letter no: 02436 dated 24th March,
+            2026</span></div>
+      </div>
       <article class="panel-card flow-card form-card">
         <form id="questionnaire-form" class="form-grid" novalidate>
           <div class="form-section hidden" id="questionnaire-identification-section">
-            <div class="section-title"><span class="section-index">1.</span> <span id="questionnaire-section-1-title">Patient Identification &amp; Study Details</span></div>
+            <div class="section-title"><span class="section-index">1.</span> <span
+                id="questionnaire-section-1-title">Patient Identification &amp; Study Details</span></div>
             <div class="locked-context-note">
               <span>Patient identifiers are carried forward from the intake setup.</span>
               <button class="btn-ghost" data-tab-jump="landing" type="button">Edit Setup</button>
@@ -708,7 +962,8 @@
             <div class="section-grid section-grid-inline-identifiers">
               <div class="field-block">
                 <label for="study-id">Study ID <span class="required-marker">*</span></label>
-                <input id="study-id" name="studyId" type="text" placeholder="Auto-generated research ID" readonly required />
+                <input id="study-id" name="studyId" type="text" placeholder="Auto-generated research ID" readonly
+                  required />
               </div>
               <div class="field-block">
                 <label for="hospital-name">Hospital <span class="required-marker">*</span></label>
@@ -718,7 +973,8 @@
               </div>
               <div class="field-block">
                 <label for="hospital-id">Hospital ID <span class="required-marker">*</span></label>
-                <input id="hospital-id" name="hospitalId" type="text" placeholder="Auto-filled from hospital" readonly required />
+                <input id="hospital-id" name="hospitalId" type="text" placeholder="Auto-filled from hospital" readonly
+                  required />
               </div>
               <div class="field-block">
                 <label for="uhid">Patient Unique ID <span class="required-marker">*</span></label>
@@ -755,31 +1011,38 @@
             <div class="section-grid">
               <div class="field-block">
                 <label for="patient-age">Age <span class="required-marker hidden" data-kfre-only>*</span></label>
-                <input id="patient-age" name="age" type="number" min="18" max="120" step="1" placeholder="Age in years" required />
+                <input id="patient-age" name="age" type="number" min="18" max="120" step="1" placeholder="Age in years"
+                  required />
                 <small class="field-help">Adults only; accepted range is 18 to 120 years.</small>
               </div>
               <div class="field-block">
                 <label>Sex <span class="required-marker hidden" data-kfre-only>*</span></label>
                 <input id="patient-sex" name="sex" type="hidden" required />
                 <div class="choice-row compact-choice">
-                  <label class="choice-tile"><input type="radio" name="questionnaireSex" value="Male" data-sync-target="patient-sex" /> Male</label>
-                  <label class="choice-tile"><input type="radio" name="questionnaireSex" value="Female" data-sync-target="patient-sex" /> Female</label>
-                  <label class="choice-tile"><input type="radio" name="questionnaireSex" value="Other" data-sync-target="patient-sex" /> Other</label>
+                  <label class="choice-tile"><input type="radio" name="questionnaireSex" value="Male"
+                      data-sync-target="patient-sex" /> Male</label>
+                  <label class="choice-tile"><input type="radio" name="questionnaireSex" value="Female"
+                      data-sync-target="patient-sex" /> Female</label>
+                  <label class="choice-tile"><input type="radio" name="questionnaireSex" value="Other"
+                      data-sync-target="patient-sex" /> Other</label>
                 </div>
               </div>
               <div class="field-block hidden" data-kfre-questionnaire data-kfre-required-control="questionnaire-height">
                 <label for="questionnaire-height">Height (cm)</label>
-                <input id="questionnaire-height" name="questionnaireHeight" type="number" min="50" max="250" step="0.1" placeholder="Height in cm" />
+                <input id="questionnaire-height" name="questionnaireHeight" type="number" min="50" max="250" step="0.1"
+                  placeholder="Height in cm" />
                 <small class="field-help">Required for BMI calculation; measured value in centimetres.</small>
               </div>
               <div class="field-block hidden" data-kfre-questionnaire data-kfre-required-control="patient-weight">
                 <label for="patient-weight">Weight (kg)</label>
-                <input id="patient-weight" name="weight" type="number" min="10" max="400" step="0.1" placeholder="Weight in kg" />
+                <input id="patient-weight" name="weight" type="number" min="10" max="400" step="0.1"
+                  placeholder="Weight in kg" />
                 <small class="field-help">Enter measured weight in kilograms.</small>
               </div>
               <div class="field-block hidden" aria-hidden="true">
                 <label for="questionnaire-bmi">BMI (auto-calculated)</label>
-                <input id="questionnaire-bmi" name="questionnaireBmi" type="text" placeholder="Auto-calculated" readonly />
+                <input id="questionnaire-bmi" name="questionnaireBmi" type="text" placeholder="Auto-calculated"
+                  readonly />
               </div>
               <!-- Ethnicity — removed from KFRE intake (uncomment to restore)
               <div class="field-block hidden" data-kfre-questionnaire>
@@ -806,7 +1069,8 @@
                 </div>
                 <div class="clinical-group-grid">
                   <div class="field-block clinical-card">
-                    <label>Chronic Kidney Disease (CKD) <span class="required-marker hidden" data-kfre-only>*</span></label>
+                    <label>Chronic Kidney Disease (CKD) <span class="required-marker hidden"
+                        data-kfre-only>*</span></label>
                     <div class="choice-row compact-choice">
                       <label class="choice-tile"><input type="radio" name="knownCkd" value="Yes" /> Yes</label>
                       <label class="choice-tile"><input type="radio" name="knownCkd" value="No" /> No</label>
@@ -846,14 +1110,16 @@
                       <label>Dialysis <span class="required-marker hidden" data-kfre-only>*</span></label>
                       <input id="dialysis-yes-no" name="dialysis" type="hidden" />
                       <div class="choice-row compact-choice">
-                        <label class="choice-tile"><input type="radio" name="dialysisChoice" value="Yes" data-sync-target="dialysis-yes-no" /> Yes</label>
-                        <label class="choice-tile"><input type="radio" name="dialysisChoice" value="No" data-sync-target="dialysis-yes-no" /> No</label>
-                        <label class="choice-tile"><input type="radio" name="dialysisChoice" value="N/A" data-sync-target="dialysis-yes-no" /> N/A</label>
+                        <label class="choice-tile"><input type="radio" name="dialysisChoice" value="Yes"
+                            data-sync-target="dialysis-yes-no" /> Yes</label>
+                        <label class="choice-tile"><input type="radio" name="dialysisChoice" value="No"
+                            data-sync-target="dialysis-yes-no" /> No</label>
                       </div>
                     </div>
                     <div class="field-block clinical-card hidden" id="dialysis-frequency-block">
                       <label for="dialysis-frequency">Dialysis frequency (per week)</label>
-                      <input id="dialysis-frequency" name="dialysisFrequency" type="number" min="0" max="21" step="1" placeholder="Times per week" />
+                      <input id="dialysis-frequency" name="dialysisFrequency" type="number" min="0" max="21" step="1"
+                        placeholder="Times per week" />
                     </div>
                   </div>
                 </div>
@@ -869,14 +1135,16 @@
                     <label>Diabetes <span class="required-marker hidden" data-kfre-only>*</span></label>
                     <input id="diabetic-yes-no" name="diabetic" type="hidden" required />
                     <div class="choice-row compact-choice">
-                      <label class="choice-tile"><input type="radio" name="diabetesMellitus" value="Yes" data-sync-target="diabetic-yes-no" /> Yes</label>
-                      <label class="choice-tile"><input type="radio" name="diabetesMellitus" value="No" data-sync-target="diabetic-yes-no" /> No</label>
-                      <label class="choice-tile"><input type="radio" name="diabetesMellitus" value="N/A" data-sync-target="diabetic-yes-no" /> N/A</label>
+                      <label class="choice-tile"><input type="radio" name="diabetesMellitus" value="Yes"
+                          data-sync-target="diabetic-yes-no" /> Yes</label>
+                      <label class="choice-tile"><input type="radio" name="diabetesMellitus" value="No"
+                          data-sync-target="diabetic-yes-no" /> No</label>
                     </div>
                   </div>
                   <div class="field-block clinical-card hidden" id="diabetes-duration-block" data-kfre-questionnaire>
                     <label for="diabetes-duration">Duration of diabetes (years)</label>
-                    <input id="diabetes-duration" name="diabetesDuration" type="number" min="0" max="120" step="0.1" placeholder="Years" />
+                    <input id="diabetes-duration" name="diabetesDuration" type="number" min="0" max="120" step="0.1"
+                      placeholder="Years" />
                   </div>
                   <!-- Diabetic classification — removed from KFRE intake (uncomment to restore)
                   <div id="diabetic-stage-block" class="field-block clinical-card hidden">
@@ -901,9 +1169,11 @@
                       <label class="choice-tile"><input type="radio" name="hypertension" value="N/A" /> N/A</label>
                     </div>
                   </div>
-                  <div class="field-block clinical-card hidden" id="hypertension-duration-block" data-kfre-questionnaire>
+                  <div class="field-block clinical-card hidden" id="hypertension-duration-block"
+                    data-kfre-questionnaire>
                     <label for="hypertension-duration">Duration of hypertension (years)</label>
-                    <input id="hypertension-duration" name="hypertensionDuration" type="number" min="0" max="120" step="0.1" placeholder="Years" />
+                    <input id="hypertension-duration" name="hypertensionDuration" type="number" min="0" max="120"
+                      step="0.1" placeholder="Years" />
                   </div>
                 </div>
               </div>
@@ -917,14 +1187,17 @@
                   <div class="field-block clinical-card">
                     <label>Cardiovascular Disease</label>
                     <div class="choice-row compact-choice">
-                      <label class="choice-tile"><input type="radio" name="cardiovascularDisease" value="Yes" /> Yes</label>
-                      <label class="choice-tile"><input type="radio" name="cardiovascularDisease" value="No" /> No</label>
+                      <label class="choice-tile"><input type="radio" name="cardiovascularDisease" value="Yes" />
+                        Yes</label>
+                      <label class="choice-tile"><input type="radio" name="cardiovascularDisease" value="No" />
+                        No</label>
                     </div>
                   </div>
                   <div class="field-block clinical-card">
                     <label>Family history of kidney disease</label>
                     <div class="choice-row compact-choice">
-                      <label class="choice-tile"><input type="radio" name="familyKidneyHistory" value="Yes" /> Yes</label>
+                      <label class="choice-tile"><input type="radio" name="familyKidneyHistory" value="Yes" />
+                        Yes</label>
                       <label class="choice-tile"><input type="radio" name="familyKidneyHistory" value="No" /> No</label>
                     </div>
                   </div>
@@ -972,7 +1245,8 @@
           </div>
 
           <div class="form-section" id="egfr-ultrasound-section">
-            <div class="section-title"><span class="section-index">2.</span> Ultrasound Findings <span class="section-note">Enter the findings available in the Examination Report</span></div>
+            <div class="section-title"><span class="section-index">2.</span> Ultrasound Findings <span
+                class="section-note">Enter the findings available in the Examination Report</span></div>
             <div class="renal-findings-grid">
               <section class="renal-finding-card right-kidney-card" aria-labelledby="right-kidney-findings-title">
                 <header class="renal-finding-header">
@@ -987,26 +1261,31 @@
                   <div class="renal-measurement-grid">
                     <div class="field-block">
                       <label for="right-kidney-length">Length (cm)</label>
-                      <input id="right-kidney-length" type="number" min="0.1" max="30" step="0.1" placeholder="e.g., 10.4" />
+                      <input id="right-kidney-length" type="number" min="0.1" max="30" step="0.1"
+                        placeholder="e.g., 10.4" />
                     </div>
                     <div class="field-block">
                       <label for="right-kidney-width">Width (cm)</label>
-                      <input id="right-kidney-width" type="number" min="0.1" max="20" step="0.1" placeholder="e.g., 5.1" />
+                      <input id="right-kidney-width" type="number" min="0.1" max="20" step="0.1"
+                        placeholder="e.g., 5.1" />
                     </div>
                     <div class="field-block full-span">
                       <label for="right-cortical-thickness">Cortical Thickness (mm)</label>
-                      <input id="right-cortical-thickness" type="number" min="0.1" max="50" step="0.1" placeholder="e.g., 8.5" />
+                      <input id="right-cortical-thickness" type="number" min="0.1" max="50" step="0.1"
+                        placeholder="e.g., 8.5" />
                     </div>
                   </div>
                   <div class="finding-choice-block">
                     <label>Echogenicity</label>
                     <div class="choice-row finding-choice-row">
-                      <label class="choice-tile"><input type="radio" name="rightEchogenicity" value="Normal" /> Normal</label>
-                      <label class="choice-tile"><input type="radio" name="rightEchogenicity" value="Mild Increased" /> Mild ↑</label>
-                      <label class="choice-tile"><input type="radio" name="rightEchogenicity" value="Moderate Increased" /> Moderate ↑</label>
-                      <label class="choice-tile"><input type="radio" name="rightEchogenicity" value="Severe Increased" /> Severe ↑</label>
-                      <label class="choice-tile"><input type="radio" name="rightEchogenicity" value="Increased (Not specified)" /> Increased</label>
-                      <label class="choice-tile"><input type="radio" name="rightEchogenicity" value="N/A" /> N/A</label>
+                      <label class="choice-tile"><input type="radio" name="rightEchogenicity" value="Normal" />
+                        Normal</label>
+                      <label class="choice-tile"><input type="radio" name="rightEchogenicity" value="Mild Increased" />
+                        Mild ↑</label>
+                      <label class="choice-tile"><input type="radio" name="rightEchogenicity"
+                          value="Moderate Increased" /> Moderate ↑</label>
+                      <label class="choice-tile"><input type="radio" name="rightEchogenicity"
+                          value="Severe Increased" /> Severe ↑</label>
                     </div>
                   </div>
                 </div>
@@ -1015,19 +1294,22 @@
                   <div class="finding-choice-block">
                     <label>Kidney Size</label>
                     <div class="choice-row finding-choice-row compact-three">
-                      <label class="choice-tile"><input type="radio" name="rightKidneySize" value="Normal" /> Normal</label>
-                      <label class="choice-tile"><input type="radio" name="rightKidneySize" value="Small" /> Small</label>
-                      <label class="choice-tile"><input type="radio" name="rightKidneySize" value="Enlarged" /> Enlarged</label>
-                      <label class="choice-tile"><input type="radio" name="rightKidneySize" value="N/A" /> N/A</label>
+                      <label class="choice-tile"><input type="radio" name="rightKidneySize" value="Normal" />
+                        Normal</label>
+                      <label class="choice-tile"><input type="radio" name="rightKidneySize" value="Small" />
+                        Small</label>
+                      <label class="choice-tile"><input type="radio" name="rightKidneySize" value="Enlarged" />
+                        Enlarged</label>
                     </div>
                   </div>
                   <div class="renal-paired-choices">
                     <div class="finding-choice-block">
                       <label>Parenchymal texture</label>
                       <div class="choice-row finding-choice-row compact-two">
-                        <label class="choice-tile"><input type="radio" name="rightParenchymalTexture" value="Normal" /> Normal</label>
-                        <label class="choice-tile"><input type="radio" name="rightParenchymalTexture" value="Altered" /> Altered</label>
-                        <label class="choice-tile"><input type="radio" name="rightParenchymalTexture" value="N/A" /> N/A</label>
+                        <label class="choice-tile"><input type="radio" name="rightParenchymalTexture" value="Normal" />
+                          Normal</label>
+                        <label class="choice-tile"><input type="radio" name="rightParenchymalTexture" value="Altered" />
+                          Altered</label>
                       </div>
                     </div>
                     <div class="finding-choice-block">
@@ -1049,15 +1331,17 @@
                     <div class="finding-choice-block">
                       <label>Hydronephrosis</label>
                       <div class="choice-row finding-choice-row compact-two">
-                        <label class="choice-tile"><input type="radio" name="rightHydronephrosis" value="Yes" /> Yes</label>
-                        <label class="choice-tile"><input type="radio" name="rightHydronephrosis" value="No" /> No</label>
-                        <label class="choice-tile"><input type="radio" name="rightHydronephrosis" value="N/A" /> N/A</label>
+                        <label class="choice-tile"><input type="radio" name="rightHydronephrosis" value="Yes" />
+                          Yes</label>
+                        <label class="choice-tile"><input type="radio" name="rightHydronephrosis" value="No" />
+                          No</label>
                       </div>
                     </div>
                   </div>
                   <div class="field-block findings-other">
                     <label for="right-other-findings">Others</label>
-                    <input id="right-other-findings" type="text" maxlength="160" placeholder="Additional right kidney findings" />
+                    <input id="right-other-findings" type="text" maxlength="160"
+                      placeholder="Additional right kidney findings" />
                   </div>
                 </div>
               </section>
@@ -1075,26 +1359,31 @@
                   <div class="renal-measurement-grid">
                     <div class="field-block">
                       <label for="left-kidney-length">Length (cm)</label>
-                      <input id="left-kidney-length" type="number" min="0.1" max="30" step="0.1" placeholder="e.g., 10.4" />
+                      <input id="left-kidney-length" type="number" min="0.1" max="30" step="0.1"
+                        placeholder="e.g., 10.4" />
                     </div>
                     <div class="field-block">
                       <label for="left-kidney-width">Width (cm)</label>
-                      <input id="left-kidney-width" type="number" min="0.1" max="20" step="0.1" placeholder="e.g., 5.1" />
+                      <input id="left-kidney-width" type="number" min="0.1" max="20" step="0.1"
+                        placeholder="e.g., 5.1" />
                     </div>
                     <div class="field-block full-span">
                       <label for="left-cortical-thickness">Cortical Thickness (mm)</label>
-                      <input id="left-cortical-thickness" type="number" min="0.1" max="50" step="0.1" placeholder="e.g., 8.5" />
+                      <input id="left-cortical-thickness" type="number" min="0.1" max="50" step="0.1"
+                        placeholder="e.g., 8.5" />
                     </div>
                   </div>
                   <div class="finding-choice-block">
                     <label>Echogenicity</label>
                     <div class="choice-row finding-choice-row">
-                      <label class="choice-tile"><input type="radio" name="leftEchogenicity" value="Normal" /> Normal</label>
-                      <label class="choice-tile"><input type="radio" name="leftEchogenicity" value="Mild Increased" /> Mild ↑</label>
-                      <label class="choice-tile"><input type="radio" name="leftEchogenicity" value="Moderate Increased" /> Moderate ↑</label>
-                      <label class="choice-tile"><input type="radio" name="leftEchogenicity" value="Severe Increased" /> Severe ↑</label>
-                      <label class="choice-tile"><input type="radio" name="leftEchogenicity" value="Increased (Not specified)" /> Increased</label>
-                      <label class="choice-tile"><input type="radio" name="leftEchogenicity" value="N/A" /> N/A</label>
+                      <label class="choice-tile"><input type="radio" name="leftEchogenicity" value="Normal" />
+                        Normal</label>
+                      <label class="choice-tile"><input type="radio" name="leftEchogenicity" value="Mild Increased" />
+                        Mild ↑</label>
+                      <label class="choice-tile"><input type="radio" name="leftEchogenicity"
+                          value="Moderate Increased" /> Moderate ↑</label>
+                      <label class="choice-tile"><input type="radio" name="leftEchogenicity" value="Severe Increased" />
+                        Severe ↑</label>
                     </div>
                   </div>
                 </div>
@@ -1103,19 +1392,22 @@
                   <div class="finding-choice-block">
                     <label>Kidney Size</label>
                     <div class="choice-row finding-choice-row compact-three">
-                      <label class="choice-tile"><input type="radio" name="leftKidneySize" value="Normal" /> Normal</label>
-                      <label class="choice-tile"><input type="radio" name="leftKidneySize" value="Small" /> Small</label>
-                      <label class="choice-tile"><input type="radio" name="leftKidneySize" value="Enlarged" /> Enlarged</label>
-                      <label class="choice-tile"><input type="radio" name="leftKidneySize" value="N/A" /> N/A</label>
+                      <label class="choice-tile"><input type="radio" name="leftKidneySize" value="Normal" />
+                        Normal</label>
+                      <label class="choice-tile"><input type="radio" name="leftKidneySize" value="Small" />
+                        Small</label>
+                      <label class="choice-tile"><input type="radio" name="leftKidneySize" value="Enlarged" />
+                        Enlarged</label>
                     </div>
                   </div>
                   <div class="renal-paired-choices">
                     <div class="finding-choice-block">
                       <label>Parenchymal texture</label>
                       <div class="choice-row finding-choice-row compact-two">
-                        <label class="choice-tile"><input type="radio" name="leftParenchymalTexture" value="Normal" /> Normal</label>
-                        <label class="choice-tile"><input type="radio" name="leftParenchymalTexture" value="Altered" /> Altered</label>
-                        <label class="choice-tile"><input type="radio" name="leftParenchymalTexture" value="N/A" /> N/A</label>
+                        <label class="choice-tile"><input type="radio" name="leftParenchymalTexture" value="Normal" />
+                          Normal</label>
+                        <label class="choice-tile"><input type="radio" name="leftParenchymalTexture" value="Altered" />
+                          Altered</label>
                       </div>
                     </div>
                     <div class="finding-choice-block">
@@ -1137,15 +1429,17 @@
                     <div class="finding-choice-block">
                       <label>Hydronephrosis</label>
                       <div class="choice-row finding-choice-row compact-two">
-                        <label class="choice-tile"><input type="radio" name="leftHydronephrosis" value="Yes" /> Yes</label>
-                        <label class="choice-tile"><input type="radio" name="leftHydronephrosis" value="No" /> No</label>
-                        <label class="choice-tile"><input type="radio" name="leftHydronephrosis" value="N/A" /> N/A</label>
+                        <label class="choice-tile"><input type="radio" name="leftHydronephrosis" value="Yes" />
+                          Yes</label>
+                        <label class="choice-tile"><input type="radio" name="leftHydronephrosis" value="No" />
+                          No</label>
                       </div>
                     </div>
                   </div>
                   <div class="field-block findings-other">
                     <label for="left-other-findings">Others</label>
-                    <input id="left-other-findings" type="text" maxlength="160" placeholder="Additional left kidney findings" />
+                    <input id="left-other-findings" type="text" maxlength="160"
+                      placeholder="Additional left kidney findings" />
                   </div>
                 </div>
               </section>
@@ -1180,18 +1474,21 @@
               <label class="upload-mode-card selected" data-upload-mode-card="separate">
                 <input type="radio" name="uploadMode" value="separate" checked />
                 <span>Separate Files</span>
-                <small>Use this when Left kidney, Right kidney, and Clinical Report are available as individual files.</small>
+                <small>Use this when Left kidney, Right kidney, and Clinical Report are available as individual
+                  files.</small>
               </label>
               <label class="upload-mode-card" data-upload-mode-card="package">
                 <input type="radio" name="uploadMode" value="package" />
                 <span>Single ZIP Package</span>
-                <small>Use this when all patient Images and Clinical documents are available together in one ZIP file.</small>
+                <small>Use this when all patient Images and Clinical documents are available together in one ZIP
+                  file.</small>
               </label>
             </div>
           </div>
 
           <div class="form-section hidden" id="separate-upload-section">
-            <div class="section-title"><span class="section-index">3.</span> Separate Patient Files <span class="section-note">(All uploads mandatory)</span></div>
+            <div class="section-title"><span class="section-index">3.</span> Separate Patient Files <span
+                class="section-note">(All uploads mandatory)</span></div>
             <div class="upload-grid">
               <label class="upload-tile">
                 <input id="left-kidney-file" name="leftKidneyFile" type="file" required />
@@ -1212,15 +1509,20 @@
           </div>
 
           <div class="form-section" id="package-upload-section">
-            <div class="section-title"><span class="section-index">1.</span> Patient File Package <span class="required-marker">*</span> <span class="section-note">Upload a ZIP file or Select files, or choose a Folder</span></div>
-            <p class="section-description">Add all available anonymized ultrasound images and the clinical PDF together. If you select files or a folder, the portal will automatically create one ZIP package before submission.</p>
+            <div class="section-title"><span class="section-index">1.</span> Patient File Package <span
+                class="required-marker">*</span> <span class="section-note">Upload a ZIP file or Select files, or choose
+                a Folder</span></div>
+            <p class="section-description">Add all available anonymized ultrasound images and the clinical PDF together.
+              If you select files or a folder, the portal will automatically create one ZIP package before submission.
+            </p>
             <div class="upload-grid">
               <div class="upload-tile wide package-upload-tile" id="patient-package-tile">
                 <span class="upload-title">UPLOAD PATIENT PACKAGE</span>
                 <span class="upload-subtitle">ZIP, multiple files, or a complete patient folder</span>
                 <div class="upload-guidance">
                   <strong>Maximum upload size: 250 MB per package or video.</strong>
-                  <span><strong>Note:</strong> Ultrasound videos are not part of the ZIP or folder package. Please upload videos only in the Ultrasound Video section below.</span>
+                  <span><strong>Note:</strong> Ultrasound videos are not part of the ZIP or folder package. Please
+                    upload videos only in the Ultrasound Video section below.</span>
                 </div>
                 <div class="package-upload-actions">
                   <label class="package-upload-action">
@@ -1228,7 +1530,8 @@
                     Choose ZIP or Files
                   </label>
                   <label class="package-upload-action">
-                    <input id="patient-package-folder" name="patientPackageFolder" type="file" webkitdirectory directory multiple />
+                    <input id="patient-package-folder" name="patientPackageFolder" type="file" webkitdirectory directory
+                      multiple />
                     Choose Folder
                   </label>
                 </div>
@@ -1238,8 +1541,10 @@
           </div>
 
           <div class="form-section" id="egfr-video-section">
-            <div class="section-title"><span class="section-index">3.</span> Ultrasound Video <span class="section-note">(Optional)</span></div>
-            <p class="section-description"><strong>Important:</strong> Upload ultrasound videos here separately. Do not include video files inside the patient ZIP or selected folder package.</p>
+            <div class="section-title"><span class="section-index">3.</span> Ultrasound Video <span
+                class="section-note">(Optional)</span></div>
+            <p class="section-description"><strong>Important:</strong> Upload ultrasound videos here separately. Do not
+              include video files inside the patient ZIP or selected folder package.</p>
             <div class="upload-grid">
               <label class="upload-tile wide">
                 <input id="ultrasound-video-file" name="ultrasoundVideoFile" type="file" accept="video/*" />
@@ -1253,20 +1558,24 @@
           </div>
 
           <div class="form-section hidden" id="kfre-document-section">
-            <div class="section-title"><span class="section-index">1.</span> Kidney Function Clinical Document <span class="required-marker">*</span> <span class="section-note">(Required)</span></div>
-            <p class="section-description">Upload the laboratory or clinical report used for the KFRE research record. Ultrasound images and videos are not required in this pathway.</p>
+            <div class="section-title"><span class="section-index">1.</span> Kidney Function Clinical Document <span
+                class="required-marker">*</span> <span class="section-note">(Required)</span></div>
+            <p class="section-description">Upload the laboratory or clinical report used for the KFRE research record.
+              Ultrasound images and videos are not required in this pathway.</p>
             <div class="section-grid">
               <div class="field-block full-span">
                 <label>Do you have the clinical document for uploading?</label>
                 <div class="choice-row compact-choice">
-                  <label class="choice-tile"><input type="radio" name="kfreDocumentAvailable" value="Yes" checked /> Yes</label>
+                  <label class="choice-tile"><input type="radio" name="kfreDocumentAvailable" value="Yes" checked />
+                    Yes</label>
                   <label class="choice-tile"><input type="radio" name="kfreDocumentAvailable" value="No" /> No</label>
                 </div>
               </div>
             </div>
             <div class="upload-grid" id="kfre-document-upload">
               <label class="upload-tile wide">
-                <input id="kfre-clinical-document" name="kfreClinicalDocumentFile" type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" />
+                <input id="kfre-clinical-document" name="kfreClinicalDocumentFile" type="file"
+                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" />
                 <span class="upload-title">UPLOAD CLINICAL DOCUMENT</span>
                 <span class="upload-subtitle">Kidney-related laboratory or clinical report</span>
                 <div class="file-preview">No file selected</div>
@@ -1277,7 +1586,8 @@
               <div class="section-grid">
                 <div class="field-block">
                   <label for="kfre-lab-age">Age (18–100 years) <span class="required-marker">*</span></label>
-                  <input id="kfre-lab-age" name="kfreLabAge" type="number" min="18" max="100" step="1" placeholder="Years" />
+                  <input id="kfre-lab-age" name="kfreLabAge" type="number" min="18" max="100" step="1"
+                    placeholder="Years" />
                 </div>
                 <div class="field-block">
                   <label for="kfre-lab-sex">Sex (Male/Female) <span class="required-marker">*</span></label>
@@ -1296,24 +1606,29 @@
                   <input id="kfre-acr" name="kfreAcr" type="number" min="0" step="0.1" placeholder="mg/g" />
                 </div>
                 <div class="field-block">
-                  <label for="kfre-pcr">Urine Protein-to-Creatinine Ratio (PCR) <span class="required-marker">*</span></label>
+                  <label for="kfre-pcr">Urine Protein-to-Creatinine Ratio (PCR) <span
+                      class="required-marker">*</span></label>
                   <input id="kfre-pcr" name="kfrePcr" type="number" min="0" step="0.1" placeholder="mg/g" />
                 </div>
                 <div class="field-block">
                   <label for="kfre-serum-calcium">Serum Calcium</label>
-                  <input id="kfre-serum-calcium" name="kfreSerumCalcium" type="number" min="0" step="0.1" placeholder="mg/dL" />
+                  <input id="kfre-serum-calcium" name="kfreSerumCalcium" type="number" min="0" step="0.1"
+                    placeholder="mg/dL" />
                 </div>
                 <div class="field-block">
                   <label for="kfre-serum-phosphate">Serum Phosphate</label>
-                  <input id="kfre-serum-phosphate" name="kfreSerumPhosphate" type="number" min="0" step="0.1" placeholder="mg/dL" />
+                  <input id="kfre-serum-phosphate" name="kfreSerumPhosphate" type="number" min="0" step="0.1"
+                    placeholder="mg/dL" />
                 </div>
                 <div class="field-block">
                   <label for="kfre-serum-bicarbonate">Serum Bicarbonate</label>
-                  <input id="kfre-serum-bicarbonate" name="kfreSerumBicarbonate" type="number" min="0" step="0.1" placeholder="mmol/L" />
+                  <input id="kfre-serum-bicarbonate" name="kfreSerumBicarbonate" type="number" min="0" step="0.1"
+                    placeholder="mmol/L" />
                 </div>
                 <div class="field-block">
                   <label for="kfre-serum-albumin">Serum Albumin</label>
-                  <input id="kfre-serum-albumin" name="kfreSerumAlbumin" type="number" min="0" step="0.1" placeholder="g/dL" />
+                  <input id="kfre-serum-albumin" name="kfreSerumAlbumin" type="number" min="0" step="0.1"
+                    placeholder="g/dL" />
                 </div>
               </div>
             </div>
@@ -1323,14 +1638,18 @@
             <div class="form-section">
               <div class="section-title"><span class="section-index">2.</span> Clinical Examination</div>
               <p class="section-description">Record measurements taken during clinical assessment.</p>
-              <p class="section-description">Measurements in centimeters (cm). Use WHO waist/hip landmarks. Common India/South Asia risk thresholds: waist ≥ 90 cm (men), ≥ 80 cm (women) and WHR > 0.90 (men), > 0.85 (women).</p>
+              <p class="section-description">Measurements in centimeters (cm). Use WHO waist/hip landmarks. Common
+                India/South Asia risk thresholds: waist ≥ 90 cm (men), ≥ 80 cm (women) and WHR > 0.90 (men), > 0.85
+                (women).</p>
               <div class="section-grid kfre-clinical-grid">
                 <div class="field-block">
-                  <label for="kfre-systolic-bp">Systolic Blood Pressure (mmHg) <span class="required-marker">*</span></label>
+                  <label for="kfre-systolic-bp">Systolic Blood Pressure (mmHg) <span
+                      class="required-marker">*</span></label>
                   <input id="kfre-systolic-bp" type="number" min="50" max="300" step="1" placeholder="e.g., 120" />
                 </div>
                 <div class="field-block">
-                  <label for="kfre-diastolic-bp">Diastolic Blood Pressure (mmHg) <span class="required-marker">*</span></label>
+                  <label for="kfre-diastolic-bp">Diastolic Blood Pressure (mmHg) <span
+                      class="required-marker">*</span></label>
                   <input id="kfre-diastolic-bp" type="number" min="30" max="200" step="1" placeholder="e.g., 80" />
                 </div>
                 <div class="field-block">
@@ -1353,13 +1672,15 @@
                 </div>
                 <div class="field-block">
                   <label for="kfre-whr-display">Waist-to-Hip Ratio</label>
-                  <input id="kfre-whr-display" type="text" placeholder="Auto-calculated" readonly aria-readonly="true" />
+                  <input id="kfre-whr-display" type="text" placeholder="Auto-calculated" readonly
+                    aria-readonly="true" />
                 </div>
               </div>
             </div>
 
             <div class="form-section">
-              <div class="section-title"><span class="section-index">3.</span> Clinical Events <span class="section-note">(Hospitalization / Dialysis / Transplant)</span></div>
+              <div class="section-title"><span class="section-index">3.</span> Clinical Events <span
+                  class="section-note">(Hospitalization / Dialysis / Transplant)</span></div>
               <!-- Follow-up detail fields removed (uncomment to restore)
               <div class="section-grid">
                 <div class="field-block full-span">
@@ -1405,21 +1726,34 @@
               <div class="section-grid">
                 <div class="field-block">
                   <label for="kfre-hospitalization">Hospitalization <span class="required-marker">*</span></label>
-                  <select id="kfre-hospitalization"><option value="" selected disabled>Select</option><option value="Yes">Yes</option><option value="No">No</option></select>
+                  <select id="kfre-hospitalization">
+                    <option value="" selected disabled>Select</option>
+                    <option value="Yes">Yes</option>
+                    <option value="No">No</option>
+                  </select>
                 </div>
                 <div class="field-block">
                   <label for="kfre-dialysis-initiated">Dialysis Initiated <span class="required-marker">*</span></label>
-                  <select id="kfre-dialysis-initiated"><option value="" selected disabled>Select</option><option value="Yes">Yes</option><option value="No">No</option></select>
+                  <select id="kfre-dialysis-initiated">
+                    <option value="" selected disabled>Select</option>
+                    <option value="Yes">Yes</option>
+                    <option value="No">No</option>
+                  </select>
                 </div>
                 <div class="field-block">
                   <label for="kfre-transplant">Transplant <span class="required-marker">*</span></label>
-                  <select id="kfre-transplant"><option value="" selected disabled>Select</option><option value="Yes">Yes</option><option value="No">No</option></select>
+                  <select id="kfre-transplant">
+                    <option value="" selected disabled>Select</option>
+                    <option value="Yes">Yes</option>
+                    <option value="No">No</option>
+                  </select>
                 </div>
               </div>
             </div>
 
             <div class="form-section">
-              <div class="section-title"><span class="section-index">4.</span> Outcome Labels <span class="section-note"></span></div>
+              <div class="section-title"><span class="section-index">4.</span> Outcome Labels <span
+                  class="section-note"></span></div>
               <div class="section-grid">
                 <!-- CKD Stage removed (captured in intake form — uncomment to restore)
                 <div class="field-block">
@@ -1437,11 +1771,20 @@
                 -->
                 <div class="field-block">
                   <label for="kfre-rapid-progression">Rapid Progression <span class="required-marker">*</span></label>
-                  <select id="kfre-rapid-progression"><option value="" selected disabled>Select</option><option value="Yes">Yes</option><option value="No">No</option></select>
+                  <select id="kfre-rapid-progression">
+                    <option value="" selected disabled>Select</option>
+                    <option value="Yes">Yes</option>
+                    <option value="No">No</option>
+                  </select>
                 </div>
                 <div class="field-block">
-                  <label for="kfre-kidney-failure-event">Kidney Failure Event <span class="required-marker">*</span></label>
-                  <select id="kfre-kidney-failure-event"><option value="" selected disabled>Select</option><option value="Yes">Yes</option><option value="No">No</option></select>
+                  <label for="kfre-kidney-failure-event">Kidney Failure Event <span
+                      class="required-marker">*</span></label>
+                  <select id="kfre-kidney-failure-event">
+                    <option value="" selected disabled>Select</option>
+                    <option value="Yes">Yes</option>
+                    <option value="No">No</option>
+                  </select>
                 </div>
               </div>
               <!-- Event date/type removed (uncomment to restore)
@@ -1482,23 +1825,30 @@
       <div id="dash-admin-view" class="hidden">
         <div class="page-hero dashboard-hero">
           <h1>Data Collection Operations</h1>
-          <p>Monitor participating hospitals, submitted patient records, and cloud storage activity across both study pathways</p>
+          <p>Monitor participating hospitals, submitted patient records, and cloud storage activity across both study
+            pathways</p>
           <span class="hero-update" id="dashboard-updated-at">Awaiting live data</span>
           <div class="hero-divider"></div>
         </div>
         <div class="admin-pathway-switcher" role="tablist" aria-label="Select dashboard view">
-          <button class="admin-pathway-tab active" id="admin-overview-tab" type="button" role="tab" aria-selected="true" aria-controls="admin-overview-panel" tabindex="0" data-admin-dashboard-view="overview">
+          <button class="admin-pathway-tab active" id="admin-overview-tab" type="button" role="tab" aria-selected="true"
+            aria-controls="admin-overview-panel" tabindex="0" data-admin-dashboard-view="overview">
             Overview
           </button>
-          <button class="admin-pathway-tab" id="admin-egfr-tab" type="button" role="tab" aria-selected="false" aria-controls="admin-study-panel" tabindex="-1" data-admin-dashboard-view="egfr">
-            <span class="pathway-dot egfr"></span>eGFR Study <span class="pathway-count" id="admin-egfr-tab-count">0</span>
+          <button class="admin-pathway-tab" id="admin-egfr-tab" type="button" role="tab" aria-selected="false"
+            aria-controls="admin-study-panel" tabindex="-1" data-admin-dashboard-view="egfr">
+            <span class="pathway-dot egfr"></span>eGFR Study <span class="pathway-count"
+              id="admin-egfr-tab-count">0</span>
           </button>
-          <button class="admin-pathway-tab" id="admin-kfre-tab" type="button" role="tab" aria-selected="false" aria-controls="admin-study-panel" tabindex="-1" data-admin-dashboard-view="kfre">
-            <span class="pathway-dot kfre"></span>KFRE Study <span class="pathway-count" id="admin-kfre-tab-count">0</span>
+          <button class="admin-pathway-tab" id="admin-kfre-tab" type="button" role="tab" aria-selected="false"
+            aria-controls="admin-study-panel" tabindex="-1" data-admin-dashboard-view="kfre">
+            <span class="pathway-dot kfre"></span>KFRE Study <span class="pathway-count"
+              id="admin-kfre-tab-count">0</span>
           </button>
         </div>
         <article class="panel-card flow-card dashboard-card">
-          <section class="admin-dashboard-panel visible" id="admin-overview-panel" role="tabpanel" aria-labelledby="admin-overview-tab" data-admin-panel="overview">
+          <section class="admin-dashboard-panel visible" id="admin-overview-panel" role="tabpanel"
+            aria-labelledby="admin-overview-tab" data-admin-panel="overview">
             <div class="summary-grid admin-overview-summary">
               <div class="summary-card">
                 <span class="summary-value" id="summary-hospitals">0</span>
@@ -1528,7 +1878,8 @@
             </section>
           </section>
 
-          <section class="admin-dashboard-panel" id="admin-study-panel" role="tabpanel" aria-label="Selected study dashboard" data-admin-panel="study">
+          <section class="admin-dashboard-panel" id="admin-study-panel" role="tabpanel"
+            aria-label="Selected study dashboard" data-admin-panel="study">
             <header class="admin-study-header" id="admin-study-header">
               <div>
                 <span class="admin-study-badge" id="admin-study-badge">eGFR STUDY</span>
@@ -1553,7 +1904,9 @@
 
             <div class="viz-grid admin-viz-grid">
               <section class="viz-card">
-                <div class="viz-header"><h3 id="admin-stage-title">Chronic Kidney Disease Status</h3></div>
+                <div class="viz-header">
+                  <h3 id="admin-stage-title">Chronic Kidney Disease Status</h3>
+                </div>
                 <div class="donut-wrap">
                   <div class="donut" id="ckd-stage-donut" aria-label="Chronic kidney disease status distribution"></div>
                   <div class="donut-center" id="ckd-stage-center">--</div>
@@ -1575,7 +1928,9 @@
                 </div>
               </section>
               <section class="viz-card">
-                <div class="viz-header"><h3 id="admin-tertiary-title">CKD Diabetic vs Non-Diabetic</h3></div>
+                <div class="viz-header">
+                  <h3 id="admin-tertiary-title">CKD Diabetic vs Non-Diabetic</h3>
+                </div>
                 <div class="donut-wrap">
                   <div class="donut" id="diabetic-donut" aria-label="Pathway outcome distribution"></div>
                   <div class="donut-center" id="diabetic-center">--</div>
@@ -1592,7 +1947,13 @@
               <div class="table-wrap">
                 <table>
                   <thead>
-                    <tr><th>Patient ID</th><th>Hospital</th><th>Method</th><th>Received</th><th>Status</th></tr>
+                    <tr>
+                      <th>Patient ID</th>
+                      <th>Hospital</th>
+                      <th>Method</th>
+                      <th>Received</th>
+                      <th>Status</th>
+                    </tr>
                   </thead>
                   <tbody id="recent-body"></tbody>
                 </table>
@@ -1610,12 +1971,17 @@
           <span class="hero-update" id="dash-hospital-updated">Awaiting live data</span>
           <div class="hero-divider"></div>
         </div>
-        <div class="admin-pathway-switcher hospital-pathway-switcher" role="tablist" aria-label="Select hospital dashboard study">
-          <button class="admin-pathway-tab active" id="hospital-egfr-tab" type="button" role="tab" aria-selected="true" aria-controls="hospital-study-dashboard" tabindex="0" data-hospital-dashboard-view="egfr">
-            <span class="pathway-dot egfr"></span>eGFR Study <span class="pathway-count" id="hospital-egfr-tab-count">0</span>
+        <div class="admin-pathway-switcher hospital-pathway-switcher" role="tablist"
+          aria-label="Select hospital dashboard study">
+          <button class="admin-pathway-tab active" id="hospital-egfr-tab" type="button" role="tab" aria-selected="true"
+            aria-controls="hospital-study-dashboard" tabindex="0" data-hospital-dashboard-view="egfr">
+            <span class="pathway-dot egfr"></span>eGFR Study <span class="pathway-count"
+              id="hospital-egfr-tab-count">0</span>
           </button>
-          <button class="admin-pathway-tab" id="hospital-kfre-tab" type="button" role="tab" aria-selected="false" aria-controls="hospital-study-dashboard" tabindex="-1" data-hospital-dashboard-view="kfre">
-            <span class="pathway-dot kfre"></span>KFRE Study <span class="pathway-count" id="hospital-kfre-tab-count">0</span>
+          <button class="admin-pathway-tab" id="hospital-kfre-tab" type="button" role="tab" aria-selected="false"
+            aria-controls="hospital-study-dashboard" tabindex="-1" data-hospital-dashboard-view="kfre">
+            <span class="pathway-dot kfre"></span>KFRE Study <span class="pathway-count"
+              id="hospital-kfre-tab-count">0</span>
           </button>
         </div>
         <article class="panel-card flow-card dashboard-card" id="hospital-study-dashboard">
@@ -1623,7 +1989,8 @@
             <div>
               <span class="admin-study-badge" id="hospital-study-badge">eGFR STUDY</span>
               <h2 id="hospital-study-title">Ultrasound and Clinical Intake</h2>
-              <p id="hospital-study-description">Your hospital’s kidney ultrasound and clinical document submissions.</p>
+              <p id="hospital-study-description">Your hospital’s kidney ultrasound and clinical document submissions.
+              </p>
             </div>
           </header>
           <div class="summary-grid">
@@ -1643,7 +2010,9 @@
 
           <div class="viz-grid">
             <section class="viz-card">
-              <div class="viz-header"><h3 id="hosp-stage-title">CKD Status</h3></div>
+              <div class="viz-header">
+                <h3 id="hosp-stage-title">CKD Status</h3>
+              </div>
               <div class="donut-wrap">
                 <div class="donut" id="hosp-ckd-donut" aria-label="My chronic kidney disease status distribution"></div>
                 <div class="donut-center" id="hosp-ckd-center">--</div>
@@ -1667,7 +2036,12 @@
             <div class="table-wrap">
               <table>
                 <thead>
-                  <tr><th>Patient ID</th><th>Method</th><th>Received</th><th>Storage Status</th></tr>
+                  <tr>
+                    <th>Patient ID</th>
+                    <th>Method</th>
+                    <th>Received</th>
+                    <th>Storage Status</th>
+                  </tr>
                 </thead>
                 <tbody id="hosp-recent-body"></tbody>
               </table>
@@ -1696,7 +2070,8 @@
         </div>
         <div class="sub-filter-group sub-filter-search">
           <label class="sub-filter-label" for="sub-search-input">Search</label>
-          <input class="sub-filter-input" id="sub-search-input" type="text" placeholder="Patient ID or Record ID…" autocomplete="off" />
+          <input class="sub-filter-input" id="sub-search-input" type="text" placeholder="Patient ID or Record ID…"
+            autocomplete="off" />
         </div>
         <div class="sub-date-range" aria-label="Received date range">
           <div class="sub-filter-group sub-date-field">
@@ -1713,7 +2088,12 @@
           <button class="btn-primary sub-filter-btn" id="sub-apply-filters" type="button">Apply Filters</button>
           <button class="btn-ghost sub-filter-btn" id="sub-reset-filters" type="button">Reset</button>
           <button class="btn-export sub-filter-btn" id="sub-export-csv" type="button">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
             Export CSV
           </button>
         </div>
@@ -1738,7 +2118,9 @@
               </tr>
             </thead>
             <tbody id="sub-tbody">
-              <tr><td colspan="10" class="empty">Loading submissions…</td></tr>
+              <tr>
+                <td colspan="10" class="empty">Loading submissions…</td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -1770,7 +2152,8 @@
         <div>
           <span class="eyebrow">PII removal workflow</span>
           <h1>Anonymization Tool</h1>
-          <p>Hospitals can upload the Ultrasound images, Ultrasound Reports, and Lab Reports and get the Anonymized version</p>
+          <p>Hospitals can upload the Ultrasound images, Ultrasound Reports, and Lab Reports and get the Anonymized
+            version</p>
         </div>
         <div class="anon-hero-steps" aria-label="Anonymization workflow">
           <div><span>1</span><strong>Select package</strong><small>Folder or files</small></div>
@@ -1784,7 +2167,8 @@
           <div class="anon-card-head">
             <span class="eyebrow">Expected input structure</span>
             <h2>One patient folder, predictable subfolders</h2>
-            <p>This structure helps the Anonymization tool to classify files consistently and produce an Anonymized package.</p>
+            <p>This structure helps the Anonymization tool to classify files consistently and produce an Anonymized
+              package.</p>
           </div>
           <div class="anon-folder-tree" aria-label="Expected folder structure">
             <div><strong>Patient_Folder/</strong></div>
@@ -1822,7 +2206,8 @@
               <span class="upload-subtitle">Folder, selected files, ultrasound reports, and lab reports</span>
               <div class="upload-guidance">
                 <!-- <strong>Demo mode: files are not uploaded to the server.</strong> -->
-                <span><strong>Expected:</strong> One patient folder with left/right kidney images, ultrasound reports, and lab reports. The tool previews irreversible anonymized output before cleanup.</span>
+                <span><strong>Expected:</strong> One patient folder with left/right kidney images, ultrasound reports,
+                  and lab reports. The tool previews irreversible anonymized output before cleanup.</span>
               </div>
               <div class="package-upload-actions">
                 <label class="package-upload-action">
@@ -1863,7 +2248,8 @@
   </div>
 
   <!-- Submission detail slide-in panel -->
-  <div class="sub-detail-overlay hidden" id="sub-detail-overlay" role="dialog" aria-modal="true" aria-label="Submission detail">
+  <div class="sub-detail-overlay hidden" id="sub-detail-overlay" role="dialog" aria-modal="true"
+    aria-label="Submission detail">
     <div class="sub-detail-panel" id="sub-detail-panel">
       <div class="sub-detail-header">
         <div>
@@ -1917,7 +2303,8 @@
         </div>
       </div>
       <ul class="admin-nav-list" role="list">
-        <li><button class="admin-nav-btn active" data-section="overview" aria-current="page" type="button">Overview</button></li>
+        <li><button class="admin-nav-btn active" data-section="overview" aria-current="page"
+            type="button">Overview</button></li>
         <li><button class="admin-nav-btn" data-section="hospitals" type="button">Hospitals</button></li>
         <li><button class="admin-nav-btn" data-section="submissions" type="button">Patient Records</button></li>
         <li><button class="admin-nav-btn" data-section="audit" type="button">Audit Log</button></li>
@@ -1930,7 +2317,8 @@
     <div class="admin-main">
       <header class="admin-topbar">
         <h1 class="admin-page-title" id="admin-page-title">Overview</h1>
-        <button class="admin-refresh-btn" id="admin-refresh-btn" type="button" aria-label="Refresh current section">↻ Refresh</button>
+        <button class="admin-refresh-btn" id="admin-refresh-btn" type="button" aria-label="Refresh current section">↻
+          Refresh</button>
       </header>
 
       <!-- Overview -->
@@ -1941,11 +2329,15 @@
         <div class="admin-two-col">
           <div class="admin-card">
             <h2 class="admin-card-title">Recent Activity</h2>
-            <div id="admin-recent-audit" class="admin-table-wrap"><p class="admin-empty">Loading…</p></div>
+            <div id="admin-recent-audit" class="admin-table-wrap">
+              <p class="admin-empty">Loading…</p>
+            </div>
           </div>
           <div class="admin-card">
             <h2 class="admin-card-title">System Status</h2>
-            <div id="admin-system-quick" class="admin-system-quick"><p class="admin-empty">Loading…</p></div>
+            <div id="admin-system-quick" class="admin-system-quick">
+              <p class="admin-empty">Loading…</p>
+            </div>
           </div>
         </div>
       </section>
@@ -1953,18 +2345,22 @@
       <!-- Hospitals -->
       <section id="admin-section-hospitals" class="admin-section hidden" aria-label="Hospitals">
         <div class="admin-section-toolbar">
-          <input type="search" id="hospital-search" class="admin-search" placeholder="Search hospitals…" aria-label="Search hospitals">
+          <input type="search" id="hospital-search" class="admin-search" placeholder="Search hospitals…"
+            aria-label="Search hospitals">
           <button class="admin-btn admin-btn-primary" id="add-hospital-btn" type="button">+ Add Hospital</button>
         </div>
         <div class="admin-card">
-          <div id="hospitals-table-wrap" class="admin-table-wrap"><p class="admin-empty">Loading…</p></div>
+          <div id="hospitals-table-wrap" class="admin-table-wrap">
+            <p class="admin-empty">Loading…</p>
+          </div>
         </div>
       </section>
 
       <!-- Submissions -->
       <section id="admin-section-submissions" class="admin-section hidden" aria-label="Patient Records">
         <div class="admin-section-toolbar">
-          <input type="search" id="admin-sub-search" class="admin-search" placeholder="Search by record or patient ID…" aria-label="Search patient records">
+          <input type="search" id="admin-sub-search" class="admin-search" placeholder="Search by record or patient ID…"
+            aria-label="Search patient records">
           <select id="admin-sub-hospital-filter" class="admin-select" aria-label="Filter by hospital">
             <option value="">All Hospitals</option>
           </select>
@@ -1974,7 +2370,9 @@
           <p class="admin-empty">Loading hospital records…</p>
         </div>
         <div class="admin-card">
-          <div id="admin-sub-table-wrap" class="admin-table-wrap"><p class="admin-empty">Loading…</p></div>
+          <div id="admin-sub-table-wrap" class="admin-table-wrap">
+            <p class="admin-empty">Loading…</p>
+          </div>
           <div class="admin-pagination" id="admin-sub-pagination"></div>
         </div>
       </section>
@@ -1998,7 +2396,9 @@
           <button class="admin-btn admin-btn-outline" id="audit-filter-btn" type="button">Filter</button>
         </div>
         <div class="admin-card">
-          <div id="audit-table-wrap" class="admin-table-wrap"><p class="admin-empty">Loading…</p></div>
+          <div id="audit-table-wrap" class="admin-table-wrap">
+            <p class="admin-empty">Loading…</p>
+          </div>
           <div class="admin-pagination" id="audit-pagination"></div>
         </div>
       </section>
@@ -2018,15 +2418,21 @@
         <div class="admin-analytics-grid">
           <div class="admin-card">
             <h2 class="admin-card-title">Patient Record Trend</h2>
-            <div id="analytics-trend-wrap"><p class="admin-empty">Loading…</p></div>
+            <div id="analytics-trend-wrap">
+              <p class="admin-empty">Loading…</p>
+            </div>
           </div>
           <div class="admin-card">
             <h2 class="admin-card-title">CKD Yes/No Distribution</h2>
-            <div id="analytics-ckd-wrap"><p class="admin-empty">Loading…</p></div>
+            <div id="analytics-ckd-wrap">
+              <p class="admin-empty">Loading…</p>
+            </div>
           </div>
           <div class="admin-card admin-card-wide">
             <h2 class="admin-card-title">Patient Records by Hospital</h2>
-            <div id="analytics-hosp-wrap"><p class="admin-empty">Loading…</p></div>
+            <div id="analytics-hosp-wrap">
+              <p class="admin-empty">Loading…</p>
+            </div>
           </div>
         </div>
       </section>
@@ -2043,7 +2449,9 @@
           <div class="admin-card-header-row">
             <h2 class="admin-card-title">Active Sessions</h2>
           </div>
-          <div id="sessions-table-wrap" class="admin-table-wrap"><p class="admin-empty">Loading…</p></div>
+          <div id="sessions-table-wrap" class="admin-table-wrap">
+            <p class="admin-empty">Loading…</p>
+          </div>
         </div>
       </section>
 
@@ -2051,7 +2459,8 @@
   </div><!-- /admin-portal -->
 
   <!-- Admin modal -->
-  <div id="admin-modal-overlay" class="admin-modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="admin-modal-title">
+  <div id="admin-modal-overlay" class="admin-modal-overlay hidden" role="dialog" aria-modal="true"
+    aria-labelledby="admin-modal-title">
     <div class="admin-modal">
       <h2 class="admin-modal-title" id="admin-modal-title"></h2>
       <div class="admin-modal-body" id="admin-modal-body"></div>
@@ -2064,6 +2473,8 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-  <script type="module" src="./script.js?v=20260624-hospital-study-dashboard"></script>
+  <script src="/lib/chart.js"></script>
+  <script type="module" src="./script.js?v=20260625-v1"></script>
 </body>
+
 </html>

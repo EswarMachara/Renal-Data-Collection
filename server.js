@@ -3959,7 +3959,7 @@ async function getPublicDashboardSummary(options = {}) {
 
   if (dbPool && dbReady) {
     const ckdStatusExpr = "COALESCE(NULLIF(known_ckd, ''), CASE WHEN ckd_stage = 'Normal' THEN 'No' ELSE 'Yes' END)";
-    const [partners, counts, ckd, breakdown] = await Promise.all([
+    const [partners, counts, ckd, breakdown, demographicsData] = await Promise.all([
       dbPool.query(
         "SELECT COUNT(*)::int AS hospitals FROM hospitals WHERE active = true AND NOT (hospital_id = ANY($1::text[]))",
         [excludedIds]
@@ -3992,8 +3992,26 @@ async function getPublicDashboardSummary(options = {}) {
          FROM hospitals h
          LEFT JOIN submissions s ON s.hospital_id = h.hospital_id
          WHERE h.active = true AND NOT (h.hospital_id = ANY($1::text[]))
-         GROUP BY h.hospital_id, h.hospital_name
-         ORDER BY h.hospital_name ASC`,
+          GROUP BY h.hospital_id, h.hospital_name
+          ORDER BY h.hospital_name ASC`,
+        [excludedIds]
+      ),
+      dbPool.query(
+        `SELECT
+           CASE
+             WHEN age >= 80 THEN '80+'
+             WHEN age >= 70 THEN '70-79'
+             WHEN age >= 60 THEN '60-69'
+             WHEN age >= 50 THEN '50-59'
+             WHEN age >= 40 THEN '40-49'
+             WHEN age >= 30 THEN '30-39'
+             ELSE '18-29'
+           END AS age_group,
+           sex,
+           COUNT(*)::int AS value
+         FROM submissions
+         WHERE NOT (hospital_id = ANY($1::text[]))
+         GROUP BY 1, 2`,
         [excludedIds]
       )
     ]);
@@ -4007,6 +4025,7 @@ async function getPublicDashboardSummary(options = {}) {
       ultrasoundVideos: countRow.videos || 0,
       reviewedRecords: countRow.reviewed || 0,
       ckdDistribution: ckd.rows,
+      demographics: demographicsData ? demographicsData.rows : [],
       hospitalLocations: breakdown.rows.map((row) => ({
         hospitalId: row.hospital_id,
         hospitalName: row.hospital_name,
@@ -4033,6 +4052,7 @@ async function getPublicDashboardSummary(options = {}) {
     });
 
   const ckdCounts = {};
+  const demographicsMap = {};
   let ultrasoundVideos = 0;
   let reviewedRecords = 0;
   for (const record of all) {
@@ -4053,6 +4073,11 @@ async function getPublicDashboardSummary(options = {}) {
     if (record.reviewedAt) reviewedRecords++;
     const ckdStatus = getCkdStatusLabel(record);
     ckdCounts[ckdStatus] = (ckdCounts[ckdStatus] || 0) + 1;
+    
+    const ageGroup = record.age >= 80 ? '80+' : record.age >= 70 ? '70-79' : record.age >= 60 ? '60-69' : record.age >= 50 ? '50-59' : record.age >= 40 ? '40-49' : record.age >= 30 ? '30-39' : '18-29';
+    const sex = record.sex || 'Unknown';
+    const demoKey = `${ageGroup}|${sex}`;
+    demographicsMap[demoKey] = (demographicsMap[demoKey] || 0) + 1;
   }
 
   const hospitalLocations = Object.values(hospitalMap).sort((a, b) => a.hospitalName.localeCompare(b.hospitalName));
@@ -4065,6 +4090,10 @@ async function getPublicDashboardSummary(options = {}) {
     ultrasoundVideos,
     reviewedRecords,
     ckdDistribution: Object.entries(ckdCounts).map(([label, value]) => ({ label, value })),
+    demographics: Object.entries(demographicsMap).map(([key, value]) => {
+      const [age_group, sex] = key.split('|');
+      return { age_group, sex, value };
+    }),
     hospitalLocations,
     updatedAt: new Date().toISOString()
   };
