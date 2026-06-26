@@ -1544,13 +1544,15 @@
           <div class="form-section" id="egfr-video-section">
             <div class="section-title"><span class="section-index">3.</span> Ultrasound Video <span
                 class="section-note">(Optional)</span></div>
-            <p class="section-description"><strong>Important:</strong> Upload ultrasound videos here separately. Do not
-              include video files inside the patient ZIP or selected folder package.</p>
+            <p class="section-description"><strong>Important:</strong> Upload ultrasound videos here separately. Supported
+              formats include MP4, MOV, AVI, and DICOM video files (.dcm/.dicom). Do not include video files inside the
+              patient ZIP or selected folder package.</p>
             <div class="upload-grid">
               <label class="upload-tile wide">
-                <input id="ultrasound-video-file" name="ultrasoundVideoFile" type="file" accept="video/*" />
+                <input id="ultrasound-video-file" name="ultrasoundVideoFile" type="file"
+                  accept="video/*,.dcm,.dicom,application/dicom" />
                 <span class="upload-title">UPLOAD ULTRASOUND VIDEO</span>
-                <span class="upload-subtitle">Patient Ultrasound Video file</span>
+                <span class="upload-subtitle">Patient ultrasound video file, including DICOM .dcm/.dicom</span>
               </label>
             </div>
             <div class="actions" id="egfr-submit-actions">

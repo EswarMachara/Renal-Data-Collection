@@ -124,7 +124,7 @@ const allowedFileFields   = new Set(["leftKidney", "rightKidney", "egfrReport", 
 const ALLOWED_FILE_MIMES = {
   leftKidney:       ["image/jpeg", "image/png", "image/webp"],
   rightKidney:      ["image/jpeg", "image/png", "image/webp"],
-  ultrasoundVideo:  ["video/mp4", "video/quicktime", "video/x-msvideo", "video/avi"],
+  ultrasoundVideo:  ["video/mp4", "video/quicktime", "video/x-msvideo", "video/avi", "application/dicom"],
   egfrReport:       ["application/pdf"],
   clinicalDocument: [
     "application/pdf",
@@ -157,6 +157,21 @@ function checkMagicBytes(buffer, mimeType) {
   if (!rule) return true;
   if (!Buffer.isBuffer(buffer) || buffer.length < rule.offset + rule.sig.length) return false;
   return rule.sig.every((byte, index) => buffer[rule.offset + index] === byte);
+}
+
+function isDicomFileName(name) {
+  return /\.(dcm|dicom)$/i.test(name || "");
+}
+
+function isAllowedDicomVideoUpload(fieldName, file) {
+  if (fieldName !== "ultrasoundVideo" || !isDicomFileName(file.name)) return false;
+  return !file.type || file.type === "application/dicom" || file.type === "application/octet-stream";
+}
+
+function getAcceptedFileTypesLabel(fieldName) {
+  const accepted = [...ALLOWED_FILE_MIMES[fieldName]];
+  if (fieldName === "ultrasoundVideo") accepted.push(".dcm", ".dicom");
+  return accepted.join(", ");
 }
 
 function readFileHeader(file) {
@@ -1482,8 +1497,8 @@ function normalizeFiles(files, { requireContent = true } = {}) {
   return files.map((file) => {
     const fieldName   = cleanText(file.fieldName, 60);
     if (!allowedFileFields.has(fieldName)) throw new Error(`Unsupported upload field: ${fieldName || "unknown"}.`);
-    if (file.type && !ALLOWED_FILE_MIMES[fieldName].includes(file.type)) {
-      throw new Error(`File type "${file.type}" is not allowed for field "${fieldName}". Accepted types: ${ALLOWED_FILE_MIMES[fieldName].join(", ")}.`);
+    if (file.type && !ALLOWED_FILE_MIMES[fieldName].includes(file.type) && !isAllowedDicomVideoUpload(fieldName, file)) {
+      throw new Error(`File type "${file.type}" is not allowed for field "${fieldName}". Accepted types: ${getAcceptedFileTypesLabel(fieldName)}.`);
     }
     const contentHeader = readFileHeader(file);
     if (file.type && contentHeader && !checkMagicBytes(contentHeader, file.type)) {
