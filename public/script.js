@@ -100,6 +100,16 @@ function clearAuthSession() {
   resetConsentRecord();
 }
 
+const publicNav = document.querySelector(".public-nav");
+const publicMenuToggle = document.getElementById("public-menu-toggle");
+
+function setPublicMobileNavigationOpen(isOpen) {
+  if (!publicNav || !publicMenuToggle) return;
+  publicNav.classList.toggle("mobile-menu-open", isOpen);
+  publicMenuToggle.setAttribute("aria-expanded", String(isOpen));
+  publicMenuToggle.setAttribute("aria-label", isOpen ? "Close navigation menu" : "Open navigation menu");
+}
+
 function setMobileNavigationOpen(isOpen) {
   if (!appNavbar || !navbarMenuToggle) return;
   appNavbar.classList.toggle("mobile-menu-open", isOpen);
@@ -124,6 +134,23 @@ function initializeMobileNavigation() {
     if (event.matches) setMobileNavigationOpen(false);
   });
 }
+
+function initializePublicMobileNavigation() {
+  if (!publicNav || !publicMenuToggle) return;
+  publicMenuToggle.addEventListener("click", () => {
+    setPublicMobileNavigationOpen(!publicNav.classList.contains("mobile-menu-open"));
+  });
+  publicNav.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    setPublicMobileNavigationOpen(false);
+    publicMenuToggle.focus();
+  });
+  window.matchMedia("(min-width: 861px)").addEventListener("change", (event) => {
+    if (event.matches) setPublicMobileNavigationOpen(false);
+  });
+}
+
+initializePublicMobileNavigation();
 
 function loadHospitalsFromApi() {
   return fetchHospitalsFromApi(populateHospitals);
