@@ -231,6 +231,11 @@ const mimeTypes = {
 
 const COMPRESSIBLE_EXTS = new Set([".html", ".css", ".js", ".json", ".svg"]);
 
+// In-memory static file cache: path -> { raw: Buffer, gzip: Buffer | null }
+// Eliminates repeated disk reads and gzip recomputation per request.
+const staticFileCache = new Map();
+const STATIC_CACHE_MAX_BYTES = 5 * 1024 * 1024; // skip caching files > 5 MB
+
 // Returns appropriate Cache-Control for a given file extension.
 // Immutable assets (images, fonts, 3D models) are cached for 1 year.
 // HTML is revalidated on every request.
@@ -680,51 +685,60 @@ function serveStatic(req, res) {
     return;
   }
 
+  const ext         = path.extname(filePath).toLowerCase();
+  const acceptsGzip = (req.headers["accept-encoding"] || "").includes("gzip");
+
+  function sendEntry(entry) {
+    const useGzip = acceptsGzip && entry.gzip;
+    if (useGzip) {
+      res.writeHead(200, {
+        "Content-Type":     mimeTypes[ext] || "application/octet-stream",
+        "Content-Encoding": "gzip",
+        "Content-Length":   entry.gzip.length,
+        "Cache-Control":    getCacheControl(ext),
+        "Vary":             "Accept-Encoding",
+        ...SECURITY_HEADERS
+      });
+      if (req.method !== "HEAD") res.end(entry.gzip);
+      else res.end();
+    } else {
+      res.writeHead(200, {
+        "Content-Type":   mimeTypes[ext] || "application/octet-stream",
+        "Content-Length": entry.raw.length,
+        "Cache-Control":  getCacheControl(ext),
+        "Vary":           "Accept-Encoding",
+        ...SECURITY_HEADERS
+      });
+      if (req.method !== "HEAD") res.end(entry.raw);
+      else res.end();
+    }
+  }
+
+  const cached = staticFileCache.get(filePath);
+  if (cached) {
+    sendEntry(cached);
+    return;
+  }
+
   fs.readFile(filePath, (err, fileBuffer) => {
     if (err) {
       sendJson(res, 404, { ok: false, error: "Not found." });
       return;
     }
-    const ext            = path.extname(filePath).toLowerCase();
-    const acceptsGzip    = (req.headers["accept-encoding"] || "").includes("gzip");
-    const shouldCompress = acceptsGzip && COMPRESSIBLE_EXTS.has(ext);
 
-    if (shouldCompress) {
+    const shouldCache     = fileBuffer.length <= STATIC_CACHE_MAX_BYTES;
+    const isCompressible  = COMPRESSIBLE_EXTS.has(ext);
+
+    if (isCompressible) {
       zlib.gzip(fileBuffer, (gzipErr, compressed) => {
-        if (gzipErr) {
-          // Fall back to uncompressed on error
-          res.writeHead(200, {
-            "Content-Type":   mimeTypes[ext] || "application/octet-stream",
-            "Content-Length": fileBuffer.length,
-            "Cache-Control":  getCacheControl(ext),
-            "Vary":           "Accept-Encoding",
-            ...SECURITY_HEADERS
-          });
-          if (req.method === "HEAD") { res.end(); return; }
-          res.end(fileBuffer);
-          return;
-        }
-        res.writeHead(200, {
-          "Content-Type":     mimeTypes[ext] || "application/octet-stream",
-          "Content-Encoding": "gzip",
-          "Content-Length":   compressed.length,
-          "Cache-Control":    getCacheControl(ext),
-          "Vary":             "Accept-Encoding",
-          ...SECURITY_HEADERS
-        });
-        if (req.method === "HEAD") { res.end(); return; }
-        res.end(compressed);
+        const entry = { raw: fileBuffer, gzip: gzipErr ? null : compressed };
+        if (shouldCache) staticFileCache.set(filePath, entry);
+        sendEntry(entry);
       });
     } else {
-      res.writeHead(200, {
-        "Content-Type":   mimeTypes[ext] || "application/octet-stream",
-        "Content-Length": fileBuffer.length,
-        "Cache-Control":  getCacheControl(ext),
-        "Vary":           "Accept-Encoding",
-        ...SECURITY_HEADERS
-      });
-      if (req.method === "HEAD") { res.end(); return; }
-      res.end(fileBuffer);
+      const entry = { raw: fileBuffer, gzip: null };
+      if (shouldCache) staticFileCache.set(filePath, entry);
+      sendEntry(entry);
     }
   });
 }
@@ -4363,6 +4377,18 @@ setInterval(() => {
 setInterval(() => {
   refreshPublicDashboardCache().catch(() => {});
 }, PUBLIC_DASHBOARD_CACHE_TTL_MS);
+
+// Ensure required data directories exist before accepting any requests.
+// The Dockerfile creates these, but Docker volume mounts shadow image-layer
+// dirs, and bare-VM deployments have no automated setup — so we do it here.
+for (const dir of [
+  path.join(DATA_DIR, "submissions"),
+  path.join(DATA_DIR, "upload-sessions"),
+  path.join(DATA_DIR, "gcs-sync"),
+  path.join(DATA_DIR, "private"),
+]) {
+  fs.mkdirSync(dir, { recursive: true });
+}
 
 initializeDatabase()
   .then(() => {
