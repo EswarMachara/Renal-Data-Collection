@@ -755,6 +755,17 @@ function copyToGcs(localPath) {
   });
 }
 
+// Deletes the uploaded binary files for a record once they're confirmed in GCS,
+// keeping metadata.json so the submissions list (read from local disk) keeps working.
+function pruneLocalSubmissionBinaries(recordDir) {
+  let entries;
+  try { entries = fs.readdirSync(recordDir, { withFileTypes: true }); } catch { return; }
+  for (const entry of entries) {
+    if (entry.name === "metadata.json") continue;
+    fs.rm(path.join(recordDir, entry.name), { recursive: true, force: true }, () => {});
+  }
+}
+
 // ─── Database initialisation ──────────────────────────────────────────────────
 
 async function initializeDatabase() {
@@ -2876,6 +2887,13 @@ async function finalizeSubmissionBatch({ normalizedSubmissions, session, req }) 
 
   const gcsResult = await copyToGcs(gcsSyncDir);
   const dbResult  = await persistRecordsToDatabase({ batchId, batchDir, records, gcsResult });
+
+  if (gcsResult.synced) {
+    fs.rm(gcsSyncDir, { recursive: true, force: true }, () => {});
+    for (const record of records) {
+      pruneLocalSubmissionBinaries(path.join(batchDir, record.recordId));
+    }
+  }
 
   for (const record of records) {
     await logAudit({
